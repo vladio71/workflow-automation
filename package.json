@@ -6,10 +6,14 @@
     "node": ">=20.19"
   },
   "scripts": {
+    "setup": "node -e \"const fs=require('fs'); if (!fs.existsSync('.env')) fs.copyFileSync('.env.example', '.env')\" && npm install && npm run db:up && npm run db:migrate && npm run db:seed",
+    "app": "npm run db:up && npm run db:migrate && next build && next start",
     "dev": "next dev",
+    "dev:all": "npm run db:up && next dev",
     "build": "next build",
     "start": "next start",
-    "db:up": "docker compose up -d db",
+    "stop": "docker compose stop db",
+    "db:up": "docker compose up -d --wait db",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "postinstall": "prisma generate",

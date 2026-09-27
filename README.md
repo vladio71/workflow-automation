@@ -6,20 +6,35 @@
 
 ## Запуск
 
+Потрібні Node 22+ і Docker (Docker Desktop має бути запущений).
+
+**Перший раз:**
 ```bash
-cp .env.example .env            # за бажанням встав GEMINI_API_KEY
-docker compose up -d db         # Postgres на :5433
-npm install
-npm run db:migrate
-npm run db:seed                 # тема GraphQL з нотатками і 32 питаннями; решту додаєш сам
-npm run dev                     # http://localhost:3000
+npm run setup      # створить .env, npm install, підніме Postgres, міграції, seed
 ```
+`setup` запускає seed, а він **чистить усі дані** в апці. Тому тільки один раз.
+Після цього за бажанням встав `GEMINI_API_KEY` і `GITHUB_TOKEN` у `.env`.
+
+**Щодня:**
+```bash
+npm run app        # Postgres + нові міграції + збірка + старт на http://localhost:3000
+```
+Зупинити: `Ctrl+C` (апка), потім `npm run stop` (Postgres; дані лишаються у volume).
+
+**Після `git pull`:** той самий `npm run app` (сам застосує нові міграції і перезбере). Якщо змінився `package.json`, спершу `npm install`.
+
+| Команда | Що робить |
+|---|---|
+| `npm run setup` | перший запуск з нуля |
+| `npm run app` | звичайний старт (production-збірка, швидка) |
+| `npm run dev:all` | Postgres + dev-режим з hot reload, якщо правиш код |
+| `npm run stop` | зупинити Postgres |
+| `npm run db:seed` | стерти все і залити стартову тему GraphQL |
 
 Ключ Gemini: https://aistudio.google.com/apikey. Модель задається в `GEMINI_MODEL`, актуальні безкоштовні моделі дивись в AI Studio. Без ключа все працює, крім AI-перевірки і mock-інтерв'ю.
 
 На безкоштовному рівні Google може використовувати запити для навчання своїх моделей. Для навчальних нотаток це неважливо, робоче сюди не клади.
 
-`npm run db:seed` чистить усі дані в апці. Запускай тільки один раз на старті.
 
 ## Що де
 

@@ -29,7 +29,12 @@ export interface ParsedQuestions {
 export interface ParsedTopic {
   name: string;
   track: Track;
+  /** текст під front matter (якщо є) */
   notes: string;
+  /** front matter `notes:` шлях до файлу в репо, який стає нотатками теми (наприклад README модуля) */
+  notesFile: string;
+  /** front matter `drill:` шлях до папки чи файлу з дрілами */
+  drill: string;
   errors: string[];
 }
 
@@ -118,7 +123,15 @@ export function parseQuestions(text: string): ParsedQuestions {
   return { cards, errors };
 }
 
-/** learn/topic.md: front matter name/track + необов'язкові нотатки нижче. */
+/**
+ * topic.md: front matter + необов'язкові нотатки нижче.
+ *   ---
+ *   name: Caching          обов'язково
+ *   track: SYSTEM_DESIGN   GRAPHQL | SYSTEM_DESIGN | NODE | AI | PYTHON | OTHER
+ *   notes: modules/02-caching/README.md   необов'язково: файл, який стане нотатками теми
+ *   drill: modules/02-caching             необов'язково: де лежать дріли
+ *   ---
+ */
 export function parseTopic(text: string): ParsedTopic {
   const match = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   const frontMatter = match?.[1];
@@ -128,6 +141,8 @@ export function parseTopic(text: string): ParsedTopic {
       name: '',
       track: 'OTHER',
       notes: '',
+      notesFile: '',
+      drill: '',
       errors: ['topic.md must start with front matter (--- name: ... track: ... ---)'],
     };
   }
@@ -147,5 +162,12 @@ export function parseTopic(text: string): ParsedTopic {
   if (TRACKS.includes(trackRaw as Track)) track = trackRaw as Track;
   else errors.push(`topic.md: track must be one of ${TRACKS.join(', ')}`);
 
-  return { name, track, notes: body.trim(), errors };
+  return {
+    name,
+    track,
+    notes: body.trim(),
+    notesFile: meta.get('notes') ?? '',
+    drill: meta.get('drill') ?? '',
+    errors,
+  };
 }

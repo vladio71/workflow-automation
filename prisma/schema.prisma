@@ -65,8 +65,9 @@ model Topic {
   notes        String      @default("")
   cycleId      Int?
   cycle        Cycle?      @relation(fields: [cycleId], references: [id], onDelete: SetNull)
-  /// тема, яка синхронізується з репо (learn/topic.md)
-  sourceId     Int?        @unique
+  /// тема, яка синхронізується з репо: learn/topic.md (sourcePath "") або learn/<sourcePath>/topic.md
+  sourceId     Int?
+  sourcePath   String      @default("")
   syncSource   Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   questions    Question[]
   recalls      RecallLog[]
@@ -75,6 +76,7 @@ model Topic {
   updatedAt    DateTime    @updatedAt
 
   @@index([nextReviewAt])
+  @@unique([sourceId, sourcePath])
 }
 
 /// Питання, а не конспекти: своє питання + відповідь з пам'яті + еталон.
@@ -192,7 +194,9 @@ model Source {
   lastSyncedAt DateTime?
   lastError    String     @default("")
   lastSummary  String     @default("")
-  topic        Topic?
+  /// SHA коміту останнього успішного sync: не змінився, тоді файли не качаємо
+  lastSha      String     @default("")
+  topics       Topic[]
   questions    Question[]
   createdAt    DateTime   @default(now())
 }

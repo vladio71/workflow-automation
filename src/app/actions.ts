@@ -366,7 +366,7 @@ export async function addSource(formData: FormData): Promise<void> {
   if (!repo) return;
   const branch = String(formData.get('branch') ?? '').trim() || 'main';
   const source = await db.source.upsert({ where: { repo }, update: { branch }, create: { repo, branch } });
-  await syncSource(source.id);
+  await syncSource(source.id, { force: true });
   refresh();
 }
 
@@ -380,7 +380,7 @@ export async function removeSource(id: number): Promise<void> {
 }
 
 export async function syncSourceNow(id: number): Promise<SyncResult> {
-  const result = await syncSource(id);
+  const result = await syncSource(id, { force: true });
   refresh();
   return result;
 }

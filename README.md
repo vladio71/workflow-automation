@@ -11,7 +11,7 @@ cp .env.example .env            # за бажанням встав GEMINI_API_KE
 docker compose up -d db         # Postgres на :5433
 npm install
 npm run db:migrate
-npm run db:seed                 # 36 тем, 32 питання, 5 циклів (з docs/notion)
+npm run db:seed                 # тема GraphQL з нотатками і 32 питаннями; решту додаєш сам
 npm run dev                     # http://localhost:3000
 ```
 
@@ -19,7 +19,7 @@ npm run dev                     # http://localhost:3000
 
 На безкоштовному рівні Google може використовувати запити для навчання своїх моделей. Для навчальних нотаток це неважливо, робоче сюди не клади.
 
-`npm run db:seed` перезаписує теми, питання і цикли. Запускай тільки один раз на старті.
+`npm run db:seed` чистить усі дані в апці. Запускай тільки один раз на старті.
 
 ## Що де
 
@@ -28,10 +28,11 @@ npm run dev                     # http://localhost:3000
 | `docs/GUIDE.md` | як користуватись системою (також сторінка Guide в апці) |
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
-| `seed/` | CSV тем і колода Anki, з яких заливається база |
-| `prisma/schema.prisma` | Topic, Question, RecallLog, Cycle, DailyLog, DailyPlan, InboxItem, MockSession |
+| `seed/` | нотатки GraphQL і колода Anki, з яких заливається стартова тема |
+| `prisma/schema.prisma` | Topic, Question, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
 | `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
+| `src/lib/activity.ts` | лог часу, стрік, аналітика |
 | `src/lib/planner.ts` | кандидати для плану з даних, план за правилами без AI, автовизначення виконаного |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |

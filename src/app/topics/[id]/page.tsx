@@ -16,6 +16,8 @@ import { InlineText } from '@/components/InlineText';
 import { NotesEditor } from '@/components/NotesEditor';
 import { Select } from '@/components/Select';
 import { Tag } from '@/components/Tag';
+import { LogTime } from '@/components/LogTime';
+import { formatMinutes } from '@/lib/activity';
 import { db } from '@/lib/db';
 import { CONFIDENCES, TRACKS, optionFor, type Option } from '@/lib/labels';
 import { relativeDay } from '@/lib/schedule';
@@ -31,7 +33,10 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
     },
   });
   if (!topic) notFound();
-  const cycles = await db.cycle.findMany({ orderBy: { number: 'asc' } });
+  const [cycles, timeSpent] = await Promise.all([
+    db.cycle.findMany({ orderBy: { number: 'asc' } }),
+    db.activityLog.aggregate({ where: { topicId: topic.id }, _sum: { minutes: true } }),
+  ]);
   const cycleOptions: Option<string>[] = [
     { value: '', label: 'No cycle', color: 'gray' },
     ...cycles.map((cycle) => ({ value: String(cycle.id), label: `C${cycle.number} · ${cycle.name}`, color: 'blue' as const })),
@@ -52,9 +57,11 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
         <div className="k">◉ Confidence</div>
         <div className="v"><Select<Confidence> value={topic.confidence} options={CONFIDENCES} action={setTopicConfidence.bind(null, topic.id)} /></div>
         <div className="k">🗓 Last recall</div>
-        <div className="v muted">{topic.lastRecallAt ? `${topic.lastRecallAt.toLocaleDateString('en-GB')} · ${relativeDay(topic.lastRecallAt, now)}` : 'never'}</div>
-        <div className="k">🗓 Next review</div>
-        <div className="v muted">{topic.nextReviewAt ? `${topic.nextReviewAt.toLocaleDateString('en-GB')} · ${relativeDay(topic.nextReviewAt, now)} · step ${topic.intervalDays}d` : 'after first recall'}</div>
+        <div className="v muted">{relativeDay(topic.lastRecallAt, now) || 'never'}</div>
+        <div className="k">🔁 Next recall</div>
+        <div className="v muted">{topic.nextReviewAt ? relativeDay(topic.nextReviewAt, now) : 'after first recall'}</div>
+        <div className="k">⏱ Time spent</div>
+        <div className="v muted">{formatMinutes(timeSpent._sum.minutes ?? 0)}</div>
         <div className="k">◉ Cycle</div>
         <div className="v"><Select<string> value={topic.cycleId ? String(topic.cycleId) : ''} options={cycleOptions} action={setTopicCycle.bind(null, topic.id)} /></div>
         <div className="k">⌘ Drill / file</div>
@@ -73,6 +80,9 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
         <Link href={`/recall/${topic.id}`} className="btn primary">▶ Start recall</Link>
         <form action={deleteTopic.bind(null, topic.id)}><button className="btn ghost">Delete</button></form>
       </div>
+
+      <h3 className="block-title">Log time on this topic</h3>
+      <LogTime topicId={topic.id} />
 
       <div className="divider" />
       <h2 className="block-title" style={{ marginTop: 0 }}>Notes</h2>
@@ -116,7 +126,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
                 const confidence = optionFor(CONFIDENCES, recall.confidenceAfter);
                 return (
                   <tr key={recall.id}>
-                    <td className="muted" style={{ width: 110 }}>{recall.createdAt.toLocaleDateString('en-GB')}</td>
+                    <td className="muted" style={{ width: 110 }}>{relativeDay(recall.createdAt, now)}</td>
                     <td style={{ width: 90 }}><Tag color={confidence.color}>{confidence.label}</Tag></td>
                     <td className="muted" style={{ fontSize: 13 }}>{recall.question?.question ?? 'Free recall'}</td>
                   </tr>

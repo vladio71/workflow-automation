@@ -7,7 +7,8 @@ import { dayKey } from '@/lib/queries';
 import { schedule } from '@/lib/schedule';
 import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
-import type { Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
+import { logActivity } from '@/lib/activity';
+import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
 function refresh(): void {
@@ -44,6 +45,16 @@ export async function createTopic(formData: FormData): Promise<void> {
   const topic = await db.topic.create({ data: { name: 'Untitled', track } });
   refresh();
   redirect(`/topics/${topic.id}`);
+}
+
+/** Швидке додавання з рядка таблиці: назва + трек, без переходу на сторінку. */
+export async function addTopicQuick(formData: FormData): Promise<void> {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return;
+  const track = (formData.get('track') as Track | null) ?? 'OTHER';
+  const cycleId = formData.get('cycleId');
+  await db.topic.create({ data: { name, track, cycleId: cycleId ? Number(cycleId) : null } });
+  refresh();
 }
 
 export async function deleteTopic(id: number): Promise<void> {
@@ -125,6 +136,22 @@ export async function updateCycleText(id: number, field: CycleTextField, value: 
   refresh();
 }
 
+export async function createCycle(formData: FormData): Promise<void> {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return;
+  const last = await db.cycle.findFirst({ orderBy: { number: 'desc' } });
+  const hasActive = await db.cycle.count({ where: { status: 'ACTIVE' } });
+  await db.cycle.create({
+    data: { name, number: (last?.number ?? 0) + 1, goal: String(formData.get('goal') ?? '').trim(), status: hasActive ? 'PLANNED' : 'ACTIVE' },
+  });
+  refresh();
+}
+
+export async function deleteCycle(id: number): Promise<void> {
+  await db.cycle.delete({ where: { id } });
+  refresh();
+}
+
 /** Активним може бути тільки один цикл: попередній активний стає Done. */
 export async function setCycleStatus(id: number, status: CycleStatus): Promise<void> {
   await db.$transaction(async (tx) => {
@@ -157,6 +184,8 @@ export interface SaveRecallInput {
   answer: string;
   feedback: string;
   confidence: Exclude<Confidence, 'NOT_STARTED'>;
+  /** скільки тривала сесія: йде в лог часу */
+  seconds: number;
 }
 
 /** Зберегти відтворення: лог, новий колір, наступна дата, відмітка в щоденному чеклісті. */
@@ -185,6 +214,7 @@ export async function saveRecall(input: SaveRecallInput): Promise<{ nextTopicId:
       : []),
     db.dailyLog.upsert({ where: { day }, create: { day, recallDone: true }, update: { recallDone: true } }),
   ]);
+  await logActivity({ minutes: Math.max(1, Math.ceil(input.seconds / 60)), kind: 'RECALL', topicId: input.topicId, track: null, note: '', at: now });
 
   const next = await db.topic.findFirst({
     where: {
@@ -302,4 +332,25 @@ export async function reviewToday(): Promise<PlanActionResult> {
   await db.dailyPlan.update({ where: { day: dayKey(now) }, data: { review } });
   refresh();
   return { ok: true };
+}
+
+// ================================================================== activity log
+
+export async function addActivity(formData: FormData): Promise<void> {
+  const minutes = Number(formData.get('minutes') ?? 0);
+  const topicRaw = String(formData.get('topicId') ?? '');
+  const trackRaw = String(formData.get('track') ?? '');
+  await logActivity({
+    minutes,
+    kind: (formData.get('kind') as ActivityKind | null) ?? 'STUDY',
+    topicId: topicRaw ? Number(topicRaw) : null,
+    track: trackRaw ? (trackRaw as Track) : null,
+    note: String(formData.get('note') ?? ''),
+  });
+  refresh();
+}
+
+export async function deleteActivity(id: number): Promise<void> {
+  await db.activityLog.delete({ where: { id } });
+  refresh();
 }

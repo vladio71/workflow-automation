@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { logActivity } from '@/lib/activity';
 import { streamMockReply, type ChatTurn } from '@/lib/gemini';
 
 /**
@@ -14,7 +15,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const text = (body.message ?? '').trim() || "Hi, I'm ready. Let's start.";
   await db.mockMessage.create({ data: { sessionId, role: 'USER', content: text } });
-  if (text === 'END') await db.mockSession.update({ where: { id: sessionId }, data: { endedAt: new Date() } });
+  if (text === 'END' && !session.endedAt) {
+    const endedAt = new Date();
+    await db.mockSession.update({ where: { id: sessionId }, data: { endedAt } });
+    // тривалість mock іде в лог часу (з обмеженням, якщо вкладку забули відкритою)
+    const minutes = Math.min(120, Math.max(1, Math.round((endedAt.getTime() - session.startedAt.getTime()) / 60000)));
+    await logActivity({ minutes, kind: 'MOCK', topicId: null, track: 'SYSTEM_DESIGN', note: session.problem, at: endedAt });
+  }
 
   const history: ChatTurn[] = [...session.messages.map((m) => ({ role: m.role, content: m.content })), { role: 'USER', content: text }];
   const encoder = new TextEncoder();

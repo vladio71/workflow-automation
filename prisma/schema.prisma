@@ -13,6 +13,17 @@ enum Track {
   NODE
   AI
   PYTHON
+  OTHER
+}
+
+enum ActivityKind {
+  STUDY
+  DRILL
+  RECALL
+  QUESTIONS
+  READING
+  MOCK
+  OTHER
 }
 
 enum Confidence {
@@ -50,6 +61,7 @@ model Topic {
   cycle        Cycle?      @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   questions    Question[]
   recalls      RecallLog[]
+  activities   ActivityLog[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -82,16 +94,32 @@ model RecallLog {
   createdAt       DateTime   @default(now())
 }
 
+/// Цикл без жорстких дат: порядок (number), статус, ціль, ретро.
 model Cycle {
-  id       Int         @id @default(autoincrement())
-  number   Int         @unique
-  name     String
-  goal     String      @default("")
-  startsOn DateTime    @db.Date
-  endsOn   DateTime    @db.Date
-  status   CycleStatus @default(PLANNED)
-  retro    String      @default("")
-  topics   Topic[]
+  id        Int         @id @default(autoincrement())
+  number    Int         @unique
+  name      String
+  goal      String      @default("")
+  status    CycleStatus @default(PLANNED)
+  retro     String      @default("")
+  topics    Topic[]
+  createdAt DateTime    @default(now())
+}
+
+/// Лог часу: скільки хвилин і на що. З нього рахуються стрік і аналітика.
+/// Recall і mock пишуть сюди самі, решту додаєш руками.
+model ActivityLog {
+  id        Int          @id @default(autoincrement())
+  day       DateTime     @db.Date
+  minutes   Int
+  kind      ActivityKind
+  track     Track?
+  topicId   Int?
+  topic     Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  note      String       @default("")
+  createdAt DateTime     @default(now())
+
+  @@index([day])
 }
 
 /// Щоденний чекліст. Один рядок на день.

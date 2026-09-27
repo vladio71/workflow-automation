@@ -86,6 +86,7 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
         answer,
         feedback: grade ? formatFeedback(grade) : '',
         confidence,
+        seconds,
       });
       router.push(nextTopicId ? `/recall/${nextTopicId}` : '/');
     });

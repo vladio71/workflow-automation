@@ -211,3 +211,41 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
 /* ---------------- chat ---------------- */
 .chat-msg { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .chat-msg .who { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+
+/* ---------------- charts (один синій відтінок: це кількість, а не ідентичність) ---------------- */
+:root {
+  --viz-bar: #2a78d6;
+  --viz-heat-0: rgba(55, 53, 47, 0.07);
+  --viz-heat-1: #b7d3f6;
+  --viz-heat-2: #6da7ec;
+  --viz-heat-3: #2a78d6;
+  --viz-heat-4: #184f95;
+  --viz-grid: rgba(55, 53, 47, 0.09);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --viz-bar: #3987e5;
+    --viz-heat-0: rgba(255, 255, 255, 0.06);
+    --viz-heat-1: #184f95;
+    --viz-heat-2: #256abf;
+    --viz-heat-3: #3987e5;
+    --viz-heat-4: #86b6ef;
+    --viz-grid: rgba(255, 255, 255, 0.09);
+  }
+}
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.kpi { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.kpi .label { font-size: 12px; color: var(--muted); }
+.kpi .value { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.kpi .hint { font-size: 12px; color: var(--faint); }
+.viz { position: relative; }
+.viz-tip {
+  position: absolute; pointer-events: none; z-index: 20; background: var(--bg); box-shadow: var(--shadow);
+  border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 9px; font-size: 12px; white-space: nowrap; transform: translate(-50%, calc(-100% - 8px));
+}
+.viz-tip b { font-size: 14px; display: block; }
+.hbar { display: grid; grid-template-columns: 180px 1fr 64px; align-items: center; gap: 10px; font-size: 14px; padding: 4px 0; }
+.hbar .track-bg { height: 10px; border-radius: 0 4px 4px 0; background: transparent; }
+.hbar .fill { height: 10px; border-radius: 0 4px 4px 0; background: var(--viz-bar); min-width: 2px; }
+.hbar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }

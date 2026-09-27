@@ -1,4 +1,4 @@
-import type { Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
+import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Кольори як у Notion select. Ключ = назва кольору з globals.css (--tag-<color>-bg / -fg). */
 export type TagColor = 'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange' | 'pink' | 'brown';
@@ -15,6 +15,17 @@ export const TRACKS: readonly Option<Track>[] = [
   { value: 'NODE', label: 'Node', color: 'green' },
   { value: 'AI', label: 'AI', color: 'purple' },
   { value: 'PYTHON', label: 'Python', color: 'yellow' },
+  { value: 'OTHER', label: 'Other', color: 'brown' },
+];
+
+export const ACTIVITY_KINDS: readonly Option<ActivityKind>[] = [
+  { value: 'STUDY', label: 'Study', color: 'blue' },
+  { value: 'DRILL', label: 'Drill', color: 'purple' },
+  { value: 'RECALL', label: 'Recall', color: 'green' },
+  { value: 'QUESTIONS', label: 'Questions', color: 'pink' },
+  { value: 'READING', label: 'Reading', color: 'yellow' },
+  { value: 'MOCK', label: 'Mock', color: 'orange' },
+  { value: 'OTHER', label: 'Other', color: 'gray' },
 ];
 
 export const CONFIDENCES: readonly Option<Confidence>[] = [

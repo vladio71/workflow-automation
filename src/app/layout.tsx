@@ -4,12 +4,13 @@ import './globals.css';
 import { NavLink } from '@/components/NavLink';
 import { db } from '@/lib/db';
 import { getDueCount } from '@/lib/queries';
+import { getStreak } from '@/lib/activity';
 
 export const metadata: Metadata = { title: 'Learn it. Keep it.' };
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [dueCount, inboxCount] = await Promise.all([getDueCount(), db.inboxItem.count()]);
+  const [dueCount, inboxCount, streak] = await Promise.all([getDueCount(), db.inboxItem.count(), getStreak()]);
 
   return (
     <html lang="en">
@@ -18,6 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <aside className="sidebar">
             <div className="sidebar-title">
               <span style={{ fontSize: 18 }}>🧠</span> Learn it. Keep it.
+              <span className="faint" style={{ marginLeft: 'auto', fontWeight: 500 }} title="Streak: days in a row">🔥 {streak.current}</span>
             </div>
             <NavLink href="/" icon="☀️" label="Today" count={dueCount} />
             <NavLink href="/inbox" icon="📥" label="Inbox" count={inboxCount} />
@@ -25,6 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/topics" icon="🗂️" label="Topics" />
             <NavLink href="/questions" icon="❓" label="Questions" />
             <NavLink href="/cycles" icon="🔁" label="Cycles" />
+            <NavLink href="/stats" icon="📈" label="Stats" />
             <div className="sidebar-section">Practice</div>
             <NavLink href="/mock" icon="🎙️" label="Mock interview" />
             <div className="sidebar-section">System</div>

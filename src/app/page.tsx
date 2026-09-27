@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { setDaily } from './actions';
 import { CheckItem } from '@/components/CheckItem';
 import { PlanCard } from '@/components/PlanCard';
+import { LogTime } from '@/components/LogTime';
+import { formatMinutes, getAnalytics } from '@/lib/activity';
 import { isGeminiConfigured } from '@/lib/gemini';
 import { getTodayPlan } from '@/lib/planner';
 import { QuickCapture } from '@/components/QuickCapture';
@@ -11,12 +13,12 @@ import { getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } f
 import { relativeDay } from '@/lib/schedule';
 import { db } from '@/lib/db';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, log, cycle, due, sdTopic] = await Promise.all([
+  const [plan, stats, allTopics, log, cycle, due, sdTopic] = await Promise.all([
     getTodayPlan(now),
+    getAnalytics(7, now),
+    db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     getTodayLog(now),
     getActiveCycle(),
     getDueTopics(now),
@@ -26,7 +28,6 @@ export default async function TodayPage() {
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
     : [];
 
-  const cycleDay = cycle ? Math.min(14, Math.max(1, Math.floor((now.getTime() - cycle.startsOn.getTime()) / DAY_MS) + 1)) : 0;
   const dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const isSunday = now.getDay() === 0;
 
@@ -34,7 +35,9 @@ export default async function TodayPage() {
     <div className="page">
       <div className="page-icon">☀️</div>
       <h1 className="page-title">Today</h1>
-      <p className="page-sub">{dateLabel}</p>
+      <p className="page-sub">
+        {dateLabel} · 🔥 {stats.streak.current} day streak · {formatMinutes(stats.todayMinutes)} today · {formatMinutes(stats.weekMinutes)} this week
+      </p>
 
       <PlanCard
         plan={plan ? { summary: plan.summary, review: plan.review, items: plan.items } : null}
@@ -47,16 +50,19 @@ export default async function TodayPage() {
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <Link href="/cycles" style={{ fontWeight: 600 }}>Cycle {cycle.number} · {cycle.name}</Link>
-              <span className="muted" style={{ fontSize: 13 }}>day {cycleDay} of 14</span>
+              <span className="muted" style={{ fontSize: 13 }}>{cycle.greenCount}/{cycle.topicCount} green</span>
             </div>
             <div className="muted" style={{ fontSize: 14, margin: '2px 0 10px' }}>{cycle.goal}</div>
-            <div className="progress"><div style={{ width: `${(cycleDay / 14) * 100}%` }} /></div>
+            <div className="progress"><div style={{ width: `${cycle.topicCount ? (cycle.greenCount / cycle.topicCount) * 100 : 0}%` }} /></div>
             <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>
-              {cycle.greenCount} of {cycle.topicCount} topics green · one topic per cycle, finish it before the next
+              one topic per cycle, finish it before the next
             </div>
           </div>
         </div>
       )}
+
+      <h2 className="block-title">Log time</h2>
+      <LogTime topics={allTopics} />
 
       <h2 className="block-title">Daily · 25 min</h2>
       <CheckItem checked={log.ankiDone} label={<>Anki: 10-15 cards</>} action={setDaily.bind(null, 'ankiDone')} />

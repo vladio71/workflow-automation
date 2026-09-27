@@ -1,6 +1,6 @@
 /**
- * Стартові дані: одна тема GraphQL з твоїми матеріалами (нотатки + 32 питання з колоди Anki),
- * прив'язана до репо vladio71/graphql-base: перший Sync (або відкриття Today) підтягне картки з learn/.
+ * Стартові дані: одна тема GraphQL з твоїми нотатками, прив'язана до репо vladio71/graphql-base.
+ * Картки приходять тільки з learn/ у репо: перший Sync (або відкриття Today) їх підтягне.
  * Решту тем і циклів додаєш сам. Запуск: npm run db:seed.
  * УВАГА: чистить усі дані (теми, питання, цикли, логи, плани, mock, inbox). Запускай один раз на старті.
  */
@@ -10,16 +10,6 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.ts';
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
-
-/** Прості HTML-теги з карток Anki -> markdown. */
-function htmlToMarkdown(html: string): string {
-  return html
-    .replace(/<b>(.*?)<\/b>/g, '**$1**')
-    .replace(/<code>(.*?)<\/code>/g, '`$1`')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
-}
 
 async function main(): Promise<void> {
   await db.$transaction([
@@ -48,19 +38,7 @@ async function main(): Promise<void> {
     },
   });
 
-  const cards = readFileSync('seed/anki-graphql.txt', 'utf8')
-    .split('\n')
-    .filter((line) => line.trim() && !line.startsWith('#'));
-
-  for (const card of cards) {
-    const [question, answer] = card.split('\t');
-    if (!question || !answer) continue;
-    await db.question.create({
-      data: { question, reference: htmlToMarkdown(answer), inAnki: true, topicId: graphql.id },
-    });
-  }
-
-  console.log(`Seeded: topic "GraphQL" with ${await db.question.count()} questions. Cards from learn/ arrive on the first Sync. Add your own topics and cycles in the app.`);
+  console.log('Seeded: topic "GraphQL" linked to vladio71/graphql-base. Cards arrive on the first Sync.');
 }
 
 await main();

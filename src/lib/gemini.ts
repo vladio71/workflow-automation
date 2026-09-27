@@ -9,7 +9,7 @@ import { z } from 'zod';
  *   2. інтерв'юер: уточнювальне питання після відповіді (в тому ж gradeAnswer)
  *   3. mock system design: веде 45-хвилинну задачу
  */
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);

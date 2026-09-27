@@ -1,6 +1,6 @@
 # learning-app
 
-Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
+Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, AI-план на день з вечірньою перевіркою, recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
 
 **Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, стиль Notion (світла і темна тема за налаштуваннями системи).
 
@@ -29,9 +29,10 @@ npm run dev                     # http://localhost:3000
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | CSV тем і колода Anki, з яких заливається база |
-| `prisma/schema.prisma` | Topic, Question, RecallLog, Cycle, DailyLog, InboxItem, MockSession |
+| `prisma/schema.prisma` | Topic, Question, RecallLog, Cycle, DailyLog, DailyPlan, InboxItem, MockSession |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
-| `src/lib/gemini.ts` | екзаменатор (structured JSON) і інтерв'юер (стрімінг) |
+| `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
+| `src/lib/planner.ts` | кандидати для плану з даних, план за правилами без AI, автовизначення виконаного |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/app/api/anki-export` | експорт нових питань у файл для Anki |

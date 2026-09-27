@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { dayKey } from '@/lib/queries';
 import { schedule } from '@/lib/schedule';
-import { gradeAnswer, isGeminiConfigured, type GradeInput, type GradeResult } from '@/lib/gemini';
+import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
+import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import type { Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -206,4 +207,99 @@ export async function startMock(formData: FormData): Promise<void> {
   const session = await db.mockSession.create({ data: { problem } });
   refresh();
   redirect(`/mock/${session.id}`);
+}
+
+// ================================================================== AI plan for the day
+
+export type PlanActionResult = { ok: true; note?: string } | { ok: false; error: string };
+
+/** Скласти (або перескласти) план на сьогодні. Без ключа або при помилці Gemini: план за правилами. */
+export async function generatePlan(minutesBudget: number): Promise<PlanActionResult> {
+  const now = new Date();
+  const day = dayKey(now);
+  const candidates = await buildCandidates(now);
+  const yesterday = await db.dailyPlan.findUnique({ where: { day: dayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000)) } });
+  const yesterdayUndone = yesterday
+    ? (await withStatus(parsePlanItems(yesterday.items), new Date(now.getTime() - 24 * 60 * 60 * 1000)))
+        .filter((item) => !item.done)
+        .map((item) => item.title)
+    : [];
+
+  let items: PlanItem[];
+  let summary: string;
+  let note: string | undefined;
+
+  if (isGeminiConfigured()) {
+    try {
+      const result = await generateDayPlan({
+        weekday: now.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' }),
+        minutesBudget,
+        candidates: candidates.map(({ id, kind, title, defaultMinutes }) => ({ id, kind, title, defaultMinutes })),
+        yesterdayUndone,
+      });
+      const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+      // AI може вибирати тільки з кандидатів: невідомі id відкидаємо, дублікати теж
+      const seen = new Set<string>();
+      items = [];
+      for (const picked of result.items) {
+        const candidate = byId.get(picked.id);
+        if (!candidate || seen.has(picked.id)) continue;
+        seen.add(picked.id);
+        items.push({ ...candidate, minutes: picked.minutes, why: picked.why, manualDone: false });
+      }
+      summary = result.summary;
+      if (items.length === 0) throw new Error('Gemini returned no valid items');
+    } catch (error) {
+      console.error(error);
+      ({ items, summary } = rulePlan(candidates, minutesBudget));
+      note = `Gemini не відповів (${error instanceof Error ? error.message.slice(0, 120) : 'error'}), склав план за правилами.`;
+    }
+  } else {
+    ({ items, summary } = rulePlan(candidates, minutesBudget));
+  }
+
+  const itemsJson = items.map((item) => ({ ...item }));
+  await db.dailyPlan.upsert({
+    where: { day },
+    create: { day, items: itemsJson, summary },
+    update: { items: itemsJson, summary, review: '' },
+  });
+  refresh();
+  return { ok: true, note };
+}
+
+export async function setPlanItemDone(itemId: string, done: boolean): Promise<void> {
+  const day = dayKey(new Date());
+  const plan = await db.dailyPlan.findUnique({ where: { day } });
+  if (!plan) return;
+  const items = parsePlanItems(plan.items).map((item) => (item.id === itemId ? { ...item, manualDone: done } : item));
+  await db.dailyPlan.update({ where: { day }, data: { items: items.map((item) => ({ ...item })) } });
+  refresh();
+}
+
+/** Вечірня перевірка: апка сама рахує виконане, Gemini пише короткий огляд. */
+export async function reviewToday(): Promise<PlanActionResult> {
+  const now = new Date();
+  const plan = await getTodayPlan(now);
+  if (!plan) return { ok: false, error: 'Спершу склади план на сьогодні' };
+
+  const done = plan.items.filter((item) => item.done);
+  const undone = plan.items.filter((item) => !item.done);
+  let review = `Зроблено ${done.length} з ${plan.items.length}.` +
+    (undone.length ? ` Не зроблено: ${undone.map((item) => item.title).join('; ')}.` : ' Все виконано.');
+
+  if (isGeminiConfigured()) {
+    try {
+      review = await reviewDay({
+        items: plan.items.map((item) => ({ title: item.title, minutes: item.minutes, done: item.done })),
+        recalls: await todayRecallSummary(now),
+      });
+    } catch (error) {
+      console.error(error);
+      review += ' (Gemini недоступний, огляд без AI.)';
+    }
+  }
+  await db.dailyPlan.update({ where: { day: dayKey(now) }, data: { review } });
+  refresh();
+  return { ok: true };
 }

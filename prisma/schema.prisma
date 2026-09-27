@@ -125,3 +125,15 @@ model MockMessage {
   content   String
   createdAt DateTime    @default(now())
 }
+
+/// План на день від AI. items = JSON масив PlanItem (src/lib/planner.ts).
+model DailyPlan {
+  day       DateTime @id @db.Date
+  items     Json
+  /// коротке пояснення, чому саме такий план
+  summary   String   @default("")
+  /// вечірній огляд: що зроблено, що перенести
+  review    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

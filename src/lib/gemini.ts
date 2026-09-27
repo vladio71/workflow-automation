@@ -125,3 +125,96 @@ export async function* streamMockReply(problem: string, history: ChatTurn[]): As
     if (chunk.text) yield chunk.text;
   }
 }
+
+// ------------------------------------------------------------------ 4. план дня і вечірній огляд
+
+const DayPlanSchema = z.object({
+  summary: z.string(),
+  items: z.array(z.object({ id: z.string(), minutes: z.number().int().min(5).max(180), why: z.string() })),
+});
+export type DayPlanResult = z.infer<typeof DayPlanSchema>;
+
+const DAY_PLAN_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          minutes: { type: 'integer', minimum: 5, maximum: 180 },
+          why: { type: 'string' },
+        },
+        required: ['id', 'minutes', 'why'],
+      },
+    },
+  },
+  required: ['summary', 'items'],
+};
+
+const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior backend розробника, який шукає роботу і вчить Node, system design, AI на TypeScript і Python.
+Склади план на СЬОГОДНІ тільки з наданих кандидатів (використовуй їхні id без змін, нічого не вигадуй).
+Правила системи:
+- Anki і хоча б одне повторення (RECALL) щодня, якщо вони є серед кандидатів.
+- Спершу червоні/найстаріші повторення, потім робота по поточному циклу. Не більше 2-3 повторень за день.
+- Одна тема циклу за раз. QUESTIONS для теми, над якою працюєш, це частина роботи, а не окрема тема.
+- SYSTEM_DESIGN і MOCK приблизно раз на тиждень; MOCK краще у вихідні або коли є 45+ хвилин.
+- Вклади план у бюджет часу. Краще 3-5 пунктів, які реально зробити, ніж 8.
+- Порядок пунктів = порядок виконання.
+- why: одне коротке речення українською, чому цей пункт сьогодні.
+- summary: 1-2 речення українською, головний фокус дня.`;
+
+export interface DayPlanInput {
+  weekday: string;
+  minutesBudget: number;
+  candidates: { id: string; kind: string; title: string; defaultMinutes: number }[];
+  yesterdayUndone: string[];
+}
+
+export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResult> {
+  const prompt = [
+    `Сьогодні: ${input.weekday}. Бюджет часу: ${input.minutesBudget} хв.`,
+    input.yesterdayUndone.length ? `Вчора не зроблено: ${input.yesterdayUndone.join('; ')}` : 'Вчора план виконано або його не було.',
+    'Кандидати (id | тип | що | звичайний час):',
+    ...input.candidates.map((c) => `${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв`),
+  ].join('\n');
+
+  const response = await gemini().models.generateContent({
+    model: MODEL,
+    contents: prompt,
+    config: {
+      systemInstruction: PLANNER_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseJsonSchema: DAY_PLAN_JSON_SCHEMA,
+      temperature: 0.3,
+    },
+  });
+  return DayPlanSchema.parse(JSON.parse(response.text ?? '{}'));
+}
+
+export interface DayReviewInput {
+  items: { title: string; minutes: number; done: boolean }[];
+  recalls: string[];
+}
+
+export async function reviewDay(input: DayReviewInput): Promise<string> {
+  const prompt = [
+    'План на сьогодні і що виконано:',
+    ...input.items.map((item) => `[${item.done ? 'x' : ' '}] ${item.title} (${item.minutes} хв)`),
+    input.recalls.length ? `Повторення сьогодні (тема: колір): ${input.recalls.join('; ')}` : 'Повторень сьогодні не було.',
+  ].join('\n');
+
+  const response = await gemini().models.generateContent({
+    model: MODEL,
+    contents: prompt,
+    config: {
+      systemInstruction: `Ти коуч з навчання. Дай короткий вечірній огляд українською, 3-5 речень, без води і без похвали заради похвали:
+1) що зроблено (конкретно), 2) що не зроблено і чи варто це переносити на завтра, 3) одна порада на завтра.
+Якщо повторення були червоними, нагадай, що через 2 дні їх треба повторити з нуля. Не пропонуй нові теми.`,
+      temperature: 0.4,
+    },
+  });
+  return (response.text ?? '').trim();
+}

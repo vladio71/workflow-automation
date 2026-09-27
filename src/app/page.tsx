@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { setDaily } from './actions';
 import { CheckItem } from '@/components/CheckItem';
+import { PlanCard } from '@/components/PlanCard';
+import { isGeminiConfigured } from '@/lib/gemini';
+import { getTodayPlan } from '@/lib/planner';
 import { QuickCapture } from '@/components/QuickCapture';
 import { Tag } from '@/components/Tag';
 import { CONFIDENCES, TRACKS, optionFor } from '@/lib/labels';
@@ -12,7 +15,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default async function TodayPage() {
   const now = new Date();
-  const [log, cycle, due, sdTopic] = await Promise.all([
+  const [plan, log, cycle, due, sdTopic] = await Promise.all([
+    getTodayPlan(now),
     getTodayLog(now),
     getActiveCycle(),
     getDueTopics(now),
@@ -31,6 +35,11 @@ export default async function TodayPage() {
       <div className="page-icon">☀️</div>
       <h1 className="page-title">Today</h1>
       <p className="page-sub">{dateLabel}</p>
+
+      <PlanCard
+        plan={plan ? { summary: plan.summary, review: plan.review, items: plan.items } : null}
+        geminiEnabled={isGeminiConfigured()}
+      />
 
       {cycle && (
         <div className="callout">

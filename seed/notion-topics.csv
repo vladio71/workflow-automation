@@ -1,0 +1,37 @@
+﻿Name,Track,Confidence,Last recall,Cycle,Drill / file,Source
+"GraphQL 01. Resolver signature (parent, args, context, info)",GraphQL,⚪ Not started,,,drills/01-easy/01-resolver-signature.ts,https://github.com/vladio71/graphql-base
+"GraphQL 02. Resolver chain, default resolver, where N+1 comes from",GraphQL,⚪ Not started,,,drills/01-easy/02-resolver-chain.ts,https://github.com/vladio71/graphql-base
+GraphQL 03. Errors and null bubbling,GraphQL,⚪ Not started,,,drills/01-easy/03-errors-and-nullability.ts,https://github.com/vladio71/graphql-base
+GraphQL 04. Mutation payload + userErrors with code,GraphQL,⚪ Not started,,,drills/01-easy/04-mutation-payload.ts,https://github.com/vladio71/graphql-base
+GraphQL 05. DataLoader step by step,GraphQL,⚪ Not started,,,drills/02-medium/05-dataloader-simulation.ts,https://github.com/vladio71/graphql-base
+GraphQL 06. DataLoader by hand (MiniLoader),GraphQL,⚪ Not started,,,drills/02-medium/06-dataloader-by-hand.ts,https://github.com/vladio71/graphql-base
+GraphQL 07. N+1 on real stack: 251 vs 102 vs 3 SQL,GraphQL,⚪ Not started,,,drills/02-medium/07-n-plus-1-real.ts,https://github.com/vladio71/graphql-base
+GraphQL 08. Offset vs cursor pagination,GraphQL,⚪ Not started,,,drills/02-medium/08-pagination.ts,https://github.com/vladio71/graphql-base
+"GraphQL 09. Auth: operation, resource, field",GraphQL,⚪ Not started,,,drills/02-medium/09-auth-context.ts,https://github.com/vladio71/graphql-base
+"GraphQL 10. Codegen: typed resolvers, TypedDocumentNode, SDK",GraphQL,⚪ Not started,,,drills/02-medium/10-typed-client.ts,https://github.com/vladio71/graphql-base
+"GraphQL 11. Transactions, rollback, serial mutations",GraphQL,⚪ Not started,,,drills/03-hard/11-transactions.ts,https://github.com/vladio71/graphql-base
+"GraphQL 12. Query limits: depth, aliases, cost",GraphQL,⚪ Not started,,,drills/03-hard/12-query-limits.ts,https://github.com/vladio71/graphql-base
+GraphQL 13. DataLoader cache pitfalls (per-request),GraphQL,⚪ Not started,,,drills/03-hard/13-dataloader-cache-pitfalls.ts,https://github.com/vladio71/graphql-base
+GraphQL 14. Subscriptions: graphql-ws + PubSub,GraphQL,⚪ Not started,,,drills/03-hard/14-subscriptions.ts,https://github.com/vladio71/graphql-base
+GraphQL 15. Top-N per parent: ROW_NUMBER + loader with args,GraphQL,⚪ Not started,,,drills/03-hard/15-top-n-per-parent.ts,https://github.com/vladio71/graphql-base
+"GraphQL 16. Composite cursor (created_at, id), µs trap",GraphQL,⚪ Not started,,,drills/03-hard/16-composite-cursor.ts,https://github.com/vladio71/graphql-base
+GraphQL 17. info / AST: select only requested fields,GraphQL,⚪ Not started,,,drills/03-hard/17-info-requested-fields.ts,https://github.com/vladio71/graphql-base
+"SD §7 Core challenges: replication, sharding, async, eventual consistency",System design,⚪ Not started,,,,https://systemdesignschool.io/primer
+"SD §8 Scale: load estimation, horizontal scaling, partitioning",System design,⚪ Not started,,,back-of-envelope on paper,https://systemdesignschool.io/primer
+"SD §8 Caching: cache-aside, TTL, invalidation",System design,⚪ Not started,,,drill: cache-aside + invalidation,https://systemdesignschool.io/primer
+"SD §8 Message queues, read/write separation",System design,⚪ Not started,,,drill: queue worker with idempotency key,https://systemdesignschool.io/primer
+"SD §9 CAP, consistency models (strong / eventual / read-your-writes)",System design,⚪ Not started,,,,https://systemdesignschool.io/primer
+SD §9 Concurrency + sagas,System design,⚪ Not started,,,"drill: stock race (conditional update, FOR UPDATE), saga with compensation",https://systemdesignschool.io/primer
+SD §10 Master template,System design,⚪ Not started,,,draw it from memory,https://systemdesignschool.io/primer
+"SD §11 Components: SQL vs NoSQL, object storage, CDN, API gateway",System design,⚪ Not started,,,,https://systemdesignschool.io/primer
+"SD §12 Decomposition: verbs, nouns, adjectives",System design,⚪ Not started,,,,https://systemdesignschool.io/primer
+"SD §13 Mock: Design Twitter (45 min, out loud)",System design,⚪ Not started,,,weekly mock,https://systemdesignschool.io/primer
+SD §14 Deep dive: celebrity fan-out (write vs read),System design,⚪ Not started,,,drill: fan-out on posts,https://systemdesignschool.io/primer
+"SD §14 Deep dives: trends/hashtags, search at scale",System design,⚪ Not started,,,,https://systemdesignschool.io/primer
+"Pool, timeouts, withRetry for transient errors",Node,⚪ Not started,,1,drill 18 (to build),
+"Races: oversell, double cancel",Node,⚪ Not started,,1,drill 19 (to build),
+"Load test: autocannon, Little's law",Node,⚪ Not started,,1,drill 18 (to build),
+LLM streaming (SSE) + tool calling in TS,AI,⚪ Not started,,2,ai/01 (to build),
+"RAG: chunking, embeddings, retrieval, evals",AI,⚪ Not started,,3,ai/02 (to build),
+Python: FastAPI + pydantic basics,Python,⚪ Not started,,4,py/01 (to build),
+Python: rewrite RAG on FastAPI,Python,⚪ Not started,,4,py/02 (to build),

@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Track {
+  GRAPHQL
+  SYSTEM_DESIGN
+  NODE
+  AI
+  PYTHON
+}
+
+enum Confidence {
+  NOT_STARTED
+  RED
+  AMBER
+  GREEN
+}
+
+enum CycleStatus {
+  PLANNED
+  ACTIVE
+  DONE
+}
+
+enum MessageRole {
+  USER
+  MODEL
+}
+
+/// Тема = рядок retrospective timetable. notes = база знань по темі (markdown).
+model Topic {
+  id           Int         @id @default(autoincrement())
+  name         String
+  track        Track
+  confidence   Confidence  @default(NOT_STARTED)
+  lastRecallAt DateTime?
+  /// поточний крок інтервалу в днях (2 -> 7 -> 21 -> 42 -> 84)
+  intervalDays Int         @default(0)
+  nextReviewAt DateTime?
+  drill        String      @default("")
+  source       String      @default("")
+  notes        String      @default("")
+  cycleId      Int?
+  cycle        Cycle?      @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  questions    Question[]
+  recalls      RecallLog[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([nextReviewAt])
+}
+
+/// Питання, а не конспекти: своє питання + відповідь з пам'яті + еталон.
+model Question {
+  id        Int         @id @default(autoincrement())
+  question  String
+  myAnswer  String      @default("")
+  reference String      @default("")
+  inAnki    Boolean     @default(false)
+  topicId   Int?
+  topic     Topic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  recalls   RecallLog[]
+  createdAt DateTime    @default(now())
+}
+
+/// Одне відтворення з пам'яті: що написав, що сказав AI, який колір поставив.
+model RecallLog {
+  id              Int        @id @default(autoincrement())
+  topicId         Int
+  topic           Topic      @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  questionId      Int?
+  question        Question?  @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  answer          String
+  feedback        String     @default("")
+  confidenceAfter Confidence
+  createdAt       DateTime   @default(now())
+}
+
+model Cycle {
+  id       Int         @id @default(autoincrement())
+  number   Int         @unique
+  name     String
+  goal     String      @default("")
+  startsOn DateTime    @db.Date
+  endsOn   DateTime    @db.Date
+  status   CycleStatus @default(PLANNED)
+  retro    String      @default("")
+  topics   Topic[]
+}
+
+/// Щоденний чекліст. Один рядок на день.
+model DailyLog {
+  day        DateTime @id @db.Date
+  ankiDone   Boolean  @default(false)
+  recallDone Boolean  @default(false)
+  outLoud    Boolean  @default(false)
+  note       String   @default("")
+}
+
+model InboxItem {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model MockSession {
+  id        Int           @id @default(autoincrement())
+  problem   String
+  startedAt DateTime      @default(now())
+  endedAt   DateTime?
+  messages  MockMessage[]
+}
+
+model MockMessage {
+  id        Int         @id @default(autoincrement())
+  sessionId Int
+  session   MockSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now())
+}

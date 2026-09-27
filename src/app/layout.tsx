@@ -28,6 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/questions" icon="❓" label="Questions" />
             <NavLink href="/cycles" icon="🔁" label="Cycles" />
             <NavLink href="/stats" icon="📈" label="Stats" />
+            <NavLink href="/sources" icon="🔗" label="Sources" />
             <div className="sidebar-section">Practice</div>
             <NavLink href="/mock" icon="🎙️" label="Mock interview" />
             <div className="sidebar-section">System</div>

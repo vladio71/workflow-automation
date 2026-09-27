@@ -16,8 +16,13 @@ interface RecallTopic {
 
 interface RecallQuestion {
   id: number;
+  kind: 'CONCEPT' | 'TASK';
   question: string;
   reference: string;
+  /** TASK: посилання на файл-еталон у репо і команда перевірки */
+  refUrl: string | null;
+  refPath: string;
+  check: string;
 }
 
 interface RecallSessionProps {
@@ -67,6 +72,7 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
   const question = useMemo(() => questions.find((item) => item.id === questionId) ?? null, [questions, questionId]);
   const prompt = question?.question ?? `Explain "${topic.name}" from memory: what it is, why, how it works, trade-offs.`;
   const reference = question?.reference || '';
+  const isTask = question?.kind === 'TASK';
 
   function check() {
     setError(null);
@@ -108,13 +114,24 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
             setRevealed(false);
           }}
         >
-          {questions.map((item) => <option key={item.id} value={item.id}>{item.question}</option>)}
+          {questions.map((item) => (
+            <option key={item.id} value={item.id}>{item.kind === 'TASK' ? `[Task] ${item.question}` : item.question}</option>
+          ))}
           <option value={FREE_RECALL}>Free recall: explain the whole topic</option>
         </select>
         <span className="faint mono">{minutes}:{String(seconds % 60).padStart(2, '0')}</span>
       </div>
 
-      <div className="callout"><span className="emoji">❓</span><div style={{ fontWeight: 600 }}>{prompt}</div></div>
+      <div className="callout">
+        <span className="emoji">{isTask ? '🛠️' : '❓'}</span>
+        <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{prompt}</div>
+      </div>
+      {isTask && (
+        <p className="muted" style={{ fontSize: 14 }}>
+          Hands-on: open an empty file and write it without looking at the reference solution.
+          {question?.check && <> Then run <code className="mono">{question.check}</code>.</>} Paste the key part or notes on where you got stuck below.
+        </p>
+      )}
       {topic.drill && !question && (
         <p className="muted" style={{ fontSize: 14 }}>
           Drill: open an empty file and rebuild <span className="mono">{topic.drill}</span> without looking. Paste the key idea below.
@@ -131,14 +148,14 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
       />
 
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
-        {geminiEnabled && (
+        {geminiEnabled && !isTask && (
           <button className="btn primary" onClick={check} disabled={grading || !answer.trim()}>
             {grading ? 'Checking…' : '✨ Check with Gemini'}
           </button>
         )}
-        <button className="btn" onClick={() => setRevealed(true)}>Show reference</button>
+        <button className="btn" onClick={() => setRevealed(true)}>{isTask ? 'Done, show the solution' : 'Show reference'}</button>
       </div>
-      {!geminiEnabled && <p className="faint" style={{ fontSize: 13 }}>Set GEMINI_API_KEY in .env to get AI feedback. Without it, compare with the reference yourself.</p>}
+      {!geminiEnabled && !isTask && <p className="faint" style={{ fontSize: 13 }}>Set GEMINI_API_KEY in .env to get AI feedback. Without it, compare with the reference yourself.</p>}
       {error && <div className="callout" style={{ color: '#eb5757' }}><span className="emoji">⚠️</span><div>{error}</div></div>}
 
       {grade && (
@@ -157,7 +174,16 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
       {revealed && (
         <div className="card" style={{ margin: '12px 0' }}>
           <b>Reference</b>
-          {reference ? (
+          {isTask ? (
+            <div style={{ marginTop: 6, fontSize: 14, display: 'grid', gap: 6 }}>
+              {question?.refUrl ? (
+                <div>Compare with <a href={question.refUrl} target="_blank" rel="noreferrer" className="mono" style={{ textDecoration: 'underline' }}>{question.refPath} ↗</a></div>
+              ) : (
+                <div className="faint">No reference file for this task.</div>
+              )}
+              {question?.check && <div>Check: <code className="mono">{question.check}</code></div>}
+            </div>
+          ) : reference ? (
             <div className="md" style={{ marginTop: 4 }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{reference}</ReactMarkdown></div>
           ) : (
             <p className="faint" style={{ fontSize: 14 }}>No reference for this question yet. Fill it on the topic page after checking the source.</p>

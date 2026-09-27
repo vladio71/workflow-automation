@@ -1,5 +1,6 @@
 /**
- * Стартові дані: одна тема GraphQL з твоїми матеріалами (нотатки + 32 питання з колоди Anki).
+ * Стартові дані: одна тема GraphQL з твоїми матеріалами (нотатки + 32 питання з колоди Anki),
+ * прив'язана до репо vladio71/graphql-base: перший Sync (або відкриття Today) підтягне картки з learn/.
  * Решту тем і циклів додаєш сам. Запуск: npm run db:seed.
  * УВАГА: чистить усі дані (теми, питання, цикли, логи, плани, mock, inbox). Запускай один раз на старті.
  */
@@ -31,14 +32,18 @@ async function main(): Promise<void> {
     db.question.deleteMany(),
     db.topic.deleteMany(),
     db.cycle.deleteMany(),
+    db.source.deleteMany(),
   ]);
+
+  const repo = await db.source.create({ data: { repo: 'vladio71/graphql-base', branch: 'main' } });
 
   const graphql = await db.topic.create({
     data: {
       name: 'GraphQL',
       track: 'GRAPHQL',
-      drill: 'drills/ (17 drills)',
+      drill: 'drills',
       source: 'https://github.com/vladio71/graphql-base',
+      sourceId: repo.id,
       notes: readFileSync('seed/graphql-notes.md', 'utf8'),
     },
   });
@@ -55,7 +60,7 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`Seeded: topic "GraphQL" with ${await db.question.count()} questions. Add your own topics and cycles in the app.`);
+  console.log(`Seeded: topic "GraphQL" with ${await db.question.count()} questions. Cards from learn/ arrive on the first Sync. Add your own topics and cycles in the app.`);
 }
 
 await main();

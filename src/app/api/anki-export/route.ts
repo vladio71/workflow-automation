@@ -1,11 +1,12 @@
 import { db } from '@/lib/db';
 
 /**
- * Файл для Anki (File -> Import): питання, яких ще немає в Anki.
+ * Файл для Anki (File -> Import): питання-концепти, яких ще немає в Anki.
+ * TASK-картки (написати код руками) в Anki не йдуть: їх роблять у recall-сесії апки.
  * Після експорту позначаємо їх inAnki = true, щоб наступного разу не дублювати.
  */
 export async function GET(): Promise<Response> {
-  const questions = await db.question.findMany({ where: { inAnki: false }, include: { topic: true }, orderBy: { id: 'asc' } });
+  const questions = await db.question.findMany({ where: { inAnki: false, kind: 'CONCEPT' }, include: { topic: true }, orderBy: { id: 'asc' } });
   const clean = (text: string): string => text.replace(/\t/g, ' ').replace(/\r?\n/g, '<br>');
   const lines = [
     '#separator:tab',

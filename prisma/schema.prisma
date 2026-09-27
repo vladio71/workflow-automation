@@ -16,6 +16,12 @@ enum Track {
   OTHER
 }
 
+/// CONCEPT = питання/відповідь (йде в Anki), TASK = задача руками (тільки в апці)
+enum CardKind {
+  CONCEPT
+  TASK
+}
+
 enum ActivityKind {
   STUDY
   DRILL
@@ -59,6 +65,9 @@ model Topic {
   notes        String      @default("")
   cycleId      Int?
   cycle        Cycle?      @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  /// тема, яка синхронізується з репо (learn/topic.md)
+  sourceId     Int?        @unique
+  syncSource   Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   questions    Question[]
   recalls      RecallLog[]
   activities   ActivityLog[]
@@ -71,10 +80,18 @@ model Topic {
 /// Питання, а не конспекти: своє питання + відповідь з пам'яті + еталон.
 model Question {
   id        Int         @id @default(autoincrement())
+  kind      CardKind    @default(CONCEPT)
   question  String
   myAnswer  String      @default("")
   reference String      @default("")
+  /// TASK: файл-еталон у репо і команда перевірки
+  ref       String      @default("")
+  check     String      @default("")
   inAnki    Boolean     @default(false)
+  /// для карток з репо: стабільний ключ, щоб Sync оновлював, а не дублював
+  sourceKey String?     @unique
+  sourceId  Int?
+  syncSource Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   topicId   Int?
   topic     Topic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
   recalls   RecallLog[]
@@ -164,4 +181,18 @@ model DailyPlan {
   review    String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Репо, з якого апка підтягує картки: learn/topic.md + learn/questions.md
+model Source {
+  id           Int        @id @default(autoincrement())
+  /// owner/name
+  repo         String     @unique
+  branch       String     @default("main")
+  lastSyncedAt DateTime?
+  lastError    String     @default("")
+  lastSummary  String     @default("")
+  topic        Topic?
+  questions    Question[]
+  createdAt    DateTime   @default(now())
 }

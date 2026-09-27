@@ -7,6 +7,7 @@ import { formatMinutes, getAnalytics } from '@/lib/activity';
 import { isGeminiConfigured } from '@/lib/gemini';
 import { getTodayPlan } from '@/lib/planner';
 import { QuickCapture } from '@/components/QuickCapture';
+import { AutoSync } from '@/components/AutoSync';
 import { Tag } from '@/components/Tag';
 import { CONFIDENCES, TRACKS, optionFor } from '@/lib/labels';
 import { getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from '@/lib/queries';
@@ -33,6 +34,7 @@ export default async function TodayPage() {
 
   return (
     <div className="page">
+      <AutoSync />
       <div className="page-icon">☀️</div>
       <h1 className="page-title">Today</h1>
       <p className="page-sub">

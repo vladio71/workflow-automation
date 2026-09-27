@@ -8,6 +8,7 @@ import { schedule } from '@/lib/schedule';
 import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import { logActivity } from '@/lib/activity';
+import { normalizeRepo, syncAll, syncAllIfStale, syncSource, type SyncResult } from '@/lib/sync';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -77,6 +78,9 @@ export async function createQuestion(topicId: number | null, formData: FormData)
 }
 
 export async function updateQuestionText(id: number, field: QuestionTextField, value: string): Promise<void> {
+  const question = await db.question.findUniqueOrThrow({ where: { id } });
+  // картки з репо редагуються в репо; в апці тільки твоя відповідь з пам'яті
+  if (question.sourceId !== null && field !== 'myAnswer') return;
   await db.question.update({ where: { id }, data: { [field]: value } });
   refresh();
 }
@@ -353,4 +357,43 @@ export async function addActivity(formData: FormData): Promise<void> {
 export async function deleteActivity(id: number): Promise<void> {
   await db.activityLog.delete({ where: { id } });
   refresh();
+}
+
+// ================================================================== sources (repo -> app sync)
+
+export async function addSource(formData: FormData): Promise<void> {
+  const repo = normalizeRepo(String(formData.get('repo') ?? ''));
+  if (!repo) return;
+  const branch = String(formData.get('branch') ?? '').trim() || 'main';
+  const source = await db.source.upsert({ where: { repo }, update: { branch }, create: { repo, branch } });
+  await syncSource(source.id);
+  refresh();
+}
+
+/** Від'єднати репо. Тема і картки лишаються в апці як звичайні (їх можна редагувати руками). */
+export async function removeSource(id: number): Promise<void> {
+  await db.$transaction([
+    db.question.updateMany({ where: { sourceId: id }, data: { sourceKey: null } }),
+    db.source.delete({ where: { id } }),
+  ]);
+  refresh();
+}
+
+export async function syncSourceNow(id: number): Promise<SyncResult> {
+  const result = await syncSource(id);
+  refresh();
+  return result;
+}
+
+export async function syncAllNow(): Promise<SyncResult[]> {
+  const results = await syncAll();
+  refresh();
+  return results;
+}
+
+/** Викликається з Today при відкритті: тягне тільки ті репо, які не синкались 10+ хвилин. */
+export async function autoSync(): Promise<number> {
+  const synced = await syncAllIfStale();
+  if (synced > 0) refresh();
+  return synced;
 }

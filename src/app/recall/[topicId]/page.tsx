@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { RecallSession } from '@/components/RecallSession';
 import { db } from '@/lib/db';
 import { isGeminiConfigured } from '@/lib/gemini';
+import { refUrl } from '@/lib/sync';
 
 interface RecallPageProps {
   params: Promise<{ topicId: string }>;
@@ -14,7 +15,7 @@ export default async function RecallPage({ params, searchParams }: RecallPagePro
   const { q } = await searchParams;
   const topic = await db.topic.findUnique({
     where: { id: Number(topicId) },
-    include: { questions: { orderBy: { id: 'asc' } } },
+    include: { questions: { orderBy: [{ kind: 'desc' }, { id: 'asc' }] }, syncSource: true },
   });
   if (!topic) notFound();
 
@@ -28,7 +29,15 @@ export default async function RecallPage({ params, searchParams }: RecallPagePro
       <p className="page-sub">Blank page, no peeking. Write everything you remember, then check. The struggle is the point.</p>
       <RecallSession
         topic={{ id: topic.id, name: topic.name, notes: topic.notes, drill: topic.drill }}
-        questions={topic.questions.map((question) => ({ id: question.id, question: question.question, reference: question.reference }))}
+        questions={topic.questions.map((question) => ({
+          id: question.id,
+          kind: question.kind,
+          question: question.question,
+          reference: question.reference,
+          refUrl: topic.syncSource && question.ref ? refUrl(topic.syncSource, question.ref) : null,
+          refPath: question.ref,
+          check: question.check,
+        }))}
         initialQuestionId={q ? Number(q) : null}
         geminiEnabled={isGeminiConfigured()}
       />

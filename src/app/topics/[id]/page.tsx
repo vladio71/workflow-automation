@@ -21,6 +21,7 @@ import { formatMinutes } from '@/lib/activity';
 import { db } from '@/lib/db';
 import { CONFIDENCES, TRACKS, optionFor, type Option } from '@/lib/labels';
 import { relativeDay } from '@/lib/schedule';
+import { refUrl, repoUrl } from '@/lib/sync';
 import type { Confidence, Track } from '@/generated/prisma/enums';
 
 export default async function TopicPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +29,8 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
   const topic = await db.topic.findUnique({
     where: { id: Number(id) },
     include: {
-      questions: { orderBy: { id: 'asc' } },
+      questions: { orderBy: [{ kind: 'desc' }, { id: 'asc' }] },
+      syncSource: true,
       recalls: { orderBy: { createdAt: 'desc' }, take: 10, include: { question: true } },
     },
   });
@@ -42,18 +44,34 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
     ...cycles.map((cycle) => ({ value: String(cycle.id), label: `C${cycle.number} · ${cycle.name}`, color: 'blue' as const })),
   ];
   const now = new Date();
-  const repoFile = topic.drill.startsWith('drills/') ? `https://github.com/vladio71/graphql-base/blob/main/${topic.drill}` : null;
+  const synced = topic.syncSource;
+  const repoFile = synced && topic.drill ? refUrl(synced, topic.drill) : null;
 
   return (
     <div className="page">
       <div style={{ marginBottom: 14 }}><Link href="/topics" className="faint" style={{ fontSize: 14 }}>← Topics</Link></div>
       <div className="page-title">
-        <InlineText value={topic.name} action={updateTopicText.bind(null, topic.id, 'name')} multiline />
+        {synced ? topic.name : <InlineText value={topic.name} action={updateTopicText.bind(null, topic.id, 'name')} multiline />}
       </div>
 
       <div className="props" style={{ marginTop: 16 }}>
         <div className="k">◉ Track</div>
-        <div className="v"><Select<Track> value={topic.track} options={TRACKS} action={setTopicTrack.bind(null, topic.id)} /></div>
+        <div className="v">
+          {synced ? (
+            <Tag color={optionFor(TRACKS, topic.track).color}>{optionFor(TRACKS, topic.track).label}</Tag>
+          ) : (
+            <Select<Track> value={topic.track} options={TRACKS} action={setTopicTrack.bind(null, topic.id)} />
+          )}
+        </div>
+        {synced && (
+          <>
+            <div className="k">⇣ Synced from</div>
+            <div className="v muted" style={{ gap: 8 }}>
+              <a href={repoUrl(synced)} target="_blank" rel="noreferrer">{synced.repo}</a>
+              <Link href="/sources" className="faint" style={{ fontSize: 13 }}>{synced.lastError ? '⚠ sync error' : 'learn/ · manage'}</Link>
+            </div>
+          </>
+        )}
         <div className="k">◉ Confidence</div>
         <div className="v"><Select<Confidence> value={topic.confidence} options={CONFIDENCES} action={setTopicConfidence.bind(null, topic.id)} /></div>
         <div className="k">🗓 Last recall</div>
@@ -90,29 +108,61 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
       <NotesEditor value={topic.notes} action={updateTopicText.bind(null, topic.id, 'notes')} />
 
       <h2 className="block-title">Questions <span className="faint" style={{ fontWeight: 400, fontSize: 15 }}>{topic.questions.length}</span></h2>
-      <p className="faint" style={{ fontSize: 13, marginBottom: 8 }}>Close the source, write 3-5 questions, answer from memory, then fill the reference.</p>
-      {topic.questions.map((question) => (
+      <p className="faint" style={{ fontSize: 13, marginBottom: 8 }}>
+        {synced
+          ? 'Cards marked "repo" come from learn/questions.md: edit them in the repo, the app pulls changes on Sync.'
+          : 'Close the source, write 3-5 questions, answer from memory, then fill the reference.'}
+      </p>
+      {topic.questions.map((question) => {
+        const fromRepo = question.sourceId !== null && synced !== null;
+        const isTask = question.kind === 'TASK';
+        return (
         <div key={question.id} className="card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <span style={{ fontWeight: 600, flex: 1 }}>
-              <InlineText value={question.question} action={updateQuestionText.bind(null, question.id, 'question')} multiline />
+            <span style={{ display: 'flex', gap: 4, paddingTop: 2 }}>
+              <Tag color={isTask ? 'orange' : 'blue'}>{isTask ? 'Task' : 'Q'}</Tag>
+              {fromRepo && <Tag color="gray">repo</Tag>}
             </span>
-            <Link href={`/recall/${topic.id}?q=${question.id}`} className="btn sm">Recall</Link>
-            <form action={deleteQuestion.bind(null, question.id)}><button className="btn sm ghost" title="Delete">✕</button></form>
+            <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'pre-wrap' }}>
+              {fromRepo ? question.question : <InlineText value={question.question} action={updateQuestionText.bind(null, question.id, 'question')} multiline />}
+            </span>
+            <Link href={`/recall/${topic.id}?q=${question.id}`} className="btn sm">{isTask ? 'Do it' : 'Recall'}</Link>
+            {!fromRepo && <form action={deleteQuestion.bind(null, question.id)}><button className="btn sm ghost" title="Delete">✕</button></form>}
           </div>
-          <div className="faint" style={{ fontSize: 12, marginTop: 8 }}>Reference</div>
-          <InlineText value={question.reference} action={updateQuestionText.bind(null, question.id, 'reference')} placeholder="Correct answer after checking the source" multiline />
+          {isTask ? (
+            <div style={{ fontSize: 13, marginTop: 8, display: 'grid', gap: 4 }}>
+              {question.ref && (
+                <div>
+                  <span className="faint">Reference solution </span>
+                  {synced ? <a href={refUrl(synced, question.ref)} target="_blank" rel="noreferrer" className="mono">{question.ref} ↗</a> : <span className="mono">{question.ref}</span>}
+                </div>
+              )}
+              {question.check && <div><span className="faint">Check </span><code className="mono">{question.check}</code></div>}
+            </div>
+          ) : (
+            <>
+              <div className="faint" style={{ fontSize: 12, marginTop: 8 }}>Reference</div>
+              {fromRepo ? (
+                <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{question.reference}</div>
+              ) : (
+                <InlineText value={question.reference} action={updateQuestionText.bind(null, question.id, 'reference')} placeholder="Correct answer after checking the source" multiline />
+              )}
+            </>
+          )}
           {question.myAnswer && (
             <>
               <div className="faint" style={{ fontSize: 12, marginTop: 8 }}>My last answer from memory</div>
               <div className="muted" style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{question.myAnswer}</div>
             </>
           )}
-          <div style={{ marginTop: 6, fontSize: 13 }}>
-            <CheckItem checked={question.inAnki} label="In Anki" strike={false} action={setQuestionInAnki.bind(null, question.id)} />
-          </div>
+          {!isTask && (
+            <div style={{ marginTop: 6, fontSize: 13 }}>
+              <CheckItem checked={question.inAnki} label="In Anki" strike={false} action={setQuestionInAnki.bind(null, question.id)} />
+            </div>
+          )}
         </div>
-      ))}
+        );
+      })}
       <form action={createQuestion.bind(null, topic.id)}>
         <input name="question" className="input" placeholder="+ New question (Enter)" autoComplete="off" />
       </form>

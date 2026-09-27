@@ -29,7 +29,9 @@ npm run dev                     # http://localhost:3000
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL і колода Anki, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
+| `prisma/schema.prisma` | Topic, Question, Source, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
+| `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
+| `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert теми і карток |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
 | `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
 | `src/lib/activity.ts` | лог часу, стрік, аналітика |

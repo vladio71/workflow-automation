@@ -196,7 +196,43 @@ model Source {
   lastSummary  String     @default("")
   /// SHA коміту останнього успішного sync: не змінився, тоді файли не качаємо
   lastSha      String     @default("")
+  /// learn/plan.md: назва плану і скільки хвилин на день він бере (0 = плану немає)
+  planName         String     @default("")
+  planDailyMinutes Int        @default(0)
   topics       Topic[]
+  planSteps    PlanStep[]
   questions    Question[]
   createdAt    DateTime   @default(now())
+}
+
+enum PlanStepKind {
+  READ
+  ATTEMPT
+  REFERENCE
+  SUMMARY
+  DEPTH
+  EXAM
+}
+
+/// Крок навчального плану з learn/plan.md. Порядок і текст приходять з репо, прогрес (doneAt) живе тут.
+model PlanStep {
+  id        Int          @id @default(autoincrement())
+  sourceId  Int
+  source    Source       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// Id: з plan.md; по ньому Sync знаходить крок, тож прогрес не губиться, коли кроки переставляють
+  key       String
+  position  Int
+  /// заголовок "## ..." над кроком, наприклад "Тиждень 1"
+  group     String       @default("")
+  title     String
+  minutes   Int
+  kind      PlanStepKind @default(READ)
+  /// URL або шлях у репо
+  link      String       @default("")
+  /// папка теми в learn/: ATTEMPT = recall цієї теми
+  topicPath String       @default("")
+  doneAt    DateTime?
+
+  @@unique([sourceId, key])
+  @@index([sourceId, position])
 }

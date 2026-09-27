@@ -18,28 +18,42 @@ export async function getActiveCycle(): Promise<CycleWithProgress | null> {
   return { ...cycle, topicCount, greenCount };
 }
 
-/** Що повторювати сьогодні: термін настав або тема червона. Спершу червоні, потім найстаріші. */
+/**
+ * Що повторювати сьогодні: термін настав або тема червона. Спершу червоні, потім найстаріші.
+ * Виняток: задачі з навчального плану (теми ATTEMPT-кроків) тільки за розкладом, навіть червоні:
+ * задачу, розв'язану сьогодні на червоне, переробляють через 2 дні, а не того ж вечора.
+ */
 export async function getDueTopics(now: Date = new Date()): Promise<Topic[]> {
-  const due = await db.topic.findMany({
-    where: {
-      OR: [
-        { nextReviewAt: { lte: endOfDay(now) } },
-        { confidence: 'RED' },
-      ],
-    },
-  });
+  const until = endOfDay(now);
+  const [due, attemptSteps] = await Promise.all([
+    db.topic.findMany({
+      where: {
+        OR: [
+          { nextReviewAt: { lte: until } },
+          { confidence: 'RED' },
+        ],
+      },
+    }),
+    db.planStep.findMany({ where: { kind: 'ATTEMPT' }, select: { sourceId: true, topicPath: true } }),
+  ]);
+  const problemKeys = new Set(attemptSteps.map((step) => `${step.sourceId}:${step.topicPath}`));
+  const isScheduledLater = (topic: Topic): boolean =>
+    topic.sourceId !== null &&
+    problemKeys.has(`${topic.sourceId}:${topic.sourcePath}`) &&
+    (topic.nextReviewAt === null || topic.nextReviewAt > until);
+
   const rank = (topic: Topic): number => (topic.confidence === 'RED' ? 0 : 1);
-  return due.sort((a, b) => {
-    const byColor = rank(a) - rank(b);
-    if (byColor !== 0) return byColor;
-    return (a.lastRecallAt?.getTime() ?? 0) - (b.lastRecallAt?.getTime() ?? 0);
-  });
+  return due
+    .filter((topic) => !isScheduledLater(topic))
+    .sort((a, b) => {
+      const byColor = rank(a) - rank(b);
+      if (byColor !== 0) return byColor;
+      return (a.lastRecallAt?.getTime() ?? 0) - (b.lastRecallAt?.getTime() ?? 0);
+    });
 }
 
 export async function getDueCount(): Promise<number> {
-  return db.topic.count({
-    where: { OR: [{ nextReviewAt: { lte: endOfDay(new Date()) } }, { confidence: 'RED' }] },
-  });
+  return (await getDueTopics()).length;
 }
 
 export async function getTodayLog(now: Date = new Date()): Promise<DailyLog> {

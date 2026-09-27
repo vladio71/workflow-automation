@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import type { Source } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { parseQuestions, parseTopic, type ParsedCard, type ParsedTopic } from '@/lib/learn-format';
+import { isUrl, parsePlan, parseQuestions, parseTopic, type ParsedCard, type ParsedPlan, type ParsedTopic } from '@/lib/learn-format';
 
 /**
  * Sync тягне з репо папку learn/ і робить з неї теми + картки.
@@ -10,6 +10,7 @@ import { parseQuestions, parseTopic, type ParsedCard, type ParsedTopic } from '@
  * Дві розкладки (можна змішувати):
  *   learn/topic.md + learn/questions.md                  одна тема на все репо (graphql-base)
  *   learn/<module>/topic.md + learn/<module>/questions.md  тема на кожну папку (system-design-reps)
+ *   learn/plan.md (необов'язково)                           навчальний план: кроки по порядку, прогрес живе в апці
  *
  * Правила:
  *   - спершу питаємо SHA останнього коміту гілки; не змінився з минулого успішного sync, тоді нічого не качаємо;
@@ -35,7 +36,9 @@ export function repoUrl(source: Pick<Source, 'repo'>): string {
   return `https://github.com/${source.repo}`;
 }
 
+/** Ref:/Link: з репо -> посилання на GitHub; повний URL лишається як є. */
 export function refUrl(source: Pick<Source, 'repo' | 'branch'>, ref: string): string {
+  if (isUrl(ref)) return ref;
   return `https://github.com/${source.repo}/blob/${source.branch}/${ref}`;
 }
 
@@ -126,7 +129,12 @@ async function readTopicFolder(source: Source, sha: string, path: string): Promi
   return { path, topic, notes, cards: questions.cards };
 }
 
-async function readLearnFolder(source: Source, sha: string): Promise<RepoTopicFiles[]> {
+interface RepoLearn {
+  folders: RepoTopicFiles[];
+  plan: ParsedPlan | null;
+}
+
+async function readLearn(source: Source, sha: string): Promise<RepoLearn> {
   const entries = await listDir(source, sha, 'learn');
   if (entries === null) throw new SyncError(`learn/ not found in ${source.repo}@${source.branch}`);
 
@@ -142,7 +150,21 @@ async function readLearnFolder(source: Source, sha: string): Promise<RepoTopicFi
     if (folder) folders.push(folder);
   }
   if (folders.length === 0) throw new SyncError('learn/ has no topic.md (neither learn/topic.md nor learn/<module>/topic.md)');
-  return folders;
+
+  let plan: ParsedPlan | null = null;
+  if (entries.some((entry) => entry.type === 'file' && entry.name === 'plan.md')) {
+    const planText = await fetchFile(source, sha, 'learn/plan.md');
+    if (planText !== null) {
+      plan = parsePlan(planText);
+      const errors = plan.errors.map((error) => `learn/plan.md ${error}`);
+      const folderPaths = new Set(folders.map((folder) => folder.path));
+      for (const step of plan.steps) {
+        if (step.topic && !folderPaths.has(step.topic)) errors.push(`learn/plan.md line ${step.line}: Topic learn/${step.topic}/ not found`);
+      }
+      if (errors.length > 0) throw new SyncError(errors.slice(0, 5).join('; '));
+    }
+  }
+  return { folders, plan };
 }
 
 /** Стабільний ключ картки: репо + папка теми + тип + текст питання без різниці в регістрі та пробілах. */
@@ -162,8 +184,8 @@ export async function syncSource(sourceId: number, options: { force?: boolean } 
       return { ok: true, summary: source.lastSummary };
     }
 
-    const folders = await readLearnFolder(source, sha);
-    const summary = await applyFolders(source, folders);
+    const learn = await readLearn(source, sha);
+    const summary = await applyLearn(source, learn);
     await db.source.update({
       where: { id: source.id },
       data: { lastSyncedAt: new Date(), lastError: '', lastSummary: summary, lastSha: sha },
@@ -176,8 +198,10 @@ export async function syncSource(sourceId: number, options: { force?: boolean } 
   }
 }
 
-async function applyFolders(source: Source, folders: RepoTopicFiles[]): Promise<string> {
-  return db.$transaction(async (tx) => {
+async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
+  const { folders, plan } = learn;
+  return db.$transaction(
+    async (tx) => {
     const existing = await tx.question.findMany({ where: { sourceId: source.id } });
     const byKey = new Map(existing.map((question) => [question.sourceKey, question]));
     const keysInRepo = new Set<string>();
@@ -249,9 +273,37 @@ async function applyFolders(source: Source, folders: RepoTopicFiles[]): Promise<
       data: { sourceId: null, sourcePath: '' },
     });
 
+    // навчальний план: кроки по Id; прогрес (doneAt) лишається, навіть якщо крок перейменували чи пересунули
+    const planSteps = plan?.steps ?? [];
+    for (const [position, step] of planSteps.entries()) {
+      const data = {
+        position,
+        group: step.group,
+        title: step.title,
+        minutes: step.minutes,
+        kind: step.kind,
+        link: step.link,
+        topicPath: step.topic,
+      };
+      await tx.planStep.upsert({
+        where: { sourceId_key: { sourceId: source.id, key: step.key } },
+        update: data,
+        create: { ...data, sourceId: source.id, key: step.key },
+      });
+    }
+    await tx.planStep.deleteMany({ where: { sourceId: source.id, key: { notIn: planSteps.map((step) => step.key) } } });
+    await tx.source.update({
+      where: { id: source.id },
+      data: { planName: plan?.name ?? '', planDailyMinutes: plan?.dailyMinutes ?? 0 },
+    });
+
     const topicsLabel = folders.length === 1 ? '' : `${folders.length} topics · `;
-    return `${topicsLabel}${concepts} Q · ${tasks} tasks (+${added} new, ${updated} updated, ${removedIds.length} removed)`;
-  });
+    const planLabel = plan ? ` · plan: ${plan.steps.length} steps` : '';
+    return `${topicsLabel}${concepts} Q · ${tasks} tasks (+${added} new, ${updated} updated, ${removedIds.length} removed)${planLabel}`;
+    },
+    // багато дрібних upsert-ів (картки, кроки плану): дефолтних 5 с може не вистачити
+    { timeout: 30_000 },
+  );
 }
 
 /** Кнопка "Sync all": force, тобто перечитати файли навіть якщо коміт той самий. */

@@ -13,10 +13,11 @@ import { CONFIDENCES, TRACKS, optionFor } from '@/lib/labels';
 import { getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from '@/lib/queries';
 import { relativeDay } from '@/lib/schedule';
 import { db } from '@/lib/db';
+import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, log, cycle, due, sdTopic] = await Promise.all([
+  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -24,6 +25,7 @@ export default async function TodayPage() {
     getActiveCycle(),
     getDueTopics(now),
     getNextSystemDesignTopic(),
+    getStudyPlans(),
   ]);
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
@@ -45,6 +47,40 @@ export default async function TodayPage() {
         plan={plan ? { summary: plan.summary, review: plan.review, items: plan.items } : null}
         geminiEnabled={isGeminiConfigured()}
       />
+
+      {studyPlans.map((studyPlan) => {
+        const progress = planProgress(studyPlan);
+        const next = progress.next;
+        return (
+          <div key={studyPlan.source.id} className="callout">
+            <span className="emoji">🧭</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <Link href="/plan" style={{ fontWeight: 600 }}>{studyPlan.source.planName}</Link>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  step {Math.min(progress.done + 1, progress.total)}/{progress.total}{next ? ` · ${next.group}` : ' · done'}
+                </span>
+              </div>
+              <div className="progress" style={{ margin: '8px 0' }}>
+                <div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+              </div>
+              {next ? (
+                <div style={{ fontSize: 14 }}>
+                  <span className="faint">Next: </span>
+                  {stepHref(studyPlan, next).startsWith('http') ? (
+                    <a href={stepHref(studyPlan, next)} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{next.title} ↗</a>
+                  ) : (
+                    <Link href={stepHref(studyPlan, next)} style={{ textDecoration: 'underline' }}>{next.title}</Link>
+                  )}
+                  <span className="faint mono"> · {next.minutes}m</span>
+                </div>
+              ) : (
+                <div className="muted" style={{ fontSize: 14 }}>All steps done. Exam mode: a random problem once or twice a week.</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
       {cycle && (
         <div className="callout">
@@ -118,6 +154,7 @@ export default async function TodayPage() {
         </>
       )}
 
+      {studyPlans.length === 0 && (<>
       <h2 className="block-title">Weekly · system design</h2>
       <div className="callout">
         <span className="emoji">🏗️</span>
@@ -134,6 +171,7 @@ export default async function TodayPage() {
           </div>
         </div>
       </div>
+      </>)}
 
       {isSunday && (
         <div className="callout">

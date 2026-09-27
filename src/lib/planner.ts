@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { db } from './db';
 import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
 import { endOfDay, startOfDay } from './schedule';
+import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref } from './study-plan';
 
 /**
  * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
- * (що прострочене, який цикл, коли був mock), а AI лише вибирає, впорядковує і пояснює.
+ * (що прострочене, який цикл, навчальний план з репо), а AI лише вибирає, впорядковує і пояснює.
+ * Кроки навчального плану (PLAN) і переробки задач відбирає код, а не AI: вони обов'язкові і йдуть по порядку.
  */
-export type PlanItemKind = 'ANKI' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX';
+export type PlanItemKind = 'ANKI' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN';
 
 export interface PlanCandidate {
   id: string;
@@ -17,6 +19,10 @@ export interface PlanCandidate {
   href: string;
   topicId: number | null;
   defaultMinutes: number;
+  /** пояснення за замовчуванням (коли план без AI) */
+  hint?: string;
+  /** частина навчального плану на сьогодні: AI не може її викинути чи переставити */
+  mandatory?: boolean;
 }
 
 export interface PlanItem extends PlanCandidate {
@@ -37,7 +43,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['ANKI', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX']),
+  kind: z.enum(['ANKI', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN']),
   title: z.string(),
   href: z.string(),
   topicId: z.number().nullable(),
@@ -45,6 +51,8 @@ const PlanItemSchema = z.object({
   minutes: z.number(),
   why: z.string(),
   manualDone: z.boolean(),
+  hint: z.string().optional(),
+  mandatory: z.boolean().optional(),
 });
 
 export function parsePlanItems(json: unknown): PlanItem[] {
@@ -53,13 +61,14 @@ export function parsePlanItems(json: unknown): PlanItem[] {
 
 export async function buildCandidates(now: Date = new Date()): Promise<PlanCandidate[]> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall] = await Promise.all([
+  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans] = await Promise.all([
     getDueTopics(now),
     getActiveCycle(),
     getNextSystemDesignTopic(),
     db.inboxItem.count(),
     db.mockSession.findFirst({ orderBy: { startedAt: 'desc' } }),
     db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
+    getStudyPlans(),
   ]);
 
   const candidates: PlanCandidate[] = [
@@ -67,7 +76,39 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/questions', topicId: null, defaultMinutes: 5 },
   ];
 
-  for (const topic of due.slice(0, 6)) {
+  // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
+  const problemIds = new Set<number>();
+  for (const plan of studyPlans) {
+    for (const id of problemTopicIds(plan)) problemIds.add(id);
+    const { redos, steps } = selectToday(plan, due, now);
+    for (const topic of redos) {
+      candidates.push({
+        id: `recall:${topic.id}`,
+        kind: 'RECALL',
+        title: `Redo з нуля: ${topic.name}`,
+        href: `/recall/${topic.id}`,
+        topicId: topic.id,
+        defaultMinutes: REDO_MINUTES,
+        hint: 'Настав термін переробки: 45 хв з таймером, потім звір з минулою спробою.',
+        mandatory: true,
+      });
+    }
+    for (const step of steps) {
+      candidates.push({
+        id: `plan:${step.id}`,
+        kind: 'PLAN',
+        title: step.title,
+        href: stepHref(plan, step),
+        topicId: plan.topicByPath.get(step.topicPath)?.id ?? null,
+        defaultMinutes: step.minutes,
+        hint: `${plan.source.planName} · ${step.group} · крок ${step.position + 1}/${plan.steps.length}`,
+        mandatory: true,
+      });
+    }
+  }
+
+  // задачі плану повторюються тільки як Redo (45 хв), не як звичайний 15-хвилинний recall
+  for (const topic of due.filter((dueTopic) => !problemIds.has(dueTopic.id)).slice(0, 6)) {
     candidates.push({
       id: `recall:${topic.id}`,
       kind: 'RECALL',
@@ -106,7 +147,8 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     }
   }
 
-  if (sdTopic && !recentSdRecall) {
+  // старий ритм "system design раз на тиждень" і тижневий mock: тільки якщо навчального плану немає
+  if (studyPlans.length === 0 && sdTopic && !recentSdRecall) {
     candidates.push({
       id: `sd:${sdTopic.id}`,
       kind: 'SYSTEM_DESIGN',
@@ -117,7 +159,7 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     });
   }
 
-  if (!lastMock || lastMock.startedAt < weekAgo) {
+  if (studyPlans.length === 0 && (!lastMock || lastMock.startedAt < weekAgo)) {
     candidates.push({ id: 'mock', kind: 'MOCK', title: 'System design mock, 45 min', href: '/mock', topicId: null, defaultMinutes: 45 });
   }
 
@@ -130,9 +172,12 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
 
 /** План без AI (нема ключа або Gemini впав): прості правила. */
 export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { items: PlanItem[]; summary: string } {
-  const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] => candidates.filter((c) => c.kind === kind).slice(0, limit);
+  const mandatory = candidates.filter((c) => c.mandatory === true);
+  const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] =>
+    candidates.filter((c) => c.kind === kind && c.mandatory !== true).slice(0, limit);
   const ordered = [
     ...pick('ANKI', 1),
+    ...mandatory,
     ...pick('RECALL', 2),
     ...pick('CYCLE', 1),
     ...pick('QUESTIONS', 1),
@@ -141,26 +186,42 @@ export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { 
   ];
   const items: PlanItem[] = [];
   let used = 0;
+  let planCut = false;
   for (const candidate of ordered) {
-    if (used + candidate.defaultMinutes > minutesBudget && items.length >= 3) continue;
+    const fits = used + candidate.defaultMinutes <= minutesBudget;
+    if (candidate.mandatory === true) {
+      // кроки плану йдуть строго по порядку: не влізла один, наступні теж не беремо
+      if (planCut || (!fits && items.length >= 3)) {
+        planCut = true;
+        continue;
+      }
+    } else if (!fits && items.length >= 3) {
+      continue;
+    }
     used += candidate.defaultMinutes;
-    items.push({ ...candidate, minutes: candidate.defaultMinutes, why: '', manualDone: false });
+    items.push({ ...candidate, minutes: candidate.defaultMinutes, why: candidate.hint ?? '', manualDone: false });
   }
-  return { items, summary: 'План за правилами (без AI): Anki, прострочені повторення, робота по циклу, system design.' };
+  const summary = mandatory.length > 0
+    ? 'План за правилами (без AI): Anki, кроки навчального плану по порядку, повторення, решта в цикл.'
+    : 'План за правилами (без AI): Anki, прострочені повторення, робота по циклу, system design.';
+  return { items, summary };
 }
 
 /** Що апка бачить сама: recall-логи, нові питання, mock, чекліст дня. */
 export async function withStatus(items: PlanItem[], now: Date = new Date()): Promise<PlanItemWithStatus[]> {
   const from = startOfDay(now);
   const to = endOfDay(now);
-  const [log, recalls, questions, mockToday, inboxCount] = await Promise.all([
+  const planStepIds = items.filter((item) => item.kind === 'PLAN').map((item) => Number(item.id.replace('plan:', '')));
+  const [log, recalls, questions, mockToday, inboxCount, planSteps] = await Promise.all([
     getTodayLog(now),
     db.recallLog.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.question.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.mockSession.count({ where: { startedAt: { gte: from, lte: to } } }),
     db.inboxItem.count(),
+    db.planStep.findMany({ where: { id: { in: planStepIds } } }),
   ]);
   const recalled = new Set(recalls.map((r) => r.topicId));
+  const stepById = new Map(planSteps.map((step) => [step.id, step]));
   const questionsByTopic = new Map<number, number>();
   for (const q of questions) if (q.topicId) questionsByTopic.set(q.topicId, (questionsByTopic.get(q.topicId) ?? 0) + 1);
 
@@ -177,6 +238,15 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
       case 'SYSTEM_DESIGN': autoDone = recalled.has(topicId) || questionsByTopic.has(topicId); break;
       case 'MOCK': autoDone = mockToday > 0; break;
       case 'INBOX': autoDone = inboxCount === 0; break;
+      case 'PLAN': {
+        // прогрес кроку живе в PlanStep: галочка тут, на сторінці плану або автоматично після спроби задачі
+        const step = stepById.get(Number(item.id.replace('plan:', '')));
+        if (step) {
+          const attemptDone = step.kind === 'ATTEMPT' && recalled.has(topicId);
+          return { ...item, autoDone: attemptDone, done: step.doneAt !== null || attemptDone };
+        }
+        break;
+      }
     }
     return { ...item, autoDone, done: autoDone || item.manualDone };
   });

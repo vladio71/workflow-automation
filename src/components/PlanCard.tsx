@@ -10,7 +10,7 @@ interface PlanCardProps {
   geminiEnabled: boolean;
 }
 
-const BUDGETS: readonly number[] = [30, 60, 90, 120, 180];
+const BUDGETS: readonly number[] = [60, 120, 180, 240, 300, 360, 480];
 
 const KIND_ICON: Record<PlanItemWithStatus['kind'], string> = {
   ANKI: '🃏',
@@ -21,10 +21,11 @@ const KIND_ICON: Record<PlanItemWithStatus['kind'], string> = {
   MOCK: '🎙️',
   OUT_LOUD: '🗣️',
   INBOX: '📥',
+  PLAN: '🧭',
 };
 
 export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
-  const [budget, setBudget] = useState(90);
+  const [budget, setBudget] = useState(300);
   const [note, setNote] = useState<string | null>(null);
   const [planning, startPlanning] = useTransition();
   const [reviewing, startReviewing] = useTransition();
@@ -72,7 +73,7 @@ export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
       {!plan && (
         <p className="muted" style={{ fontSize: 14, marginTop: 8 }}>
           {geminiEnabled
-            ? 'Gemini picks 3-5 items from your data: overdue recalls, the current cycle, system design, mock. It never invents topics.'
+            ? 'Steps of your study plan come first, in order (the app picks them, not AI). Gemini fills the rest of the budget from your data: Anki, overdue recalls, the current cycle. It never invents topics.'
             : 'Without GEMINI_API_KEY the plan is built by simple rules.'}
         </p>
       )}
@@ -101,9 +102,15 @@ export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                     <span>{KIND_ICON[item.kind]}</span>
-                    <Link href={item.href} style={{ fontWeight: 500, textDecoration: item.done ? 'line-through' : 'none', color: item.done ? 'var(--faint)' : undefined }}>
-                      {item.title}
-                    </Link>
+                    {item.href.startsWith('http') ? (
+                      <a href={item.href} target="_blank" rel="noreferrer" style={{ fontWeight: 500, textDecoration: item.done ? 'line-through' : 'none', color: item.done ? 'var(--faint)' : undefined }}>
+                        {item.title} ↗
+                      </a>
+                    ) : (
+                      <Link href={item.href} style={{ fontWeight: 500, textDecoration: item.done ? 'line-through' : 'none', color: item.done ? 'var(--faint)' : undefined }}>
+                        {item.title}
+                      </Link>
+                    )}
                     <span className="faint mono" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{item.minutes}m</span>
                   </div>
                   {item.why && <div className="faint" style={{ fontSize: 13, marginLeft: 26 }}>{item.why}</div>}

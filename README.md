@@ -44,9 +44,11 @@ npm run app        # Postgres + нові міграції + збірка + ст�
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL і колода Anki, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, Source, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
+| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
-| `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert теми і карток |
+| `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
+| `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
+| `src/lib/plan-order.ts` | AI не може викинути чи переставити кроки плану |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
 | `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
 | `src/lib/activity.ts` | лог часу, стрік, аналітика |

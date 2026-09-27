@@ -7,6 +7,9 @@
  *   T: задача / Ref: файл / Check: команда     -> TASK
  * Рядок без ключа продовжує попереднє поле (багаторядкові відповіді).
  * Рядки з # і з відступом 4+ пробіли ігноруються. Абзац без жодного ключа теж.
+ * Ref: шлях до файлу в репо або повний URL (https://...).
+ *
+ * learn/plan.md (необов'язково): навчальний план, послідовність кроків, див. parsePlan нижче.
  */
 import type { Track } from '@/generated/prisma/client';
 
@@ -123,6 +126,24 @@ export function parseQuestions(text: string): ParsedQuestions {
   return { cards, errors };
 }
 
+interface FrontMatter {
+  meta: Map<string, string>;
+  body: string;
+}
+
+/** `---\nkey: value\n---\nтекст`: null, якщо front matter немає. */
+function readFrontMatter(text: string): FrontMatter | null {
+  const match = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  const head = match?.[1];
+  if (head === undefined) return null;
+  const meta = new Map<string, string>();
+  for (const line of head.split('\n')) {
+    const pair = line.match(/^(\w+):\s*(.*)$/);
+    if (pair?.[1]) meta.set(pair[1], (pair[2] ?? '').trim());
+  }
+  return { meta, body: match?.[2] ?? '' };
+}
+
 /**
  * topic.md: front matter + необов'язкові нотатки нижче.
  *   ---
@@ -133,10 +154,8 @@ export function parseQuestions(text: string): ParsedQuestions {
  *   ---
  */
 export function parseTopic(text: string): ParsedTopic {
-  const match = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  const frontMatter = match?.[1];
-  const body = match?.[2] ?? '';
-  if (frontMatter === undefined) {
+  const frontMatter = readFrontMatter(text);
+  if (frontMatter === null) {
     return {
       name: '',
       track: 'OTHER',
@@ -147,12 +166,7 @@ export function parseTopic(text: string): ParsedTopic {
     };
   }
 
-  const meta = new Map<string, string>();
-  for (const line of frontMatter.split('\n')) {
-    const pair = line.match(/^(\w+):\s*(.*)$/);
-    if (pair?.[1]) meta.set(pair[1], (pair[2] ?? '').trim());
-  }
-
+  const { meta, body } = frontMatter;
   const errors: string[] = [];
   const name = meta.get('name') ?? '';
   const trackRaw = meta.get('track') || 'OTHER';
@@ -170,4 +184,145 @@ export function parseTopic(text: string): ParsedTopic {
     drill: meta.get('drill') ?? '',
     errors,
   };
+}
+
+// ------------------------------------------------------------------ learn/plan.md
+
+export type PlanStepKind = 'READ' | 'ATTEMPT' | 'REFERENCE' | 'SUMMARY' | 'DEPTH' | 'EXAM';
+
+export interface ParsedPlanStep {
+  /** стабільний id кроку: прогрес прив'язаний до нього, тому текст і порядок можна міняти */
+  key: string;
+  title: string;
+  minutes: number;
+  kind: PlanStepKind;
+  /** URL або шлях у репо */
+  link: string;
+  /** папка теми в learn/ (для ATTEMPT обов'язково: спроба = recall цієї теми) */
+  topic: string;
+  /** останній заголовок `## ...` над кроком, наприклад "Тиждень 1" */
+  group: string;
+  line: number;
+}
+
+export interface ParsedPlan {
+  name: string;
+  /** скільки хвилин на день план бере собі в плані дня */
+  dailyMinutes: number;
+  steps: ParsedPlanStep[];
+  errors: string[];
+}
+
+type PlanFieldKey = 'S' | 'Id' | 'Min' | 'Kind' | 'Link' | 'Topic';
+
+const PLAN_KEY = /^(S|Id|Min|Kind|Link|Topic):\s?(.*)$/;
+const PLAN_STEP_KINDS: PlanStepKind[] = ['READ', 'ATTEMPT', 'REFERENCE', 'SUMMARY', 'DEPTH', 'EXAM'];
+const DEFAULT_DAILY_MINUTES = 180;
+const MAX_STEP_MINUTES = 600;
+
+/**
+ * learn/plan.md: front matter (name, dailyMinutes) + кроки через порожній рядок.
+ *   ## Тиждень 1              заголовок групи (для відображення)
+ *
+ *   S: URL shortener: спроба 45 хв
+ *   Id: p01-attempt           латиниця, цифри, дефіс; унікальний
+ *   Min: 45
+ *   Kind: ATTEMPT             READ | ATTEMPT | REFERENCE | SUMMARY | DEPTH | EXAM (за замовчуванням READ)
+ *   Topic: p01-url-shortener  папка в learn/
+ *   Link: https://...         або шлях у репо
+ */
+export function parsePlan(text: string): ParsedPlan {
+  const frontMatter = readFrontMatter(text);
+  if (frontMatter === null) {
+    return { name: '', dailyMinutes: 0, steps: [], errors: ['plan.md must start with front matter (--- name: ... dailyMinutes: ... ---)'] };
+  }
+
+  const errors: string[] = [];
+  const name = frontMatter.meta.get('name') ?? '';
+  if (!name) errors.push('plan.md: name is required');
+  const dailyRaw = frontMatter.meta.get('dailyMinutes');
+  let dailyMinutes = DEFAULT_DAILY_MINUTES;
+  if (dailyRaw !== undefined) {
+    dailyMinutes = Number(dailyRaw);
+    if (!Number.isInteger(dailyMinutes) || dailyMinutes <= 0) errors.push('plan.md: dailyMinutes must be a positive integer');
+  }
+
+  // номер рядка body у файлі: front matter займає рядки до другого ---
+  const headLines = text.replace(/\r\n/g, '\n').split('\n').length - frontMatter.body.split('\n').length;
+  const steps: ParsedPlanStep[] = [];
+  let group = '';
+  let block: BlockLine[] = [];
+
+  const flush = (): void => {
+    if (block.length === 0) return;
+    const lines = block;
+    block = [];
+    if (!lines.some((entry) => PLAN_KEY.test(entry.text))) return;
+
+    const fields: Partial<Record<PlanFieldKey, string>> = {};
+    let current: PlanFieldKey | null = null;
+    const startLine = lines[0]?.line ?? 0;
+    for (const entry of lines) {
+      const match = entry.text.match(PLAN_KEY);
+      if (match) {
+        const key = match[1] as PlanFieldKey;
+        if (fields[key] !== undefined) errors.push(`line ${entry.line}: duplicate "${key}:" in one step`);
+        fields[key] = (match[2] ?? '').trim();
+        current = key;
+      } else if (current === 'S') {
+        fields.S = `${fields.S ?? ''} ${entry.text.trim()}`.trim();
+      } else {
+        errors.push(`line ${entry.line}: text outside a step field: "${entry.text.trim().slice(0, 40)}"`);
+      }
+    }
+
+    const title = fields.S ?? '';
+    const key = fields.Id ?? '';
+    const minutes = Number(fields.Min ?? '');
+    const kindRaw = fields.Kind || 'READ';
+    if (!title) errors.push(`line ${startLine}: step without S:`);
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(key)) errors.push(`line ${startLine}: Id must be lowercase latin, digits and dashes`);
+    if (!Number.isInteger(minutes) || minutes <= 0 || minutes > MAX_STEP_MINUTES) {
+      errors.push(`line ${startLine}: Min must be an integer 1-${MAX_STEP_MINUTES}`);
+    }
+    let kind: PlanStepKind = 'READ';
+    if (PLAN_STEP_KINDS.includes(kindRaw as PlanStepKind)) kind = kindRaw as PlanStepKind;
+    else errors.push(`line ${startLine}: Kind must be one of ${PLAN_STEP_KINDS.join(', ')}`);
+    const topic = fields.Topic ?? '';
+    if (kind === 'ATTEMPT' && !topic) errors.push(`line ${startLine}: ATTEMPT step needs Topic:`);
+
+    steps.push({ key, title, minutes, kind, link: fields.Link ?? '', topic, group, line: startLine });
+  };
+
+  frontMatter.body.split('\n').forEach((raw, index) => {
+    const line = headLines + index + 1;
+    if (raw.trim() === '') {
+      flush();
+      return;
+    }
+    const heading = raw.match(/^##\s+(.+)$/);
+    if (heading?.[1]) {
+      flush();
+      group = heading[1].trim();
+      return;
+    }
+    if (raw.startsWith('#') || raw.startsWith('    ')) return;
+    block.push({ text: raw, line });
+  });
+  flush();
+
+  const seen = new Map<string, number>();
+  for (const step of steps) {
+    const firstLine = seen.get(step.key);
+    if (firstLine !== undefined) errors.push(`line ${step.line}: duplicate Id "${step.key}" (same as line ${firstLine})`);
+    else seen.set(step.key, step.line);
+  }
+  if (steps.length === 0) errors.push('plan.md has no steps');
+
+  return { name, dailyMinutes, steps, errors };
+}
+
+/** Посилання з Ref:/Link: це повний URL, а не шлях у репо. */
+export function isUrl(value: string): boolean {
+  return /^https?:\/\//.test(value);
 }

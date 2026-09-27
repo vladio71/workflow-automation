@@ -194,11 +194,14 @@ const DAY_PLAN_JSON_SCHEMA = {
 
 const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior backend розробника, який шукає роботу і вчить Node, system design, AI на TypeScript і Python.
 Склади план на СЬОГОДНІ тільки з наданих кандидатів (використовуй їхні id без змін, нічого не вигадуй).
+Кандидати з позначкою [MUST] — сьогоднішня частина навчального плану, вже відібрана по порядку і в межах ліміту:
+бери їх УСІ, в тому ж порядку, хвилини не міняй. PLAN = крок плану, RECALL "Redo" = переробка задачі з нуля.
+Інші кандидати додавай тільки в залишок бюджету.
 Правила системи:
 - Anki і хоча б одне повторення (RECALL) щодня, якщо вони є серед кандидатів.
 - Спершу червоні/найстаріші повторення, потім робота по поточному циклу. Не більше 2-3 повторень за день.
 - Одна тема циклу за раз. QUESTIONS для теми, над якою працюєш, це частина роботи, а не окрема тема.
-- SYSTEM_DESIGN і MOCK приблизно раз на тиждень; MOCK краще у вихідні або коли є 45+ хвилин.
+- SYSTEM_DESIGN і MOCK (якщо є серед кандидатів) приблизно раз на тиждень; MOCK краще у вихідні або коли є 45+ хвилин.
 - Вклади план у бюджет часу. Краще 3-5 пунктів, які реально зробити, ніж 8.
 - Порядок пунктів = порядок виконання.
 - why: одне коротке речення українською, чому цей пункт сьогодні.
@@ -207,7 +210,7 @@ const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior bac
 export interface DayPlanInput {
   weekday: string;
   minutesBudget: number;
-  candidates: { id: string; kind: string; title: string; defaultMinutes: number }[];
+  candidates: { id: string; kind: string; title: string; defaultMinutes: number; mandatory: boolean }[];
   yesterdayUndone: string[];
 }
 
@@ -216,7 +219,7 @@ export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResul
     `Сьогодні: ${input.weekday}. Бюджет часу: ${input.minutesBudget} хв.`,
     input.yesterdayUndone.length ? `Вчора не зроблено: ${input.yesterdayUndone.join('; ')}` : 'Вчора план виконано або його не було.',
     'Кандидати (id | тип | що | звичайний час):',
-    ...input.candidates.map((c) => `${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв`),
+    ...input.candidates.map((c) => `${c.mandatory ? '[MUST] ' : ''}${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв`),
   ].join('\n');
 
   const response = await callWithFallback((model) => gemini().models.generateContent({

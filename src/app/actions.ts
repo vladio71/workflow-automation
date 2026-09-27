@@ -3,10 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { dayKey } from '@/lib/queries';
+import { dayKey, getDueTopics } from '@/lib/queries';
 import { schedule } from '@/lib/schedule';
 import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
+import { enforceMandatory } from '@/lib/plan-order';
+import { markAttemptDone } from '@/lib/study-plan';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncAllIfStale, syncSource, type SyncResult } from '@/lib/sync';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
@@ -219,16 +221,16 @@ export async function saveRecall(input: SaveRecallInput): Promise<{ nextTopicId:
     db.dailyLog.upsert({ where: { day }, create: { day, recallDone: true }, update: { recallDone: true } }),
   ]);
   await logActivity({ minutes: Math.max(1, Math.ceil(input.seconds / 60)), kind: 'RECALL', topicId: input.topicId, track: null, note: '', at: now });
+  // перша спроба задачі з навчального плану зараховується сама
+  await markAttemptDone(topic, now);
 
-  const next = await db.topic.findFirst({
-    where: {
-      id: { not: input.topicId },
-      OR: [{ nextReviewAt: { lte: now } }, { confidence: 'RED' }],
-    },
-    orderBy: [{ lastRecallAt: { sort: 'asc', nulls: 'first' } }],
-    select: { id: true },
-  });
   refresh();
+  // задача з плану: назад на Today (там наступний крок, еталон); звичайна тема: одразу наступне повторення
+  const isPlanProblem =
+    topic.sourceId !== null &&
+    (await db.planStep.count({ where: { sourceId: topic.sourceId, topicPath: topic.sourcePath, kind: 'ATTEMPT' } })) > 0;
+  if (isPlanProblem) return { nextTopicId: null };
+  const next = (await getDueTopics(now)).find((dueTopic) => dueTopic.id !== input.topicId);
   return { nextTopicId: next?.id ?? null };
 }
 
@@ -268,7 +270,13 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
       const result = await generateDayPlan({
         weekday: now.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' }),
         minutesBudget,
-        candidates: candidates.map(({ id, kind, title, defaultMinutes }) => ({ id, kind, title, defaultMinutes })),
+        candidates: candidates.map(({ id, kind, title, defaultMinutes, mandatory }) => ({
+          id,
+          kind,
+          title,
+          defaultMinutes,
+          mandatory: mandatory === true,
+        })),
         yesterdayUndone,
       });
       const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
@@ -283,6 +291,7 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
       }
       summary = result.summary;
       if (items.length === 0) throw new Error('Gemini returned no valid items');
+      items = enforceMandatory(items, candidates, minutesBudget);
     } catch (error) {
       console.error(error);
       ({ items, summary } = rulePlan(candidates, minutesBudget));
@@ -303,6 +312,9 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
 }
 
 export async function setPlanItemDone(itemId: string, done: boolean): Promise<void> {
+  if (itemId.startsWith('plan:')) {
+    await setPlanStepDone(Number(itemId.replace('plan:', '')), done);
+  }
   const day = dayKey(new Date());
   const plan = await db.dailyPlan.findUnique({ where: { day } });
   if (!plan) return;
@@ -396,4 +408,11 @@ export async function autoSync(): Promise<number> {
   const synced = await syncAllIfStale();
   if (synced > 0) refresh();
   return synced;
+}
+
+// ================================================================== study plan (learn/plan.md)
+
+export async function setPlanStepDone(stepId: number, done: boolean): Promise<void> {
+  await db.planStep.update({ where: { id: stepId }, data: { doneAt: done ? new Date() : null } });
+  refresh();
 }

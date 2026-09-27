@@ -1,5 +1,5 @@
 import 'server-only';
-import { GoogleGenAI, type Content } from '@google/genai';
+import { ApiError, GoogleGenAI, type Content } from '@google/genai';
 import { z } from 'zod';
 
 /**
@@ -9,7 +9,44 @@ import { z } from 'zod';
  *   2. інтерв'юер: уточнювальне питання після відповіді (в тому ж gradeAnswer)
  *   3. mock system design: веде 45-хвилинну задачу
  */
-const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+/**
+ * GEMINI_MODEL може бути списком через кому: перша модель основна, решта запасні.
+ * Наприклад GEMINI_MODEL="gemini-3.8-flash,gemini-2.5-flash-lite".
+ */
+const MODELS: string[] = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
+  .split(',')
+  .map((model) => model.trim())
+  .filter((model) => model.length > 0);
+
+/** 429 = ліміт free tier, 500/503 = Google перевантажений. Це минає, тому пробуємо ще раз. */
+const TEMPORARY_STATUSES = [429, 500, 503];
+const RETRIES_PER_MODEL = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Виклик з повторами: тимчасова помилка -> пауза і ще раз; модель зайнята або прибрана (404) -> наступна зі списку.
+ * Інші помилки (невалідний ключ, поганий запит) кидаємо одразу, повтор їх не вилікує.
+ */
+async function callWithFallback<T>(call: (model: string) => Promise<T>): Promise<T> {
+  for (const model of MODELS) {
+    for (let attempt = 1; attempt <= RETRIES_PER_MODEL; attempt += 1) {
+      try {
+        return await call(model);
+      } catch (error) {
+        if (!(error instanceof ApiError)) throw error;
+        if (error.status === 404) break; // модель недоступна: одразу до наступної
+        if (!TEMPORARY_STATUSES.includes(error.status)) throw error;
+        if (attempt < RETRIES_PER_MODEL) await sleep(1500 * attempt);
+      }
+    }
+  }
+  throw new Error(
+    `Gemini is busy or unavailable (tried: ${MODELS.join(', ')}). Try again in a minute, or add a fallback model to GEMINI_MODEL.`,
+  );
+}
 
 export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
@@ -76,8 +113,8 @@ export async function gradeAnswer(input: GradeInput): Promise<GradeResult> {
     `Відповідь з пам'яті:\n${input.answer}`,
   ].join('\n\n');
 
-  const response = await gemini().models.generateContent({
-    model: MODEL,
+  const response = await callWithFallback((model) => gemini().models.generateContent({
+    model,
     contents: prompt,
     config: {
       systemInstruction: GRADER_INSTRUCTION,
@@ -85,7 +122,7 @@ export async function gradeAnswer(input: GradeInput): Promise<GradeResult> {
       responseJsonSchema: GRADE_JSON_SCHEMA,
       temperature: 0.2,
     },
-  });
+  }));
   // Межа з мережею: навіть зі structured output перевіряємо форму, а не віримо на слово.
   return GradeSchema.parse(JSON.parse(response.text ?? '{}'));
 }
@@ -116,11 +153,12 @@ function toContents(history: ChatTurn[]): Content[] {
 }
 
 export async function* streamMockReply(problem: string, history: ChatTurn[]): AsyncGenerator<string> {
-  const stream = await gemini().models.generateContentStream({
-    model: MODEL,
+  // Повтор тільки на старті: коли текст уже пішов у чат, переключати модель посеред відповіді не можна.
+  const stream = await callWithFallback((model) => gemini().models.generateContentStream({
+    model,
     contents: toContents(history),
     config: { systemInstruction: mockInstruction(problem), temperature: 0.6 },
-  });
+  }));
   for await (const chunk of stream) {
     if (chunk.text) yield chunk.text;
   }
@@ -181,8 +219,8 @@ export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResul
     ...input.candidates.map((c) => `${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв`),
   ].join('\n');
 
-  const response = await gemini().models.generateContent({
-    model: MODEL,
+  const response = await callWithFallback((model) => gemini().models.generateContent({
+    model,
     contents: prompt,
     config: {
       systemInstruction: PLANNER_INSTRUCTION,
@@ -190,7 +228,7 @@ export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResul
       responseJsonSchema: DAY_PLAN_JSON_SCHEMA,
       temperature: 0.3,
     },
-  });
+  }));
   return DayPlanSchema.parse(JSON.parse(response.text ?? '{}'));
 }
 
@@ -206,8 +244,8 @@ export async function reviewDay(input: DayReviewInput): Promise<string> {
     input.recalls.length ? `Повторення сьогодні (тема: колір): ${input.recalls.join('; ')}` : 'Повторень сьогодні не було.',
   ].join('\n');
 
-  const response = await gemini().models.generateContent({
-    model: MODEL,
+  const response = await callWithFallback((model) => gemini().models.generateContent({
+    model,
     contents: prompt,
     config: {
       systemInstruction: `Ти коуч з навчання. Дай короткий вечірній огляд українською, 3-5 речень, без води і без похвали заради похвали:
@@ -215,6 +253,6 @@ export async function reviewDay(input: DayReviewInput): Promise<string> {
 Якщо повторення були червоними, нагадай, що через 2 дні їх треба повторити з нуля. Не пропонуй нові теми.`,
       temperature: 0.4,
     },
-  });
+  }));
   return (response.text ?? '').trim();
 }

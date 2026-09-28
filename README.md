@@ -17,17 +17,17 @@ npm run setup      # створить .env, npm install, підніме Postgres
 
 **Щодня:**
 ```bash
-npm run app        # Postgres + нові міграції + збірка + старт на http://localhost:3000
+npm run app        # Postgres + нові міграції + prisma generate + збірка + старт на http://localhost:3000
 ```
 Зупинити: `Ctrl+C` (апка), потім `npm run stop` (Postgres; дані лишаються у volume).
 
-**Після `git pull`:** той самий `npm run app` (сам застосує нові міграції і перезбере). Якщо змінився `package.json`, спершу `npm install`.
+**Після `git pull`:** той самий `npm run app`: сам застосує нові міграції, перегенерує Prisma-клієнт під нову схему і перезбере. Якщо змінився `package.json` (нові залежності), спершу `npm install`.
 
 | Команда | Що робить |
 |---|---|
 | `npm run setup` | перший запуск з нуля |
 | `npm run app` | звичайний старт (production-збірка, швидка) |
-| `npm run dev:all` | Postgres + dev-режим з hot reload, якщо правиш код |
+| `npm run dev:all` | Postgres + міграції + dev-режим з hot reload, якщо правиш код |
 | `npm run stop` | зупинити Postgres |
 | `npm run db:seed` | стерти все і залити стартову тему GraphQL |
 

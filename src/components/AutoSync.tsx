@@ -2,15 +2,22 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { autoSync } from '@/app/actions';
 
-/** На Today: один раз при відкритті підтягнути репо, які давно не синкались, і перемалювати сторінку. */
+interface SyncResponse {
+  synced: number;
+}
+
+/**
+ * На Today: один раз при відкритті підтягнути репо, які давно не синкались, і перемалювати сторінку.
+ * Звичайний fetch до /api/sync, а не server action: так sync не блокує інші кнопки на сторінці.
+ */
 export function AutoSync() {
   const router = useRouter();
   useEffect(() => {
-    autoSync()
-      .then((synced) => {
-        if (synced > 0) router.refresh();
+    fetch('/api/sync', { method: 'POST' })
+      .then((response) => response.json() as Promise<SyncResponse>)
+      .then((result) => {
+        if (result.synced > 0) router.refresh();
       })
       .catch(() => {
         // мережа впала: не страшно, помилка видна на /sources після ручного Sync

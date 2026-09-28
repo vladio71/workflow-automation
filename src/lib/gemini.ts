@@ -1,5 +1,5 @@
 import 'server-only';
-import { ApiError, GoogleGenAI, type Content } from '@google/genai';
+import { ApiError, GoogleGenAI, ThinkingLevel, type Content } from '@google/genai';
 import { z } from 'zod';
 
 /**
@@ -17,6 +17,14 @@ const MODELS: string[] = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
   .split(',')
   .map((model) => model.trim())
   .filter((model) => model.length > 0);
+
+/**
+ * SDK за замовчуванням не має таймауту: запит може висіти скільки завгодно, а кнопка "Planning…" разом з ним.
+ * Таймаут на одну спробу; спливло = одразу помилка (і план за правилами), без переходу на інші моделі,
+ * щоб загальне очікування було передбачуване.
+ */
+const PLAN_TIMEOUT_MS = 30_000;
+const GRADE_TIMEOUT_MS = 60_000;
 
 /** 429 = ліміт free tier, 500/503 = Google перевантажений. Це минає, тому пробуємо ще раз. */
 const TEMPORARY_STATUSES = [429, 500, 503];
@@ -36,6 +44,9 @@ async function callWithFallback<T>(call: (model: string) => Promise<T>): Promise
       try {
         return await call(model);
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(`Gemini (${model}) не відповів вчасно, спробуй ще раз пізніше`);
+        }
         if (!(error instanceof ApiError)) throw error;
         if (error.status === 404) break; // модель недоступна: одразу до наступної
         if (!TEMPORARY_STATUSES.includes(error.status)) throw error;
@@ -121,6 +132,7 @@ export async function gradeAnswer(input: GradeInput): Promise<GradeResult> {
       responseMimeType: 'application/json',
       responseJsonSchema: GRADE_JSON_SCHEMA,
       temperature: 0.2,
+      httpOptions: { timeout: GRADE_TIMEOUT_MS },
     },
   }));
   // Межа з мережею: навіть зі structured output перевіряємо форму, а не віримо на слово.
@@ -230,6 +242,9 @@ export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResul
       responseMimeType: 'application/json',
       responseJsonSchema: DAY_PLAN_JSON_SCHEMA,
       temperature: 0.3,
+      // план з готових кандидатів не потребує глибоких роздумів: LOW у рази швидше за дефолтний medium
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      httpOptions: { timeout: PLAN_TIMEOUT_MS },
     },
   }));
   return DayPlanSchema.parse(JSON.parse(response.text ?? '{}'));
@@ -255,6 +270,8 @@ export async function reviewDay(input: DayReviewInput): Promise<string> {
 1) що зроблено (конкретно), 2) що не зроблено і чи варто це переносити на завтра, 3) одна порада на завтра.
 Якщо повторення були червоними, нагадай, що через 2 дні їх треба повторити з нуля. Не пропонуй нові теми.`,
       temperature: 0.4,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      httpOptions: { timeout: PLAN_TIMEOUT_MS },
     },
   }));
   return (response.text ?? '').trim();

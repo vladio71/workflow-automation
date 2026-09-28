@@ -16,6 +16,8 @@ import { refUrl } from '@/lib/sync';
 /** переробка задачі з нуля: 45 хв, як співбесіда */
 export const REDO_MINUTES = 45;
 const MAX_REDOS_PER_DAY = 2;
+/** саммарі закриває задачу того ж дня, поки еталон свіжий: йому дозволено вийти за ліміт на стільки хвилин */
+const SUMMARY_OVERFLOW_MINUTES = 30;
 
 export interface StudyPlan {
   source: Source;
@@ -102,7 +104,8 @@ export function selectToday(plan: StudyPlan, dueTopics: Topic[], now: Date): Tod
 
     const isProblem = step.kind === 'ATTEMPT' || step.kind === 'EXAM';
     if (isProblem && attempts >= 1) break; // одна нова задача на день
-    const fits = step.minutes <= remaining;
+    const allowance = step.kind === 'SUMMARY' ? SUMMARY_OVERFLOW_MINUTES : 0;
+    const fits = step.minutes <= remaining + allowance;
     // перший крок дня беремо, навіть якщо він довший за ліміт, інакше план застрягне назавжди
     const firstOfDay = steps.length === 0 && redos.length === 0;
     if (!fits && !firstOfDay) break;

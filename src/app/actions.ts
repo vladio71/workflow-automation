@@ -10,7 +10,7 @@ import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSum
 import { enforceMandatory } from '@/lib/plan-order';
 import { markAttemptDone } from '@/lib/study-plan';
 import { logActivity } from '@/lib/activity';
-import { normalizeRepo, syncAll, syncAllIfStale, syncSource, type SyncResult } from '@/lib/sync';
+import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -301,6 +301,14 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
     ({ items, summary } = rulePlan(candidates, minutesBudget));
   }
 
+  // план вийшов майже порожній: кажемо чому, а не лишаємо здогадуватись
+  const hasStudyPlan = candidates.some((candidate) => candidate.mandatory === true);
+  const hasCycle = candidates.some((candidate) => candidate.kind === 'CYCLE');
+  if (!hasStudyPlan && !hasCycle) {
+    const why = 'Мало пунктів: немає кроків навчального плану (додай репо з learn/plan.md на Sources) і немає активного циклу (Cycles).';
+    note = note ? `${note} ${why}` : why;
+  }
+
   const itemsJson = items.map((item) => ({ ...item }));
   await db.dailyPlan.upsert({
     where: { day },
@@ -401,13 +409,6 @@ export async function syncAllNow(): Promise<SyncResult[]> {
   const results = await syncAll();
   refresh();
   return results;
-}
-
-/** Викликається з Today при відкритті: тягне тільки ті репо, які не синкались 10+ хвилин. */
-export async function autoSync(): Promise<number> {
-  const synced = await syncAllIfStale();
-  if (synced > 0) refresh();
-  return synced;
 }
 
 // ================================================================== study plan (learn/plan.md)

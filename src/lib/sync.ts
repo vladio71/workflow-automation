@@ -24,6 +24,8 @@ import { isUrl, parsePlan, parseQuestions, parseTopic, type ParsedCard, type Par
  */
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
+/** скільки запитів до GitHub одночасно: послідовно 40 файлів це секунди очікування, 40 паралельних GitHub не любить */
+const GITHUB_CONCURRENCY = 6;
 
 export interface SyncResult {
   ok: boolean;
@@ -144,9 +146,9 @@ async function readLearn(source: Source, sha: string): Promise<RepoLearn> {
     if (entry.type === 'dir') paths.push(entry.name);
   }
 
+  const read = await mapWithLimit(paths, GITHUB_CONCURRENCY, (path) => readTopicFolder(source, sha, path));
   const folders: RepoTopicFiles[] = [];
-  for (const path of paths) {
-    const folder = await readTopicFolder(source, sha, path);
+  for (const folder of read) {
     if (folder) folders.push(folder);
   }
   if (folders.length === 0) throw new SyncError('learn/ has no topic.md (neither learn/topic.md nor learn/<module>/topic.md)');
@@ -165,6 +167,25 @@ async function readLearn(source: Source, sha: string): Promise<RepoLearn> {
     }
   }
   return { folders, plan };
+}
+
+/** Як Promise.all, але не більше `limit` задач одночасно. Порядок результатів = порядок items. */
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item === undefined) continue;
+      results[index] = await fn(item);
+    }
+  };
+  const workers: Promise<void>[] = [];
+  for (let count = 0; count < Math.min(limit, items.length); count += 1) workers.push(worker());
+  await Promise.all(workers);
+  return results;
 }
 
 /** Стабільний ключ картки: репо + папка теми + тип + текст питання без різниці в регістрі та пробілах. */
@@ -314,8 +335,22 @@ export async function syncAll(): Promise<SyncResult[]> {
   return results;
 }
 
-/** Автосинк при відкритті Today: не частіше, ніж раз на 10 хвилин; без нових комітів це 1 запит до GitHub. */
-export async function syncAllIfStale(): Promise<number> {
+let staleSyncInFlight: Promise<number> | null = null;
+
+/**
+ * Автосинк при відкритті Today: не частіше, ніж раз на 10 хвилин; без нових комітів це 1 запит до GitHub.
+ * Single-flight (як у дрілі 02): дві вкладки відкрили Today одночасно, а sync іде один.
+ */
+export function syncAllIfStale(): Promise<number> {
+  if (staleSyncInFlight === null) {
+    staleSyncInFlight = runStaleSync().finally(() => {
+      staleSyncInFlight = null;
+    });
+  }
+  return staleSyncInFlight;
+}
+
+async function runStaleSync(): Promise<number> {
   const threshold = new Date(Date.now() - STALE_AFTER_MS);
   const stale = await db.source.findMany({
     where: { OR: [{ lastSyncedAt: null }, { lastSyncedAt: { lt: threshold } }] },

@@ -16,7 +16,7 @@ enum Track {
   OTHER
 }
 
-/// CONCEPT = питання/відповідь (йде в Anki), TASK = задача руками (тільки в апці)
+/// CONCEPT = питання/відповідь (картки на сторінці Cards), TASK = задача руками (Recall і план)
 enum CardKind {
   CONCEPT
   TASK
@@ -30,6 +30,15 @@ enum ActivityKind {
   READING
   MOCK
   OTHER
+  CARDS
+}
+
+/// Оцінка картки. PRACTICE = переглянув у вільному режимі (All cards), розклад не міняється.
+enum CardGrade {
+  FORGOT
+  HARD
+  GOOD
+  PRACTICE
 }
 
 enum Confidence {
@@ -89,7 +98,12 @@ model Question {
   /// TASK: файл-еталон у репо і команда перевірки
   ref       String      @default("")
   check     String      @default("")
-  inAnki    Boolean     @default(false)
+  /// розклад картки (тільки CONCEPT): null = нова, ще не бачив
+  cardDueAt      DateTime?
+  cardInterval   Int         @default(0)
+  cardLapses     Int         @default(0)
+  cardReviewedAt DateTime?
+  cardReviews    CardReview[]
   /// для карток з репо: стабільний ключ, щоб Sync оновлював, а не дублював
   sourceKey String?     @unique
   sourceId  Int?
@@ -144,7 +158,7 @@ model ActivityLog {
 /// Щоденний чекліст. Один рядок на день.
 model DailyLog {
   day        DateTime @id @db.Date
-  ankiDone   Boolean  @default(false)
+  cardsDone  Boolean  @default(false)
   recallDone Boolean  @default(false)
   outLoud    Boolean  @default(false)
   note       String   @default("")
@@ -235,4 +249,19 @@ model PlanStep {
 
   @@unique([sourceId, key])
   @@index([sourceId, position])
+}
+
+/// Кожен показ картки: для розкладу, ліміту нових на день і часу в Stats.
+model CardReview {
+  id         Int       @id @default(autoincrement())
+  questionId Int
+  question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  grade      CardGrade
+  /// картка була нова (перший показ у режимі Review)
+  wasNew     Boolean   @default(false)
+  /// скільки секунд пішло на картку (обрізано до 3 хв, щоб перерва на чай не рахувалась)
+  seconds    Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
 }

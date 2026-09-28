@@ -26,6 +26,7 @@ export const ACTIVITY_KINDS: readonly Option<ActivityKind>[] = [
   { value: 'READING', label: 'Reading', color: 'yellow' },
   { value: 'MOCK', label: 'Mock', color: 'orange' },
   { value: 'OTHER', label: 'Other', color: 'gray' },
+  { value: 'CARDS', label: 'Cards', color: 'brown' },
 ];
 
 export const CONFIDENCES: readonly Option<Confidence>[] = [

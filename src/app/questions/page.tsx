@@ -1,39 +1,41 @@
 import Link from 'next/link';
-import { createQuestion, setQuestionInAnki, updateQuestionText } from '../actions';
-import { CheckItem } from '@/components/CheckItem';
+import { createQuestion, updateQuestionText } from '../actions';
 import { InlineText } from '@/components/InlineText';
 import { db } from '@/lib/db';
 import { Tag } from '@/components/Tag';
+import { relativeDay } from '@/lib/schedule';
 
 export default async function QuestionsPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const { filter } = await searchParams;
-  const notInAnki = filter === 'not-in-anki';
-  const [questions, topics, pendingAnki] = await Promise.all([
+  const onlyTasks = filter === 'tasks';
+  const now = new Date();
+  const [questions, topics, taskCount, totalCount] = await Promise.all([
     db.question.findMany({
-      where: notInAnki ? { inAnki: false, kind: 'CONCEPT' } : {},
+      where: onlyTasks ? { kind: 'TASK' } : {},
       include: { topic: true, syncSource: { select: { repo: true } } },
       orderBy: { id: 'desc' },
     }),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    db.question.count({ where: { inAnki: false, kind: 'CONCEPT' } }),
+    db.question.count({ where: { kind: 'TASK' } }),
+    db.question.count(),
   ]);
 
   return (
     <div className="page wide">
       <div className="page-icon">❓</div>
       <h1 className="page-title">Questions</h1>
-      <p className="page-sub">Questions, not notes. Q = explain in words (goes to Anki), Task = write code by hand (stays in the app). Cards marked with a repo are edited in that repo.</p>
+      <p className="page-sub">Questions, not notes. Q = explain in words (studied on the Cards page), Task = write code or design by hand (Recall and the plan). Cards marked with a repo are edited in that repo.</p>
 
       <div className="db-toolbar">
-        <Link className={`db-tab ${!notInAnki ? 'active' : ''}`} href="/questions">All</Link>
-        <Link className={`db-tab ${notInAnki ? 'active' : ''}`} href="/questions?filter=not-in-anki">Not in Anki · {pendingAnki}</Link>
+        <Link className={`db-tab ${!onlyTasks ? 'active' : ''}`} href="/questions">All · {totalCount}</Link>
+        <Link className={`db-tab ${onlyTasks ? 'active' : ''}`} href="/questions?filter=tasks">Tasks · {taskCount}</Link>
         <span style={{ flex: 1 }} />
-        {pendingAnki > 0 && <a className="btn sm" href="/api/anki-export" style={{ marginBottom: 4 }}>⬇ Export {pendingAnki} to Anki</a>}
+        <Link className="btn sm" href="/cards" style={{ marginBottom: 4 }}>🃏 Study cards</Link>
       </div>
 
       <table className="db">
         <thead>
-          <tr><th style={{ width: 60 }}>Type</th><th>Aa Question</th><th>Topic</th><th>Reference</th><th>Anki</th></tr>
+          <tr><th style={{ width: 60 }}>Type</th><th>Aa Question</th><th>Topic</th><th>Reference</th><th>Next card</th></tr>
         </thead>
         <tbody>
           {questions.map((question) => (
@@ -61,11 +63,13 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
                   <>{question.reference.slice(0, 140)}{question.reference.length > 140 ? '…' : ''}</>
                 )}
               </td>
-              <td style={{ width: 70 }}>
+              <td style={{ width: 96 }} className="muted">
                 {question.kind === 'TASK' ? (
-                  <span className="faint" title="Tasks stay in the app">—</span>
+                  <span className="faint" title="Tasks are done in Recall, not on Cards">—</span>
+                ) : question.cardDueAt === null ? (
+                  <span className="tag blue">new</span>
                 ) : (
-                  <CheckItem checked={question.inAnki} label="" strike={false} action={setQuestionInAnki.bind(null, question.id)} />
+                  <span style={{ fontSize: 13 }}>{question.cardDueAt <= now ? 'due' : relativeDay(question.cardDueAt, now)}</span>
                 )}
               </td>
             </tr>

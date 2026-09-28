@@ -6,7 +6,7 @@ interface CheckItemProps {
   checked: boolean;
   label: React.ReactNode;
   action: (value: boolean) => Promise<void>;
-  /** Закреслювати виконане (для чекліста дня так, для прапорця "In Anki" ні). */
+  /** Закреслювати виконане (для чекліста дня так, для прапорців-налаштувань ні). */
   strike?: boolean;
 }
 

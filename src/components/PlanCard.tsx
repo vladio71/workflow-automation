@@ -14,6 +14,7 @@ const BUDGETS: readonly number[] = [60, 120, 180, 240, 300, 360, 480];
 
 const KIND_ICON: Record<PlanItemWithStatus['kind'], string> = {
   ANKI: '🃏',
+  CARDS: '🃏',
   RECALL: '🧠',
   CYCLE: '🔁',
   QUESTIONS: '❓',
@@ -73,7 +74,7 @@ export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
       {!plan && (
         <p className="muted" style={{ fontSize: 14, marginTop: 8 }}>
           {geminiEnabled
-            ? 'Steps of your study plan come first, in order (the app picks them, not AI). Gemini fills the rest of the budget from your data: Anki, overdue recalls, the current cycle. It never invents topics.'
+            ? 'Steps of your study plan come first, in order (the app picks them, not AI). Gemini fills the rest of the budget from your data: cards, overdue recalls, the current cycle. It never invents topics.'
             : 'Without GEMINI_API_KEY the plan is built by simple rules.'}
         </p>
       )}

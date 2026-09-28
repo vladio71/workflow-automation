@@ -56,7 +56,7 @@ export async function getStreak(now: Date = new Date()): Promise<Streak> {
   const [logDays, dailyDays] = await Promise.all([
     db.activityLog.findMany({ distinct: ['day'], select: { day: true } }),
     db.dailyLog.findMany({
-      where: { OR: [{ ankiDone: true }, { recallDone: true }, { outLoud: true }] },
+      where: { OR: [{ cardsDone: true }, { recallDone: true }, { outLoud: true }] },
       select: { day: true },
     }),
   ]);

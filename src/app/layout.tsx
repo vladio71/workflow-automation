@@ -5,12 +5,13 @@ import { NavLink } from '@/components/NavLink';
 import { db } from '@/lib/db';
 import { getDueCount } from '@/lib/queries';
 import { getStreak } from '@/lib/activity';
+import { getCardCounts } from '@/lib/cards';
 
 export const metadata: Metadata = { title: 'Learn it. Keep it.' };
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [dueCount, inboxCount, streak] = await Promise.all([getDueCount(), db.inboxItem.count(), getStreak()]);
+  const [dueCount, inboxCount, streak, cards] = await Promise.all([getDueCount(), db.inboxItem.count(), getStreak(), getCardCounts()]);
 
   return (
     <html lang="en">
@@ -22,6 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="faint" style={{ marginLeft: 'auto', fontWeight: 500 }} title="Streak: days in a row">🔥 {streak.current}</span>
             </div>
             <NavLink href="/" icon="☀️" label="Today" count={dueCount} />
+            <NavLink href="/cards" icon="🃏" label="Cards" count={cards.due + cards.fresh} />
             <NavLink href="/inbox" icon="📥" label="Inbox" count={inboxCount} />
             <div className="sidebar-section">Knowledge</div>
             <NavLink href="/topics" icon="🗂️" label="Topics" />

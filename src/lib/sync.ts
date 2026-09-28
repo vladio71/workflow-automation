@@ -17,7 +17,7 @@ import { isUrl, parsePlan, parseQuestions, parseTopic, type ParsedCard, type Par
  *   - помилка формату в будь-якому файлі: не імпортується нічого (all-or-nothing), помилка видна на /sources;
  *   - картка впізнається за текстом питання: змінив відповідь, картка оновилась; змінив питання,
  *     це нова картка (стара видаляється, історія recall лишається в журналі без прив'язки);
- *   - змінилась відповідь CONCEPT-картки, тоді inAnki = false, щоб оновлена картка пішла в наступний експорт;
+ *   - змінилась відповідь картки: оновлюється текст, розклад картки (Cards) лишається;
  *   - твоя відповідь з пам'яті (myAnswer), колір теми і розклад Sync не чіпає ніколи;
  *   - папку теми видалили з репо: її картки зникають, сама тема лишається як звичайна (з історією);
  *   - питання, додані руками в апці, Sync не чіпає.
@@ -261,8 +261,7 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
 
         const current = byKey.get(sourceKey);
         if (!current) {
-          // TASK-картки в Anki не йдуть, тому одразу позначені як "не для експорту"
-          await tx.question.create({ data: { ...data, sourceKey, sourceId: source.id, inAnki: card.kind === 'TASK' } });
+          await tx.question.create({ data: { ...data, sourceKey, sourceId: source.id } });
           added += 1;
           continue;
         }
@@ -275,11 +274,7 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
           current.topicId !== data.topicId;
         if (!changed) continue;
 
-        const answerChanged = current.reference !== data.reference && card.kind === 'CONCEPT';
-        await tx.question.update({
-          where: { id: current.id },
-          data: answerChanged ? { ...data, inAnki: false } : data,
-        });
+        await tx.question.update({ where: { id: current.id }, data });
         updated += 1;
       }
     }

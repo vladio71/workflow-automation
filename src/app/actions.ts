@@ -9,6 +9,7 @@ import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type Grade
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import { enforceMandatory } from '@/lib/plan-order';
 import { markAttemptDone } from '@/lib/study-plan';
+import { getCardCounts, reviewCard, type ReviewInput } from '@/lib/cards';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
@@ -87,10 +88,6 @@ export async function updateQuestionText(id: number, field: QuestionTextField, v
   refresh();
 }
 
-export async function setQuestionInAnki(id: number, inAnki: boolean): Promise<void> {
-  await db.question.update({ where: { id }, data: { inAnki } });
-  refresh();
-}
 
 export async function deleteQuestion(id: number): Promise<void> {
   await db.question.delete({ where: { id } });
@@ -99,7 +96,7 @@ export async function deleteQuestion(id: number): Promise<void> {
 
 // ================================================================== daily
 
-export type DailyField = 'ankiDone' | 'recallDone' | 'outLoud';
+export type DailyField = 'cardsDone' | 'recallDone' | 'outLoud';
 
 export async function setDaily(field: DailyField, value: boolean): Promise<void> {
   const day = dayKey(new Date());
@@ -415,5 +412,27 @@ export async function syncAllNow(): Promise<SyncResult[]> {
 
 export async function setPlanStepDone(stepId: number, done: boolean): Promise<void> {
   await db.planStep.update({ where: { id: stepId }, data: { doneAt: done ? new Date() : null } });
+  refresh();
+}
+
+// ================================================================== cards (замість Anki)
+
+/**
+ * Оцінка картки. Без refresh(): інакше кожна картка перемальовувала б усю сторінку і сесія гальмувала.
+ * Сторінка оновлюється один раз, коли сесія закінчилась (finishCardSession).
+ */
+export async function gradeCard(input: ReviewInput): Promise<{ remaining: number }> {
+  const now = new Date();
+  await reviewCard(input, now);
+  const counts = await getCardCounts(now);
+  const remaining = counts.due + counts.fresh;
+  if (remaining === 0 && input.grade !== 'PRACTICE') {
+    const day = dayKey(now);
+    await db.dailyLog.upsert({ where: { day }, create: { day, cardsDone: true }, update: { cardsDone: true } });
+  }
+  return { remaining };
+}
+
+export async function finishCardSession(): Promise<void> {
   refresh();
 }

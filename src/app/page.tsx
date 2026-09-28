@@ -103,7 +103,7 @@ export default async function TodayPage() {
       <LogTime topics={allTopics} />
 
       <h2 className="block-title">Daily · 25 min</h2>
-      <CheckItem checked={log.ankiDone} label={<>Anki: 10-15 cards</>} action={setDaily.bind(null, 'ankiDone')} />
+      <CheckItem checked={log.cardsDone} label={<><Link href="/cards" style={{ textDecoration: 'underline' }}>Cards</Link>: everything due today (ticks itself when the queue is empty)</>} action={setDaily.bind(null, 'cardsDone')} />
       <CheckItem checked={log.recallDone} label={<>1 recall from the list below: blank page, then check</>} action={setDaily.bind(null, 'recallDone')} />
       <CheckItem checked={log.outLoud} label={<>1 question out loud in a minute</>} action={setDaily.bind(null, 'outLoud')} />
 

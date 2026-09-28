@@ -4,13 +4,15 @@ import { db } from './db';
 import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
 import { endOfDay, startOfDay } from './schedule';
 import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref } from './study-plan';
+import { getCardQueue } from './cards';
 
 /**
  * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
  * (що прострочене, який цикл, навчальний план з репо), а AI лише вибирає, впорядковує і пояснює.
  * Кроки навчального плану (PLAN) і переробки задач відбирає код, а не AI: вони обов'язкові і йдуть по порядку.
  */
-export type PlanItemKind = 'ANKI' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN';
+/** ANKI лишився тільки для старих планів у БД; нові плани мають CARDS. */
+export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN';
 
 export interface PlanCandidate {
   id: string;
@@ -43,7 +45,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['ANKI', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN']),
+  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN']),
   title: z.string(),
   href: z.string(),
   topicId: z.number().nullable(),
@@ -61,7 +63,7 @@ export function parsePlanItems(json: unknown): PlanItem[] {
 
 export async function buildCandidates(now: Date = new Date()): Promise<PlanCandidate[]> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans] = await Promise.all([
+  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans, cardQueue] = await Promise.all([
     getDueTopics(now),
     getActiveCycle(),
     getNextSystemDesignTopic(),
@@ -69,12 +71,30 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     db.mockSession.findFirst({ orderBy: { startedAt: 'desc' } }),
     db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
     getStudyPlans(),
+    getCardQueue(now),
   ]);
 
-  const candidates: PlanCandidate[] = [
-    { id: 'anki', kind: 'ANKI', title: 'Anki: 10-15 cards', href: '/', topicId: null, defaultMinutes: 10 },
-    { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/questions', topicId: null, defaultMinutes: 5 },
-  ];
+  const candidates: PlanCandidate[] = [];
+  const cardsToday = cardQueue.due.length + cardQueue.fresh.length;
+  if (cardsToday > 0) {
+    // ~30 с на картку
+    const parts = [
+      cardQueue.due.length > 0 ? `${cardQueue.due.length} due` : '',
+      cardQueue.fresh.length > 0 ? `${cardQueue.fresh.length} new` : '',
+    ].filter((part) => part !== '');
+    candidates.push({
+      id: 'cards',
+      kind: 'CARDS',
+      title: `Cards: ${parts.join(' + ')}`,
+      href: '/cards',
+      topicId: null,
+      defaultMinutes: Math.max(5, Math.ceil(cardsToday / 2)),
+      hint: 'Картки, у яких настав термін, і кілька нових.',
+    });
+  }
+  candidates.push(
+    { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 },
+  );
 
   // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
   const problemIds = new Set<number>();
@@ -176,7 +196,7 @@ export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { 
   const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] =>
     candidates.filter((c) => c.kind === kind && c.mandatory !== true).slice(0, limit);
   const ordered = [
-    ...pick('ANKI', 1),
+    ...pick('CARDS', 1),
     ...mandatory,
     ...pick('RECALL', 2),
     ...pick('CYCLE', 1),
@@ -202,8 +222,8 @@ export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { 
     items.push({ ...candidate, minutes: candidate.defaultMinutes, why: candidate.hint ?? '', manualDone: false });
   }
   const summary = mandatory.length > 0
-    ? 'План за правилами (без AI): Anki, кроки навчального плану по порядку, повторення, решта в цикл.'
-    : 'План за правилами (без AI): Anki, прострочені повторення, робота по циклу, system design.';
+    ? 'План за правилами (без AI): картки, кроки навчального плану по порядку, повторення, решта в цикл.'
+    : 'План за правилами (без AI): картки, прострочені повторення, робота по циклу, system design.';
   return { items, summary };
 }
 
@@ -229,7 +249,8 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
     const topicId = item.topicId ?? -1;
     let autoDone = false;
     switch (item.kind) {
-      case 'ANKI': autoDone = log.ankiDone; break;
+      case 'ANKI':
+      case 'CARDS': autoDone = log.cardsDone; break;
       case 'OUT_LOUD': autoDone = log.outLoud; break;
       case 'RECALL': autoDone = recalled.has(topicId); break;
       case 'QUESTIONS': autoDone = (questionsByTopic.get(topicId) ?? 0) >= 3; break;

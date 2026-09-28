@@ -249,3 +249,11 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
 .hbar .fill { height: 10px; border-radius: 0 4px 4px 0; background: var(--viz-bar); min-width: 2px; }
 .hbar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hbar .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* ---------------- Cards ---------------- */
+.flashcard { border: 1px solid var(--border-strong); border-radius: 10px; padding: 22px 24px; background: var(--bg); min-height: 180px; }
+.flashcard .q { font-size: 20px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
+.flashcard .a { border-top: 1px dashed var(--border-strong); margin-top: 18px; padding-top: 14px; }
+.kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; font-size: 11px; line-height: 16px; text-align: center; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
+.grade-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.grade-row .btn { gap: 8px; }

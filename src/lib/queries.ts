@@ -59,7 +59,7 @@ export async function getDueCount(): Promise<number> {
 export async function getTodayLog(now: Date = new Date()): Promise<DailyLog> {
   const day = dayKey(now);
   return (await db.dailyLog.findUnique({ where: { day } })) ?? {
-    day, ankiDone: false, recallDone: false, outLoud: false, note: '',
+    day, cardsDone: false, recallDone: false, outLoud: false, note: '',
   };
 }
 

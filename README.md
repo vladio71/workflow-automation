@@ -1,6 +1,6 @@
 # learning-app
 
-Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, AI-план на день з вечірньою перевіркою, recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
+Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день з вечірньою перевіркою, recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
 
 **Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, стиль Notion (світла і темна тема за налаштуваннями системи).
 
@@ -43,7 +43,7 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `docs/GUIDE.md` | як користуватись системою (також сторінка Guide в апці) |
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
-| `seed/` | нотатки GraphQL і колода Anki, з яких заливається стартова тема |
+| `seed/` | нотатки GraphQL, з яких заливається стартова тема |
 | `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
 | `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
@@ -55,4 +55,5 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/lib/planner.ts` | кандидати для плану з даних, план за правилами без AI, автовизначення виконаного |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
-| `src/app/api/anki-export` | експорт нових питань у файл для Anki |
+| `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats |
+| `src/app/api/sync` | автосинк з Today (route handler, щоб не блокувати кнопки) |

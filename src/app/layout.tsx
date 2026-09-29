@@ -6,12 +6,19 @@ import { db } from '@/lib/db';
 import { getDueCount } from '@/lib/queries';
 import { getStreak } from '@/lib/activity';
 import { getCardCounts } from '@/lib/cards';
+import { getDueLevelCount } from '@/lib/levels';
 
 export const metadata: Metadata = { title: 'Learn it. Keep it.' };
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [dueCount, inboxCount, streak, cards] = await Promise.all([getDueCount(), db.inboxItem.count(), getStreak(), getCardCounts()]);
+  const [dueCount, inboxCount, streak, cards, dueLevels] = await Promise.all([
+    getDueCount(),
+    db.inboxItem.count(),
+    getStreak(),
+    getCardCounts(),
+    getDueLevelCount(),
+  ]);
 
   return (
     <html lang="en">
@@ -33,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/stats" icon="📈" label="Stats" />
             <NavLink href="/sources" icon="🔗" label="Sources" />
             <div className="sidebar-section">Practice</div>
+            <NavLink href="/levels" icon="⚔️" label="Levels" count={dueLevels} />
             <NavLink href="/mock" icon="🎙️" label="Mock interview" />
             <div className="sidebar-section">System</div>
             <NavLink href="/guide" icon="📖" label="Guide" />

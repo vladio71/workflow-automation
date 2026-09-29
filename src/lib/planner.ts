@@ -5,6 +5,7 @@ import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getToda
 import { endOfDay, startOfDay } from './schedule';
 import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref } from './study-plan';
 import { getCardQueue } from './cards';
+import { getLevelsWithProgress } from './levels';
 
 /**
  * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
@@ -12,7 +13,7 @@ import { getCardQueue } from './cards';
  * Кроки навчального плану (PLAN) і переробки задач відбирає код, а не AI: вони обов'язкові і йдуть по порядку.
  */
 /** ANKI лишився тільки для старих планів у БД; нові плани мають CARDS. */
-export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN';
+export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN' | 'LEVEL';
 
 export interface PlanCandidate {
   id: string;
@@ -41,11 +42,14 @@ export interface PlanItemWithStatus extends PlanItem {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** рівні live-code на день: повтори в термін і нові по порядку */
+const MAX_LEVEL_REDOS = 2;
+const MAX_NEW_LEVELS = 2;
 
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN']),
+  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL']),
   title: z.string(),
   href: z.string(),
   topicId: z.number().nullable(),
@@ -63,7 +67,7 @@ export function parsePlanItems(json: unknown): PlanItem[] {
 
 export async function buildCandidates(now: Date = new Date()): Promise<PlanCandidate[]> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans, cardQueue] = await Promise.all([
+  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans, cardQueue, levelsState] = await Promise.all([
     getDueTopics(now),
     getActiveCycle(),
     getNextSystemDesignTopic(),
@@ -72,6 +76,7 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
     getStudyPlans(),
     getCardQueue(now),
+    getLevelsWithProgress(now),
   ]);
 
   const candidates: PlanCandidate[] = [];
@@ -95,6 +100,34 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
   candidates.push(
     { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 },
   );
+
+  // рівні live-code: спершу повтори, в яких настав термін, потім наступні нові вправи по порядку репо
+  const levels = levelsState.levels;
+  const dueLevels = levels
+    .filter((level) => level.progress.status === 'DUE' && !level.progress.passedToday)
+    .sort((a, b) => (a.progress.dueAt?.getTime() ?? 0) - (b.progress.dueAt?.getTime() ?? 0));
+  for (const level of dueLevels.slice(0, MAX_LEVEL_REDOS)) {
+    candidates.push({
+      id: `level:${level.key}`,
+      kind: 'LEVEL',
+      title: `Level redo: ${level.title}`,
+      href: `/levels/${level.key}`,
+      topicId: null,
+      defaultMinutes: level.minutes,
+      hint: 'Настав термін повтору: та сама вправа з нуля, без еталону.',
+    });
+  }
+  for (const level of levels.filter((candidate) => candidate.progress.status === 'NEW').slice(0, MAX_NEW_LEVELS)) {
+    candidates.push({
+      id: `level:${level.key}`,
+      kind: 'LEVEL',
+      title: `Level: ${level.title}`,
+      href: `/levels/${level.key}`,
+      topicId: null,
+      defaultMinutes: level.minutes,
+      hint: `${level.groupTitle}: наступна вправа live-code по порядку.`,
+    });
+  }
 
   // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
   const problemIds = new Set<number>();
@@ -198,6 +231,7 @@ export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { 
   const ordered = [
     ...pick('CARDS', 1),
     ...mandatory,
+    ...pick('LEVEL', 2),
     ...pick('RECALL', 2),
     ...pick('CYCLE', 1),
     ...pick('QUESTIONS', 1),
@@ -232,14 +266,16 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
   const from = startOfDay(now);
   const to = endOfDay(now);
   const planStepIds = items.filter((item) => item.kind === 'PLAN').map((item) => Number(item.id.replace('plan:', '')));
-  const [log, recalls, questions, mockToday, inboxCount, planSteps] = await Promise.all([
+  const [log, recalls, questions, mockToday, inboxCount, planSteps, levelPasses] = await Promise.all([
     getTodayLog(now),
     db.recallLog.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.question.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.mockSession.count({ where: { startedAt: { gte: from, lte: to } } }),
     db.inboxItem.count(),
     db.planStep.findMany({ where: { id: { in: planStepIds } } }),
+    db.levelAttempt.findMany({ where: { passed: true, createdAt: { gte: from, lte: to } }, select: { levelKey: true } }),
   ]);
+  const passedLevels = new Set(levelPasses.map((attempt) => attempt.levelKey));
   const recalled = new Set(recalls.map((r) => r.topicId));
   const stepById = new Map(planSteps.map((step) => [step.id, step]));
   const questionsByTopic = new Map<number, number>();
@@ -259,6 +295,7 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
       case 'SYSTEM_DESIGN': autoDone = recalled.has(topicId) || questionsByTopic.has(topicId); break;
       case 'MOCK': autoDone = mockToday > 0; break;
       case 'INBOX': autoDone = inboxCount === 0; break;
+      case 'LEVEL': autoDone = passedLevels.has(item.id.replace('level:', '')); break;
       case 'PLAN': {
         // прогрес кроку живе в PlanStep: галочка тут, на сторінці плану або автоматично після спроби задачі
         const step = stepById.get(Number(item.id.replace('plan:', '')));

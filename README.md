@@ -1,6 +1,6 @@
 # learning-app
 
-Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день з вечірньою перевіркою, recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
+Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день у вигляді карти з вечірньою перевіркою, рівні live coding (вставив код → тести), recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
 
 **Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, стиль Notion (світла і темна тема за налаштуваннями системи).
 
@@ -17,7 +17,7 @@ npm run setup      # створить .env, npm install, підніме Postgres
 
 **Щодня:**
 ```bash
-npm run app        # Postgres + нові міграції + prisma generate + збірка + старт на http://localhost:3000
+npm run app        # Postgres + нові міграції + prisma generate + збірка + старт на http://localhost:3000 (слухає тільки цей комп'ютер)
 ```
 Зупинити: `Ctrl+C` (апка), потім `npm run stop` (Postgres; дані лишаються у volume).
 
@@ -36,6 +36,16 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 
 На безкоштовному рівні Google може використовувати запити для навчання своїх моделей. Для навчальних нотаток це неважливо, робоче сюди не клади.
 
+
+## Рівні (live coding)
+
+Сторінка **Levels** бере вправи з локального клону [live-code](https://github.com/vladio71/live-code): вставляєш код, апка ганяє тести вправи.
+
+1. Клонуй live-code і один раз зроби в ньому `npm install`.
+2. У `.env` апки: `LEVELS_DIR="C:/path/to/live-code"`, перезапусти `npm run app`.
+
+Код з форми виконується на цьому комп'ютері (через vitest з live-code), тому апка слухає тільки `127.0.0.1`: з інших пристроїв у мережі її не видно.
+Спроби копіюються в `live-code/.level-attempts/` і одразу видаляються; у git status ця папка не з'являється.
 
 ## Telegram-бот
 
@@ -57,7 +67,7 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery |
+| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
 | `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
 | `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
@@ -66,6 +76,10 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
 | `src/lib/activity.ts` | лог часу, стрік, аналітика |
 | `src/lib/planner.ts` | кандидати для плану з даних, план за правилами без AI, автовизначення виконаного |
+| `src/components/DayMap.tsx` | план дня як карта: вузли, стежка, бос, фініш |
+| `src/lib/levels.ts` | рівні: читає вправи з `LEVELS_DIR`, прогрес з таблиці спроб |
+| `src/lib/level-runner.ts` | прогін коду: тимчасова копія вправи + vitest з live-code, таймаут 30 с |
+| `src/lib/level-schedule.ts` | повтори рівнів 2 → 7 → 21 → 42 і рамки 🥉 🥈 🥇 (чиста логіка) |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats |

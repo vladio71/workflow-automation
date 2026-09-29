@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { dayKey, getDueTopics } from '@/lib/queries';
-import { schedule } from '@/lib/schedule';
+import { endOfDay, schedule, startOfDay } from '@/lib/schedule';
 import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import { enforceMandatory } from '@/lib/plan-order';
@@ -12,6 +12,8 @@ import { markAttemptDone } from '@/lib/study-plan';
 import { getCardCounts, reviewCard, type ReviewInput } from '@/lib/cards';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
+import { findLevel, getLevelDetails, levelsDir } from '@/lib/levels';
+import { runLevel } from '@/lib/level-runner';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -301,7 +303,8 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
   // план вийшов майже порожній: кажемо чому, а не лишаємо здогадуватись
   const hasStudyPlan = candidates.some((candidate) => candidate.mandatory === true);
   const hasCycle = candidates.some((candidate) => candidate.kind === 'CYCLE');
-  if (!hasStudyPlan && !hasCycle) {
+  const hasLevels = candidates.some((candidate) => candidate.kind === 'LEVEL');
+  if (!hasStudyPlan && !hasCycle && !hasLevels) {
     const why = 'Мало пунктів: немає кроків навчального плану (додай репо з learn/plan.md на Sources) і немає активного циклу (Cycles).';
     note = note ? `${note} ${why}` : why;
   }
@@ -325,6 +328,21 @@ export async function setPlanItemDone(itemId: string, done: boolean): Promise<vo
   if (!plan) return;
   const items = parsePlanItems(plan.items).map((item) => (item.id === itemId ? { ...item, manualDone: done } : item));
   await db.dailyPlan.update({ where: { day }, data: { items: items.map((item) => ({ ...item })) } });
+  refresh();
+}
+
+/** Пропустити поточний вузол карти: переносимо його в кінець дня. Кроки навчального плану (mandatory) не переставляються. */
+export async function skipPlanItem(itemId: string): Promise<void> {
+  const day = dayKey(new Date());
+  const plan = await db.dailyPlan.findUnique({ where: { day } });
+  if (!plan) return;
+  const items = parsePlanItems(plan.items);
+  const index = items.findIndex((item) => item.id === itemId);
+  const item = items[index];
+  if (!item || item.mandatory === true) return;
+  items.splice(index, 1);
+  items.push(item);
+  await db.dailyPlan.update({ where: { day }, data: { items: items.map((planItem) => ({ ...planItem })) } });
   refresh();
 }
 
@@ -435,4 +453,57 @@ export async function gradeCard(input: ReviewInput): Promise<{ remaining: number
 
 export async function finishCardSession(): Promise<void> {
   refresh();
+}
+
+// ================================================================== levels (вправи live-code)
+
+const MAX_CODE_CHARS = 200_000;
+
+export type LevelRunResponse =
+  | { ok: true; passed: boolean; timedOut: boolean; output: string; durationMs: number; reference: string | null }
+  | { ok: false; error: string };
+
+export type LevelGiveUpResponse = { ok: true; reference: string } | { ok: false; error: string };
+
+/** Час на рівень пишемо в Stats один раз за день: на перший прохід або "здався". */
+async function logLevelTime(levelKey: string, title: string, elapsedMinutes: number, maxMinutes: number, gaveUp: boolean): Promise<void> {
+  const now = new Date();
+  const earlier = await db.levelAttempt.count({
+    where: { levelKey, createdAt: { gte: startOfDay(now), lte: endOfDay(now) }, OR: [{ passed: true }, { gaveUp: true }] },
+  });
+  if (earlier > 1) return; // щойно записана спроба вже в цьому числі
+  await logActivity({
+    minutes: Math.min(Math.max(elapsedMinutes, 1), maxMinutes),
+    kind: 'DRILL',
+    topicId: null,
+    track: 'NODE',
+    note: `${gaveUp ? 'Level (gave up)' : 'Level'}: ${title}`,
+  });
+}
+
+/** Прогнати код рівня через тести вправи. Зелені тести = рівень пройдено. */
+export async function runLevelAttempt(key: string, code: string, elapsedMinutes: number): Promise<LevelRunResponse> {
+  const level = await findLevel(key);
+  if (!level) return { ok: false, error: 'Level not found. Check LEVELS_DIR in .env.' };
+  if (code.length > MAX_CODE_CHARS) return { ok: false, error: 'The code is too long.' };
+  if (!code.trim()) return { ok: false, error: 'Write some code first.' };
+
+  const result = await runLevel(levelsDir(), level, code);
+  await db.levelAttempt.create({
+    data: { levelKey: level.key, code, passed: result.passed, output: result.output, durationMs: result.durationMs },
+  });
+  if (result.passed) await logLevelTime(level.key, level.title, elapsedMinutes, level.minutes * 3, false);
+  refresh();
+  const reference = result.passed ? (await getLevelDetails(level)).reference : null;
+  return { ok: true, passed: result.passed, timedOut: result.timedOut, output: result.output, durationMs: result.durationMs, reference };
+}
+
+/** Здатися: відкрити еталон до проходження. Рівень повернеться через 2 дні, рамка за сьогодні не росте. */
+export async function giveUpLevel(key: string, code: string, elapsedMinutes: number): Promise<LevelGiveUpResponse> {
+  const level = await findLevel(key);
+  if (!level) return { ok: false, error: 'Level not found. Check LEVELS_DIR in .env.' };
+  await db.levelAttempt.create({ data: { levelKey: level.key, code: code.slice(0, MAX_CODE_CHARS), passed: false, gaveUp: true } });
+  await logLevelTime(level.key, level.title, elapsedMinutes, level.minutes * 3, true);
+  refresh();
+  return { ok: true, reference: (await getLevelDetails(level)).reference };
 }

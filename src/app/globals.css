@@ -25,6 +25,9 @@
   --tag-purple-bg: #e8deee;   --tag-purple-fg: #412454;
   --tag-pink-bg: #f5e0e9;     --tag-pink-fg: #4c2337;
   --tag-red-bg: #ffe2dd;      --tag-red-fg: #5d1715;
+
+  --map-done: #448361;
+  --map-line: rgba(55, 53, 47, 0.25);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,6 +55,9 @@
     --tag-purple-bg: #3c2d49; --tag-purple-fg: rgba(255, 255, 255, 0.81);
     --tag-pink-bg: #4e2c3c;   --tag-pink-fg: rgba(255, 255, 255, 0.81);
     --tag-red-bg: #522e2a;    --tag-red-fg: rgba(255, 255, 255, 0.81);
+
+    --map-done: #4dab9a;
+    --map-line: rgba(255, 255, 255, 0.25);
   }
 }
 
@@ -257,3 +263,21 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
 .kbd { display: inline-block; min-width: 18px; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; font-size: 11px; line-height: 16px; text-align: center; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
 .grade-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .grade-row .btn { gap: 8px; }
+
+/* ---------------- карта дня ---------------- */
+.map-pulse { transform-box: fill-box; transform-origin: center; animation: map-pulse 1.8s ease-out infinite; }
+@keyframes map-pulse {
+  from { transform: scale(1); opacity: 0.6; }
+  to { transform: scale(1.55); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-pulse { animation: none; opacity: 0.4; }
+}
+
+/* ---------------- рівні: умова зліва, редактор справа; на вузькому екрані одне під одним ---------------- */
+.level-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px; align-items: start; }
+.level-play { position: sticky; top: 16px; }
+@media (max-width: 1100px) {
+  .level-grid { grid-template-columns: minmax(0, 1fr); }
+  .level-play { position: static; }
+}

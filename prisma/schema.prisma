@@ -295,3 +295,22 @@ model TelegramDelivery {
   @@unique([questionId, day])
   @@index([day])
 }
+
+/// Спроба пройти рівень = вправу з live-code (LEVELS_DIR). Самі вправи живуть у репо, тут тільки спроби.
+/// Розклад повторів і рамка рахуються з цих рядків (src/lib/level-schedule.ts).
+model LevelAttempt {
+  id         Int      @id @default(autoincrement())
+  /// папка вправи відносно exercises/, наприклад "04-async/07-dataloader"
+  levelKey   String
+  code       String
+  /// тести зелені
+  passed     Boolean
+  /// відкрив еталон до проходження: сьогодні рівень не рахується в рамку, повтор через 2 дні
+  gaveUp     Boolean  @default(false)
+  /// вивід vitest (обрізаний)
+  output     String   @default("")
+  durationMs Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([levelKey, createdAt])
+}

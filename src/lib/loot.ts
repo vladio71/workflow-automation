@@ -2,7 +2,7 @@ import 'server-only';
 import type { RestPull } from '@/generated/prisma/client';
 import { db } from './db';
 import { LOOT_RULES, STATIC_CARDS, type LootRarity } from './loot.config';
-import { chestGate, guaranteeFor, pickCard, rollRarity, ticketsEarned, type GuaranteeReason, type LootCandidate } from './loot-rules';
+import { chestGate, guaranteeFor, pickCard, rollRarity, ticketsEarned, todayWeights, type GuaranteeReason, type LootCandidate } from './loot-rules';
 import { findBossId } from './plan-order';
 import { getTodayPlan } from './planner';
 import { dayKey } from './queries';
@@ -40,6 +40,8 @@ export interface ChestState {
   bossCleared: boolean;
   /** наступна скриня після боса дасть rare+ */
   bossBonusReady: boolean;
+  /** скільки legendary вже випало сьогодні: кожна наступна вчетверо рідша */
+  legendaryToday: number;
   /** відпочинок, який іде зараз (таймер не скінчився і не натиснув "Назад на карту") */
   active: RestPullView | null;
   todayPulls: RestPullView[];
@@ -102,6 +104,7 @@ async function loadChest(now: Date): Promise<ChestFacts> {
   const gate = chestGate({ earned, pullsToday: pulls.length, lastPullAt: lastPull?.openedAt ?? null, now, rules: LOOT_RULES });
   const bossCleared = items.some((item) => item.id === bossId && item.done);
   const bossPullUsed = pulls.some((pull) => pull.guarantee === 'boss');
+  const legendaryToday = pulls.filter((pull) => pull.rarity === 'LEGENDARY').length;
   const active = lastPull && !lastPull.finishedAt && lastPull.openedAt.getTime() + lastPull.minutes * 60_000 > now.getTime()
     ? toView(lastPull)
     : null;
@@ -119,6 +122,7 @@ async function loadChest(now: Date): Promise<ChestFacts> {
       pityLeft: Math.max(1, LOOT_RULES.pityEvery - sinceEpic),
       bossCleared,
       bossBonusReady: bossCleared && !bossPullUsed,
+      legendaryToday,
       active,
       todayPulls: pulls.map(toView),
     },
@@ -145,8 +149,14 @@ export async function openChest(now: Date = new Date(), random: () => number = M
   const { state, pullsSinceEpic: sinceEpic, bossPullUsed } = await loadChest(now);
   if (!state.open) return { ok: false, error: state.reason ?? 'The chest is closed.' };
 
-  const guarantee = guaranteeFor(sinceEpic, state.bossCleared, bossPullUsed, LOOT_RULES);
-  const rarity = rollRarity(random, LOOT_RULES.weights, guarantee.minRarity);
+  const lastToday = state.todayPulls[state.todayPulls.length - 1] ?? null;
+  const guarantee = guaranteeFor(
+    { pullsSinceEpic: sinceEpic, bossCleared: state.bossCleared, bossPullUsed, lastRarityToday: lastToday?.rarity ?? null },
+    LOOT_RULES,
+  );
+  // після кожної legendary за день її шанс падає (legendaryRepeatFactor)
+  const weights = todayWeights(LOOT_RULES.weights, state.legendaryToday, LOOT_RULES.legendaryRepeatFactor);
+  const rarity = rollRarity(random, weights, guarantee.minRarity);
 
   const poolCards = await db.restCard.findMany({ where: { pulledAt: null, expiresAt: { gt: now } } });
   const candidates: Candidate[] = [

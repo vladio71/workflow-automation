@@ -31,7 +31,8 @@ export default async function LootPage() {
       <p className="page-sub">
         The chest on Today&apos;s map: a ticket for every cleared node, two for the boss. At most {LOOT_RULES.maxPullsPerDay} a day and
         not more often than every {LOOT_RULES.minMinutesBetweenPulls} min. Every {LOOT_RULES.pityEvery}th chest without an epic is at least
-        epic. Cards, odds and limits live in <code className="mono">src/lib/loot.config.ts</code>.
+        epic, and a common is never followed by another common. After each legendary the chance of another one that day drops four
+        times. Cards, odds and limits live in <code className="mono">src/lib/loot.config.ts</code>.
       </p>
 
       <div className="kpis" style={{ marginBottom: 12 }}>

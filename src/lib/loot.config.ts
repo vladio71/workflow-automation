@@ -35,6 +35,13 @@ export interface LootRules {
   minMinutesBetweenPulls: number;
   /** кожен N-й пул поспіль без epic гарантовано дає epic або legendary */
   pityEvery: number;
+  /** після common наступна скриня дає uncommon або краще: двох "поганих" поспіль не буває */
+  noCommonTwiceInRow: boolean;
+  /**
+   * Після кожної legendary за день її шанс множиться на це число: 10% → 2.5% → 0.6%.
+   * Друга legendary можлива, але рідко: інакше день пропав.
+   */
+  legendaryRepeatFactor: number;
   /** шанси у відсотках, сума = 100 */
   weights: Record<LootRarity, number>;
 }
@@ -42,8 +49,11 @@ export interface LootRules {
 export const LOOT_RULES: LootRules = {
   maxPullsPerDay: 6,
   minMinutesBetweenPulls: 25,
-  pityEvery: 10,
-  weights: { COMMON: 45, UNCOMMON: 25, RARE: 16, EPIC: 10, LEGENDARY: 4 },
+  pityEvery: 6,
+  noCommonTwiceInRow: true,
+  legendaryRepeatFactor: 0.25,
+  // це твій день, а не гра: поганий дроп рідкісний
+  weights: { COMMON: 20, UNCOMMON: 25, RARE: 25, EPIC: 20, LEGENDARY: 10 },
 };
 
 /** Рідкість карток з пулу за видом */

@@ -2,8 +2,8 @@
  * Правила скрині. Чиста логіка без БД і без мережі, як plan-order.ts: так її легко перевірити окремо.
  *   - квитки: +1 за кожен пройдений вузол, бос дає +2; рівень, пройдений після "здався", квитка не дає;
  *   - ліміти: не більше N пулів на день і не частіше ніж раз на M хвилин (як сувої на Mangabuff);
- *   - гарантії: кожен 6-й пул поспіль без epic = epic+ (pity); перший пул після боса = rare+; після common = uncommon+;
- *   - legendary: після кожної за день її шанс падає вчетверо, друга можлива, але рідко;
+ *   - гарантії: скриня за боса = legendary (rare+, якщо legendary вже була); кожен 6-й пул без epic = epic+; після common = uncommon+;
+ *   - legendary: перша гарантована за боса, друга зі звичайним шансом, третя вже рідко;
  *   - картка: рідкість кидається за вагами, потім випадкова картка цієї рідкості; немає такої, беремо нижчу.
  */
 import type { LootRarity, LootRules } from './loot.config';
@@ -70,24 +70,33 @@ export interface GuaranteeInput {
   pullsSinceEpic: number;
   bossCleared: boolean;
   bossPullUsed: boolean;
+  /** скільки legendary вже випало сьогодні */
+  legendaryToday: number;
   /** рідкість попередньої скрині сьогодні; null = сьогодні ще не відкривав */
   lastRarityToday: LootRarity | null;
 }
 
-/** Найсильніша гарантія перемагає: pity (epic+) > бос (rare+) > після common (uncommon+). */
+/**
+ * Найсильніша гарантія перемагає:
+ *   скриня за боса = legendary, якщо сьогодні її ще не було (з'їв жабу, отримав головне);
+ *   pity = epic+; скриня за боса, коли legendary вже була = rare+; після common = uncommon+.
+ */
 export function guaranteeFor(input: GuaranteeInput, rules: LootRules): Guarantee {
+  const bossChest = input.bossCleared && !input.bossPullUsed;
+  if (bossChest && input.legendaryToday === 0) return { minRarity: 'LEGENDARY', reason: 'boss' };
   if (input.pullsSinceEpic + 1 >= rules.pityEvery) return { minRarity: 'EPIC', reason: 'pity' };
-  if (input.bossCleared && !input.bossPullUsed) return { minRarity: 'RARE', reason: 'boss' };
+  if (bossChest) return { minRarity: 'RARE', reason: 'boss' };
   if (rules.noCommonTwiceInRow && input.lastRarityToday === 'COMMON') return { minRarity: 'UNCOMMON', reason: 'streak' };
   return { minRarity: 'COMMON', reason: '' };
 }
 
 /**
- * Ваги на сьогодні: після кожної legendary за день її вага множиться на repeatFactor (0.25: 10% → 2.5% → 0.6%).
- * Друга legendary можлива, але рідко.
+ * Ваги на сьогодні: поки legendary за день менше за legendaryPerDay, шанс звичайний;
+ * далі вага legendary множиться на legendaryOverflowFactor (10% → 1%).
  */
-export function todayWeights(weights: Record<LootRarity, number>, legendaryToday: number, repeatFactor: number): Record<LootRarity, number> {
-  return { ...weights, LEGENDARY: weights.LEGENDARY * repeatFactor ** legendaryToday };
+export function todayWeights(weights: Record<LootRarity, number>, legendaryToday: number, rules: LootRules): Record<LootRarity, number> {
+  if (legendaryToday < rules.legendaryPerDay) return { ...weights };
+  return { ...weights, LEGENDARY: weights.LEGENDARY * rules.legendaryOverflowFactor };
 }
 
 /** Кидок рідкості за вагами серед рідкостей не нижче minRarity. random() повертає [0, 1). */
@@ -107,7 +116,14 @@ export interface LootCandidate {
   kind: string;
   rarity: LootRarity;
   afterBoss: boolean;
+  afterDay: boolean;
   fallback: boolean;
+}
+
+/** Що вже відкрито сьогодні: бос пройдений, уся карта пройдена. */
+export interface DayGates {
+  bossCleared: boolean;
+  dayCleared: boolean;
 }
 
 export interface Picked<T extends LootCandidate> {
@@ -116,11 +132,13 @@ export interface Picked<T extends LootCandidate> {
 }
 
 /** Випадкова картка вибраної рідкості; якщо таких немає, крок вниз. Запасні картки тільки коли немає справжньої того ж виду. */
-export function pickCard<T extends LootCandidate>(candidates: readonly T[], rarity: LootRarity, bossCleared: boolean, random: () => number): Picked<T> | null {
+export function pickCard<T extends LootCandidate>(candidates: readonly T[], rarity: LootRarity, gates: DayGates, random: () => number): Picked<T> | null {
   for (let rank = rarityRank(rarity); rank >= 0; rank -= 1) {
     const current = RARITY_ORDER[rank];
     if (!current) continue;
-    const available = candidates.filter((card) => card.rarity === current && (bossCleared || !card.afterBoss));
+    const available = candidates.filter(
+      (card) => card.rarity === current && (gates.bossCleared || !card.afterBoss) && (gates.dayCleared || !card.afterDay),
+    );
     const realKinds = new Set(available.filter((card) => !card.fallback).map((card) => card.kind));
     const pool = available.filter((card) => !card.fallback || !realKinds.has(card.kind));
     if (pool.length === 0) continue;

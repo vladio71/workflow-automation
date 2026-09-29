@@ -23,8 +23,10 @@ export interface StaticRestCard {
   body: string;
   minutes: number;
   url?: string;
-  /** довге: падає тільки після боса дня */
+  /** падає тільки після боса дня (гра) */
   afterBoss?: boolean;
+  /** падає тільки коли вся карта дня пройдена (фільм на дві години) */
+  afterDay?: boolean;
   /** запасна: падає, тільки коли в пулі немає справжньої картки цього виду (наприклад, AI не підібрав музику) */
   fallback?: boolean;
 }
@@ -38,10 +40,11 @@ export interface LootRules {
   /** після common наступна скриня дає uncommon або краще: двох "поганих" поспіль не буває */
   noCommonTwiceInRow: boolean;
   /**
-   * Після кожної legendary за день її шанс множиться на це число: 10% → 2.5% → 0.6%.
-   * Друга legendary можлива, але рідко: інакше день пропав.
+   * Скільки legendary на день нормально. Перша гарантована за боса, друга падає зі звичайним шансом,
+   * а після цієї кількості шанс множиться на legendaryOverflowFactor: більше вже забагато для робочого дня.
    */
-  legendaryRepeatFactor: number;
+  legendaryPerDay: number;
+  legendaryOverflowFactor: number;
   /** шанси у відсотках, сума = 100 */
   weights: Record<LootRarity, number>;
 }
@@ -51,7 +54,8 @@ export const LOOT_RULES: LootRules = {
   minMinutesBetweenPulls: 25,
   pityEvery: 6,
   noCommonTwiceInRow: true,
-  legendaryRepeatFactor: 0.25,
+  legendaryPerDay: 2,
+  legendaryOverflowFactor: 0.1,
   // це твій день, а не гра: поганий дроп рідкісний
   weights: { COMMON: 20, UNCOMMON: 25, RARE: 25, EPIC: 20, LEGENDARY: 10 },
 };
@@ -75,8 +79,8 @@ export const POOL_TTL_DAYS: Record<PoolKind, number> = { MEME: 14, NEWS: 2, ARTI
 /** Хвилини відпочинку за видом (для карток з пулу) */
 export const POOL_MINUTES: Record<PoolKind, number> = { MEME: 3, NEWS: 5, ARTICLE: 7, MUSIC: 20, ANIME: 25, FILM: 120 };
 
-/** Фільм на дві години: тільки після боса дня */
-export const POOL_AFTER_BOSS: Record<PoolKind, boolean> = { MEME: false, NEWS: false, ARTICLE: false, MUSIC: false, ANIME: false, FILM: true };
+/** Фільм на дві години: тільки коли вся карта дня пройдена */
+export const POOL_AFTER_DAY: Record<PoolKind, boolean> = { MEME: false, NEWS: false, ARTICLE: false, MUSIC: false, ANIME: false, FILM: true };
 
 /** Що шукати для новин і статей. Твоя відповідь була: "просто щось цікаве". */
 export const INTERESTS =

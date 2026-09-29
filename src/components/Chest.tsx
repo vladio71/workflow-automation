@@ -32,7 +32,7 @@ const KIND_ICON: Record<string, string> = {
 
 const GUARANTEE_LABEL: Record<string, string> = {
   pity: 'no epic for a while: guaranteed',
-  boss: 'boss reward: rare or better',
+  boss: 'boss reward',
   streak: 'after a common: uncommon or better',
 };
 
@@ -141,8 +141,8 @@ export function Chest({ state, nextTitle }: ChestProps) {
       <b>Chest</b>
       <span className="muted" style={{ fontSize: 13 }}>
         🎟 ×{state.tickets} · {state.pullsToday}/{state.maxPullsPerDay} today · epic in {state.pityLeft}
-        {state.bossBonusReady && ' · 👑 boss reward ready'}
-        {state.legendaryToday > 0 && ' · next legendary is rarer today'}
+        {state.bossBonusReady && (state.legendaryToday === 0 ? ' · 👑 boss chest: legendary' : ' · 👑 boss chest: rare or better')}
+        {state.legendaryToday > 0 && ` · legendary today: ${state.legendaryToday}`}
       </span>
       <span style={{ flex: 1 }} />
       {state.todayPulls.length > 0 && (

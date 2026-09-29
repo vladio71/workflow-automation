@@ -1,7 +1,7 @@
 import 'server-only';
 import type { RestPull } from '@/generated/prisma/client';
 import { db } from './db';
-import { LOOT_RULES, STATIC_CARDS, type LootRarity } from './loot.config';
+import { LOOT_RULES, POOL_AFTER_DAY, STATIC_CARDS, type LootRarity, type PoolKind } from './loot.config';
 import { chestGate, guaranteeFor, pickCard, rollRarity, ticketsEarned, todayWeights, type GuaranteeReason, type LootCandidate } from './loot-rules';
 import { findBossId } from './plan-order';
 import { getTodayPlan } from './planner';
@@ -40,8 +40,10 @@ export interface ChestState {
   bossCleared: boolean;
   /** наступна скриня після боса дасть rare+ */
   bossBonusReady: boolean;
-  /** скільки legendary вже випало сьогодні: кожна наступна вчетверо рідша */
+  /** скільки legendary вже випало сьогодні */
   legendaryToday: number;
+  /** уся карта дня пройдена: відкривається фільм */
+  dayCleared: boolean;
   /** відпочинок, який іде зараз (таймер не скінчився і не натиснув "Назад на карту") */
   active: RestPullView | null;
   todayPulls: RestPullView[];
@@ -103,6 +105,7 @@ async function loadChest(now: Date): Promise<ChestFacts> {
   const lastPull = pulls[pulls.length - 1] ?? null;
   const gate = chestGate({ earned, pullsToday: pulls.length, lastPullAt: lastPull?.openedAt ?? null, now, rules: LOOT_RULES });
   const bossCleared = items.some((item) => item.id === bossId && item.done);
+  const dayCleared = items.length > 0 && items.every((item) => item.done);
   const bossPullUsed = pulls.some((pull) => pull.guarantee === 'boss');
   const legendaryToday = pulls.filter((pull) => pull.rarity === 'LEGENDARY').length;
   const active = lastPull && !lastPull.finishedAt && lastPull.openedAt.getTime() + lastPull.minutes * 60_000 > now.getTime()
@@ -123,6 +126,7 @@ async function loadChest(now: Date): Promise<ChestFacts> {
       bossCleared,
       bossBonusReady: bossCleared && !bossPullUsed,
       legendaryToday,
+      dayCleared,
       active,
       todayPulls: pulls.map(toView),
     },
@@ -151,11 +155,17 @@ export async function openChest(now: Date = new Date(), random: () => number = M
 
   const lastToday = state.todayPulls[state.todayPulls.length - 1] ?? null;
   const guarantee = guaranteeFor(
-    { pullsSinceEpic: sinceEpic, bossCleared: state.bossCleared, bossPullUsed, lastRarityToday: lastToday?.rarity ?? null },
+    {
+      pullsSinceEpic: sinceEpic,
+      bossCleared: state.bossCleared,
+      bossPullUsed,
+      legendaryToday: state.legendaryToday,
+      lastRarityToday: lastToday?.rarity ?? null,
+    },
     LOOT_RULES,
   );
-  // після кожної legendary за день її шанс падає (legendaryRepeatFactor)
-  const weights = todayWeights(LOOT_RULES.weights, state.legendaryToday, LOOT_RULES.legendaryRepeatFactor);
+  // дві legendary на день нормально, третя вже рідко
+  const weights = todayWeights(LOOT_RULES.weights, state.legendaryToday, LOOT_RULES);
   const rarity = rollRarity(random, weights, guarantee.minRarity);
 
   const poolCards = await db.restCard.findMany({ where: { pulledAt: null, expiresAt: { gt: now } } });
@@ -165,6 +175,7 @@ export async function openChest(now: Date = new Date(), random: () => number = M
       kind: card.kind,
       rarity: card.rarity,
       afterBoss: card.afterBoss === true,
+      afterDay: card.afterDay === true,
       fallback: card.fallback === true,
       title: card.title,
       body: card.body,
@@ -179,6 +190,8 @@ export async function openChest(now: Date = new Date(), random: () => number = M
       kind: card.kind,
       rarity: card.rarity,
       afterBoss: card.afterBoss,
+      // фільм на дві години: тільки коли вся карта пройдена (за видом, щоб і старі картки в пулі слухались правила)
+      afterDay: POOL_AFTER_DAY[card.kind as PoolKind] === true,
       fallback: false,
       title: card.title,
       body: card.body,
@@ -189,7 +202,7 @@ export async function openChest(now: Date = new Date(), random: () => number = M
       restCardId: card.id,
     })),
   ];
-  const picked = pickCard(candidates, rarity, state.bossCleared, random);
+  const picked = pickCard(candidates, rarity, { bossCleared: state.bossCleared, dayCleared: state.dayCleared }, random);
   if (!picked) return { ok: false, error: 'The pool is empty. Check src/lib/loot.config.ts.' };
 
   // гарантія записується, тільки якщо вона справді спрацювала (картки потрібної рідкості могло не бути)

@@ -1,7 +1,7 @@
 import 'server-only';
 import { db } from './db';
 import { findRestCards, isGeminiConfigured, type RestCardDraft, type SearchedRestKind } from './gemini';
-import { INTERESTS, POOL_AFTER_BOSS, POOL_MINUTES, POOL_RARITY, POOL_TARGETS, POOL_TTL_DAYS, type PoolKind } from './loot.config';
+import { INTERESTS, POOL_MINUTES, POOL_RARITY, POOL_TARGETS, POOL_TTL_DAYS, type PoolKind } from './loot.config';
 
 /**
  * Наповнення пулу скрині. Запускається само при відкритті Today (не частіше ніж раз на 30 хв) і кнопкою Refill на /loot.
@@ -203,7 +203,8 @@ async function doRefill(now: Date): Promise<RefillResult> {
       ...card,
       rarity: POOL_RARITY[card.kind],
       minutes: POOL_MINUTES[card.kind],
-      afterBoss: POOL_AFTER_BOSS[card.kind],
+      // afterBoss лишається false: фільм відкривається за видом, коли вся карта пройдена (POOL_AFTER_DAY)
+      afterBoss: false,
       expiresAt: new Date(now.getTime() + POOL_TTL_DAYS[card.kind] * 24 * 60 * 60_000),
     })),
     skipDuplicates: true,

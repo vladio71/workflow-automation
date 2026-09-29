@@ -15,7 +15,7 @@ const POOL_SOURCE: Record<PoolKind, string> = {
   ARTICLE: 'Gemini + Google Search, backup Hacker News',
   MUSIC: 'Gemini + Google Search',
   ANIME: 'Gemini + Google Search',
-  FILM: 'Gemini + Google Search, only after the boss',
+  FILM: 'Gemini + Google Search, only when the map is cleared',
 };
 const KIND_ICON: Record<string, string> = { MICRO: '🌿', MEME: '😂', NEWS: '📰', ARTICLE: '📖', MUSIC: '🎧', ANIME: '📺', FILM: '🎬', GAME: '🎮' };
 
@@ -31,8 +31,8 @@ export default async function LootPage() {
       <p className="page-sub">
         The chest on Today&apos;s map: a ticket for every cleared node, two for the boss. At most {LOOT_RULES.maxPullsPerDay} a day and
         not more often than every {LOOT_RULES.minMinutesBetweenPulls} min. Every {LOOT_RULES.pityEvery}th chest without an epic is at least
-        epic, and a common is never followed by another common. After each legendary the chance of another one that day drops four
-        times. Cards, odds and limits live in <code className="mono">src/lib/loot.config.ts</code>.
+        epic, and a common is never followed by another common. The boss chest is a legendary (if there was none today yet), a second
+        legendary drops with the usual chance, a third one rarely. The film unlocks only when the whole map is cleared. Cards, odds and limits live in <code className="mono">src/lib/loot.config.ts</code>.
       </p>
 
       <div className="kpis" style={{ marginBottom: 12 }}>
@@ -81,7 +81,7 @@ export default async function LootPage() {
               <td style={{ width: 110 }}><Tag color={RARITY_COLOR[card.rarity]}>{card.rarity.toLowerCase()}</Tag></td>
               <td className="muted mono" style={{ width: 60 }}>{card.minutes}m</td>
               <td className="faint" style={{ width: 150, fontSize: 13 }}>
-                {card.afterBoss ? 'after the boss' : card.fallback ? 'if the pool has none' : ''}
+                {card.afterDay ? 'when the map is cleared' : card.afterBoss ? 'after the boss' : card.fallback ? 'if the pool has none' : ''}
               </td>
             </tr>
           ))}

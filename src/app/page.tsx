@@ -6,8 +6,10 @@ import { LogTime } from '@/components/LogTime';
 import { formatMinutes, getAnalytics } from '@/lib/activity';
 import { isGeminiConfigured } from '@/lib/gemini';
 import { getTodayPlan } from '@/lib/planner';
+import { getChestState } from '@/lib/loot';
 import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
+import { LootRefill } from '@/components/LootRefill';
 import { Tag } from '@/components/Tag';
 import { CONFIDENCES, TRACKS, optionFor } from '@/lib/labels';
 import { getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from '@/lib/queries';
@@ -17,7 +19,7 @@ import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans] = await Promise.all([
+  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -26,6 +28,7 @@ export default async function TodayPage() {
     getDueTopics(now),
     getNextSystemDesignTopic(),
     getStudyPlans(),
+    getChestState(now),
   ]);
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
@@ -37,6 +40,7 @@ export default async function TodayPage() {
   return (
     <div className="page">
       <AutoSync />
+      <LootRefill />
       <div className="page-icon">☀️</div>
       <h1 className="page-title">Today</h1>
       <p className="page-sub">
@@ -46,6 +50,7 @@ export default async function TodayPage() {
       <PlanCard
         plan={plan ? { summary: plan.summary, review: plan.review, items: plan.items } : null}
         geminiEnabled={isGeminiConfigured()}
+        chest={chest}
       />
 
       {studyPlans.map((studyPlan) => {

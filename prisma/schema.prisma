@@ -314,3 +314,60 @@ model LevelAttempt {
 
   @@index([levelKey, createdAt])
 }
+
+enum LootRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+/// Картка відпочинку в пулі: з Gemini (новина, стаття, фільм, аніме, музика), xkcd або Hacker News.
+/// Статичні картки (вода, розминка, гра) живуть у src/lib/loot.config.ts і в БД не пишуться.
+model RestCard {
+  id        Int        @id @default(autoincrement())
+  /// MEME | NEWS | ARTICLE | FILM | ANIME | MUSIC (рядок, щоб нові види не вимагали міграції)
+  kind      String
+  rarity    LootRarity
+  title     String
+  body      String     @default("")
+  url       String     @default("")
+  imageUrl  String     @default("")
+  minutes   Int
+  /// gemini | xkcd | hn
+  source    String
+  /// щоб той самий комікс чи стаття не потрапили в пул двічі
+  dedupeKey String     @unique
+  /// довге (фільм): випадає тільки після боса дня
+  afterBoss Boolean    @default(false)
+  expiresAt DateTime
+  pulledAt  DateTime?
+  pulls     RestPull[]
+  createdAt DateTime   @default(now())
+
+  @@index([rarity, pulledAt, expiresAt])
+}
+
+/// Один пул зі скрині. Вміст картки скопійовано сюди, бо статичні картки не в БД, а картки пулу з часом видаляються.
+model RestPull {
+  id         Int        @id @default(autoincrement())
+  day        DateTime   @db.Date
+  rarity     LootRarity
+  kind       String
+  title      String
+  body       String     @default("")
+  url        String     @default("")
+  imageUrl   String     @default("")
+  minutes    Int
+  source     String
+  /// чому рідкість не нижча за певну: "pity" (кожен 10-й пул) або "boss"
+  guarantee  String     @default("")
+  restCardId Int?
+  restCard   RestCard?  @relation(fields: [restCardId], references: [id], onDelete: SetNull)
+  openedAt   DateTime   @default(now())
+  /// натиснув "Назад на карту"
+  finishedAt DateTime?
+
+  @@index([day])
+}

@@ -3,12 +3,17 @@
 import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { generatePlan, reviewToday, setPlanItemDone, skipPlanItem } from '@/app/actions';
+import { Chest } from '@/components/Chest';
 import { DayMap, type NodeState } from '@/components/DayMap';
+import { findBossId } from '@/lib/plan-order';
+import type { ChestState } from '@/lib/loot';
 import type { PlanItemWithStatus } from '@/lib/planner';
 
 interface PlanCardProps {
   plan: { summary: string; review: string; items: PlanItemWithStatus[] } | null;
   geminiEnabled: boolean;
+  /** скриня: квитки за пройдені вузли */
+  chest: ChestState | null;
 }
 
 const BUDGETS: readonly number[] = [60, 120, 180, 240, 300, 360, 480];
@@ -27,15 +32,6 @@ const KIND_ICON: Record<PlanItemWithStatus['kind'], string> = {
   LEVEL: '⚔️',
 };
 
-/** Бос дня = найдовший пункт (при рівності останній з них). */
-function findBossId(items: PlanItemWithStatus[]): string | null {
-  let boss: PlanItemWithStatus | null = null;
-  for (const item of items) {
-    if (!boss || item.minutes >= boss.minutes) boss = item;
-  }
-  return items.length > 1 && boss ? boss.id : null;
-}
-
 function ItemLink({ item, children, className }: { item: PlanItemWithStatus; children: React.ReactNode; className?: string }) {
   if (item.href.startsWith('http')) {
     return <a href={item.href} target="_blank" rel="noreferrer" className={className}>{children} ↗</a>;
@@ -43,7 +39,7 @@ function ItemLink({ item, children, className }: { item: PlanItemWithStatus; chi
   return <Link href={item.href} className={className}>{children}</Link>;
 }
 
-export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
+export function PlanCard({ plan, geminiEnabled, chest }: PlanCardProps) {
   const [budget, setBudget] = useState(300);
   const [note, setNote] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -115,6 +111,8 @@ export function PlanCard({ plan, geminiEnabled }: PlanCardProps) {
           {items.length > 0 && (
             <DayMap items={items} icons={KIND_ICON} selectedId={selected?.id ?? null} bossId={bossId} stateOf={stateOf} onSelect={setPickedId} />
           )}
+
+          {chest && items.length > 0 && <Chest state={chest} nextTitle={current?.title ?? null} />}
 
           {selected && selectedState && (
             <div className="callout" style={{ marginBottom: 0 }}>

@@ -7,13 +7,15 @@ import { dayKey, getDueTopics } from '@/lib/queries';
 import { endOfDay, schedule, startOfDay } from '@/lib/schedule';
 import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
 import { buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
-import { enforceMandatory } from '@/lib/plan-order';
+import { enforceMandatory, momentumOrder } from '@/lib/plan-order';
 import { markAttemptDone } from '@/lib/study-plan';
 import { getCardCounts, reviewCard, type ReviewInput } from '@/lib/cards';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
 import { findLevel, getLevelDetails, levelsDir } from '@/lib/levels';
 import { runLevel } from '@/lib/level-runner';
+import { finishRest, openChest, type OpenChestResult } from '@/lib/loot';
+import { refillPool, type RefillResult } from '@/lib/loot-refill';
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -309,6 +311,8 @@ export async function generatePlan(minutesBudget: number): Promise<PlanActionRes
     note = note ? `${note} ${why}` : why;
   }
 
+  // розминка першою, бос одразу після неї: це правило коду, AI його не переставить
+  items = momentumOrder(items);
   const itemsJson = items.map((item) => ({ ...item }));
   await db.dailyPlan.upsert({
     where: { day },
@@ -506,4 +510,30 @@ export async function giveUpLevel(key: string, code: string, elapsedMinutes: num
   await logLevelTime(level.key, level.title, elapsedMinutes, level.minutes * 3, true);
   refresh();
   return { ok: true, reference: (await getLevelDetails(level)).reference };
+}
+
+// ================================================================== скриня
+
+/** Відкрити скриню: квиток за пройдений вузол → випадкова картка відпочинку. */
+export async function openChestNow(): Promise<OpenChestResult> {
+  try {
+    const result = await openChest();
+    refresh();
+    return result;
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not open the chest.' };
+  }
+}
+
+/** "Назад на карту": відпочинок закінчено. */
+export async function finishRestNow(pullId: number): Promise<void> {
+  await finishRest(pullId);
+  refresh();
+}
+
+/** Кнопка Refill на /loot: наповнити пул зараз, не чекаючи 30 хв. */
+export async function refillLootNow(): Promise<RefillResult> {
+  const result = await refillPool({ force: true });
+  refresh();
+  return result;
 }

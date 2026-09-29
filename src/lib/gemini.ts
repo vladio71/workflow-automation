@@ -217,7 +217,7 @@ const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior bac
 - LEVEL = вправа live coding під співбесіду: пишеш код, тести мають позеленіти. Якщо LEVEL є серед кандидатів, бери 1-2 на день:
   спершу "Level redo" (настав термін повтору), потім нова. Став їх у першу половину дня, поки свіжа голова.
 - Вклади план у бюджет часу. Краще 3-5 пунктів, які реально зробити, ніж 8.
-- Порядок пунктів = порядок виконання.
+- Порядок пунктів = порядок виконання. Апка сама ставить CARDS першими (розминка) і найбільший пункт одразу після них, тож пиши why з цим порядком.
 - why: одне коротке речення українською, чому цей пункт сьогодні.
 - summary: 1-2 речення українською, головний фокус дня.`;
 
@@ -277,4 +277,136 @@ export async function reviewDay(input: DayReviewInput): Promise<string> {
     },
   }));
   return (response.text ?? '').trim();
+}
+
+// ------------------------------------------------------------------ 5. картки відпочинку для скрині
+
+/** Види карток, які шукає Gemini (меми беремо з xkcd, без AI). */
+export type SearchedRestKind = 'NEWS' | 'ARTICLE' | 'MUSIC' | 'ANIME' | 'FILM';
+
+export interface RestCardDraft {
+  kind: SearchedRestKind;
+  title: string;
+  body: string;
+  url: string;
+}
+
+export interface RestCardsRequest {
+  /** "середа, 30 вересня 2026" */
+  today: string;
+  interests: string;
+  counts: Record<SearchedRestKind, number>;
+}
+
+const RestCardsSchema = z.object({
+  cards: z.array(z.object({
+    kind: z.enum(['NEWS', 'ARTICLE', 'MUSIC', 'ANIME', 'FILM']),
+    title: z.string().min(1),
+    body: z.string(),
+    url: z.string(),
+  })),
+});
+
+const REST_CARDS_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    cards: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['NEWS', 'ARTICLE', 'MUSIC', 'ANIME', 'FILM'] },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          url: { type: 'string' },
+        },
+        required: ['kind', 'title', 'body', 'url'],
+      },
+    },
+  },
+  required: ['cards'],
+};
+
+const REST_CARDS_INSTRUCTION = `Ти підбираєш перерви для розробника, який багато вчиться. Кожна картка = готове рішення:
+він відкриває її і нічого не вибирає, одразу дивиться, слухає чи читає.
+Шукай у Google і бери тільки реальні сторінки, які знайшов. Нічого не вигадуй: ні назв, ні посилань.
+title: коротко; назви фільмів, аніме, альбомів мовою оригіналу.
+body: 1-3 речення українською: що це і чим зачепить. Без реклами і без "обов'язково подивіться".
+url: пряме https-посилання на сторінку, яку знайшов.`;
+
+const KIND_ASK: Record<SearchedRestKind, string> = {
+  NEWS: 'NEWS: свіжа (останні 3 дні) цікава новина, яку приємно прочитати за 5 хвилин',
+  ARTICLE: 'ARTICLE: цікава стаття або есе на 5-7 хвилин читання (не новина)',
+  MUSIC: 'MUSIC: конкретний альбом, EP або мікс, який слухається за ~20 хвилин; посилання на YouTube, Bandcamp або Spotify',
+  ANIME: 'ANIME: аніме, яке виходить у цьому сезоні, і конкретна серія, з якої почати (номер серії в body); посилання на MyAnimeList, AniList або Crunchyroll',
+  FILM: 'FILM: фільм останніх двох років з високими оцінками критиків і глядачів; посилання на IMDb або Letterboxd',
+};
+
+const SEARCHED_KINDS: readonly SearchedRestKind[] = ['NEWS', 'ARTICLE', 'MUSIC', 'ANIME', 'FILM'];
+
+function restCardsPrompt(request: RestCardsRequest): string {
+  const lines = SEARCHED_KINDS
+    .filter((kind) => request.counts[kind] > 0)
+    .map((kind) => `- ${KIND_ASK[kind]}: ${request.counts[kind]} шт.`);
+  return [
+    `Сьогодні ${request.today}.`,
+    `Інтереси для NEWS і ARTICLE: ${request.interests}`,
+    'Знайди:',
+    ...lines,
+    'Усі картки різні. Поверни JSON {"cards": [...]}.',
+  ].join('\n');
+}
+
+function parseRestCards(text: string): RestCardDraft[] {
+  // без structured output модель може обгорнути JSON у ```json … ```: беремо від першої { до останньої }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) return [];
+  let json: unknown;
+  try {
+    json = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  const parsed = RestCardsSchema.safeParse(json);
+  if (!parsed.success) return [];
+  return parsed.data.cards.filter((card) => card.url.startsWith('https://'));
+}
+
+const REST_TIMEOUT_MS = 90_000;
+
+/**
+ * Gemini + Google Search: новини, статті, музика, аніме, фільм для скрині.
+ * Structured output разом з пошуком підтримують моделі Gemini 3; якщо API відмовить (400), просимо JSON текстом.
+ */
+export async function findRestCards(request: RestCardsRequest): Promise<RestCardDraft[]> {
+  const prompt = restCardsPrompt(request);
+  try {
+    const response = await callWithFallback((model) => gemini().models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: REST_CARDS_INSTRUCTION,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: 'application/json',
+        responseJsonSchema: REST_CARDS_JSON_SCHEMA,
+        temperature: 0.9,
+        httpOptions: { timeout: REST_TIMEOUT_MS },
+      },
+    }));
+    return parseRestCards(response.text ?? '');
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 400) throw error;
+    const response = await callWithFallback((model) => gemini().models.generateContent({
+      model,
+      contents: `${prompt}\nВідповідай тільки JSON, без тексту навколо.`,
+      config: {
+        systemInstruction: REST_CARDS_INSTRUCTION,
+        tools: [{ googleSearch: {} }],
+        temperature: 0.9,
+        httpOptions: { timeout: REST_TIMEOUT_MS },
+      },
+    }));
+    return parseRestCards(response.text ?? '');
+  }
 }

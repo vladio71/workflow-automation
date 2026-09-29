@@ -1,6 +1,6 @@
 # learning-app
 
-Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день у вигляді карти з вечірньою перевіркою, рівні live coding (вставив код → тести), recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
+Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день у вигляді карти зі скринею відпочинку і вечірньою перевіркою, рівні live coding (вставив код → тести), recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
 
 **Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, стиль Notion (світла і темна тема за налаштуваннями системи).
 
@@ -47,6 +47,12 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 Код з форми виконується на цьому комп'ютері (через vitest з live-code), тому апка слухає тільки `127.0.0.1`: з інших пристроїв у мережі її не видно.
 Спроби копіюються в `live-code/.level-attempts/` і одразу видаляються; у git status ця папка не з'являється.
 
+## Скриня (Loot)
+
+Під картою на Today: квиток за кожен пройдений вузол, у скрині картка відпочинку з таймером. Правила і картки в `src/lib/loot.config.ts`.
+Новини, статті, музику, аніме і фільми шукає Gemini з Google Search (той самий `GEMINI_API_KEY`), меми беруться з xkcd, без ключа новини й статті йдуть з Hacker News.
+За сторінкою цін Google, пошук для Gemini 3 має безкоштовний місячний ліміт (5000 запитів на момент написання), пул тягне кілька сотень на місяць.
+
 ## Telegram-бот
 
 Картки з черги на сьогодні приходять у Telegram: питання, кнопка «Показати відповідь», потім Забув / Важко / Згадав. Оцінка йде в той самий розклад, що й на сторінці Cards, наступна картка приходить після оцінки.
@@ -67,7 +73,7 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt |
+| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt, RestCard, RestPull |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
 | `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
 | `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
@@ -80,6 +86,11 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/lib/levels.ts` | рівні: читає вправи з `LEVELS_DIR`, прогрес з таблиці спроб |
 | `src/lib/level-runner.ts` | прогін коду: тимчасова копія вправи + vitest з live-code, таймаут 30 с |
 | `src/lib/level-schedule.ts` | повтори рівнів 2 → 7 → 21 → 42 і рамки 🥉 🥈 🥇 (чиста логіка) |
+| `src/lib/plan-order.ts` | порядок дня: обов'язкові кроки плану, розминка першою, бос одразу після неї |
+| `src/lib/loot.config.ts` | скриня: статичні картки, шанси, ліміти, скільки карток тримати в пулі (редагуй тут) |
+| `src/lib/loot-rules.ts` | квитки, ліміти, pity, бонус за боса, кидок рідкості (чиста логіка) |
+| `src/lib/loot.ts` | стан скрині з плану на сьогодні, відкрити скриню, закінчити відпочинок |
+| `src/lib/loot-refill.ts` | пул карток: xkcd, Gemini + Google Search, запасний Hacker News |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats |

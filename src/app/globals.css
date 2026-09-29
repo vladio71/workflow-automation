@@ -28,6 +28,11 @@
 
   --map-done: #448361;
   --map-line: rgba(55, 53, 47, 0.25);
+  --rarity-common: rgba(55, 53, 47, 0.35);
+  --rarity-uncommon: #448361;
+  --rarity-rare: #337ea9;
+  --rarity-epic: #9065b0;
+  --rarity-legendary: #d9730d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +63,11 @@
 
     --map-done: #4dab9a;
     --map-line: rgba(255, 255, 255, 0.25);
+    --rarity-common: rgba(255, 255, 255, 0.35);
+    --rarity-uncommon: #4dab9a;
+    --rarity-rare: #529cca;
+    --rarity-epic: #9a6dd7;
+    --rarity-legendary: #ffa344;
   }
 }
 
@@ -280,4 +290,31 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
 @media (max-width: 1100px) {
   .level-grid { grid-template-columns: minmax(0, 1fr); }
   .level-play { position: static; }
+}
+
+/* ---------------- скриня ---------------- */
+.loot-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px dashed var(--border-strong); border-radius: 8px; padding: 8px 12px; margin: 4px 0 12px;
+}
+.loot-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; background: var(--rarity-common); }
+.loot-card { border: 2px solid var(--rarity-common); border-radius: 12px; padding: 14px 16px; background: var(--bg); }
+.loot-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rarity-common); }
+.r-COMMON { --rarity: var(--rarity-common); }
+.r-UNCOMMON { --rarity: var(--rarity-uncommon); }
+.r-RARE { --rarity: var(--rarity-rare); }
+.r-EPIC { --rarity: var(--rarity-epic); }
+.r-LEGENDARY { --rarity: var(--rarity-legendary); }
+.loot-card.r-COMMON, .loot-card.r-UNCOMMON, .loot-card.r-RARE, .loot-card.r-EPIC, .loot-card.r-LEGENDARY { border-color: var(--rarity); }
+.loot-rarity.r-COMMON, .loot-rarity.r-UNCOMMON, .loot-rarity.r-RARE, .loot-rarity.r-EPIC, .loot-rarity.r-LEGENDARY { color: var(--rarity); }
+.loot-dot.r-COMMON, .loot-dot.r-UNCOMMON, .loot-dot.r-RARE, .loot-dot.r-EPIC, .loot-dot.r-LEGENDARY { background: var(--rarity); }
+.loot-card.r-LEGENDARY { box-shadow: 0 0 0 4px color-mix(in srgb, var(--rarity-legendary) 18%, transparent); }
+.loot-card.reveal { animation: loot-reveal 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes loot-reveal {
+  0% { transform: perspective(600px) rotateX(75deg) scale(0.7); opacity: 0; }
+  60% { transform: perspective(600px) rotateX(0deg) scale(1.03); opacity: 1; }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loot-card.reveal { animation: none; }
 }

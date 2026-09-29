@@ -104,6 +104,8 @@ model Question {
   cardLapses     Int         @default(0)
   cardReviewedAt DateTime?
   cardReviews    CardReview[]
+  /// показ картки в Telegram-боті, один на день
+  telegramDeliveries TelegramDelivery[]
   /// для карток з репо: стабільний ключ, щоб Sync оновлював, а не дублював
   sourceKey String?     @unique
   sourceId  Int?
@@ -264,4 +266,32 @@ model CardReview {
   createdAt  DateTime  @default(now())
 
   @@index([createdAt])
+}
+
+enum TelegramDeliveryStatus {
+  SENT
+  REVEALED
+  GRADED
+  /// оцінка з Telegram уже не рахується: картку повторили в апці або відправка обірвалась
+  STALE
+}
+
+/// Картка, надіслана Telegram-ботом. Одна на картку за день (UNIQUE): бот не шле її двічі навіть після рестарту.
+model TelegramDelivery {
+  id         Int                    @id @default(autoincrement())
+  questionId Int
+  question   Question               @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  /// календарний день розсилки, як DailyLog.day
+  day        DateTime               @db.Date
+  chatId     String
+  /// null, поки Telegram не підтвердив відправку
+  messageId  Int?
+  status     TelegramDeliveryStatus @default(SENT)
+  grade      CardGrade?
+  sentAt     DateTime               @default(now())
+  revealedAt DateTime?
+  gradedAt   DateTime?
+
+  @@unique([questionId, day])
+  @@index([day])
 }

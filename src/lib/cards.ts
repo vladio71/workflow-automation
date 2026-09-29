@@ -114,6 +114,15 @@ export async function getAllCards(): Promise<CardView[]> {
   return questions.map(toView);
 }
 
+/** Одна картка: Telegram-бот перемальовує нею повідомлення після показу відповіді чи оцінки. */
+export async function getCard(questionId: number): Promise<CardView | null> {
+  const question = await db.question.findUnique({
+    where: { id: questionId },
+    include: { topic: { select: { id: true, name: true } } },
+  });
+  return question ? toView(question) : null;
+}
+
 export interface ReviewInput {
   questionId: number;
   grade: CardGrade;

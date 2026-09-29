@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "stop": "docker compose stop db",
+    "bot": "tsx --conditions=react-server src/bot/main.ts",
     "db:up": "docker compose up -d --wait db",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",

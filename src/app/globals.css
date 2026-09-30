@@ -2,6 +2,8 @@
 
 /* ---------------- Notion-подібні токени: світла і темна теми ---------------- */
 :root {
+  /* нативні контроли (випадний список select, скролбари) малюються в темі сторінки */
+  color-scheme: light;
   --bg: #ffffff;
   --sidebar: #f7f7f5;
   --hover: rgba(55, 53, 47, 0.06);
@@ -37,6 +39,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --bg: #191919;
     --sidebar: #202020;
     --hover: rgba(255, 255, 255, 0.055);
@@ -139,6 +142,8 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
   width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 6px;
   padding: 6px 10px; color: var(--text); font: inherit; outline: none;
 }
+/* пункти випадного списку: без цього в темній темі Chrome/Windows малює світлий фон зі світлим текстом */
+select.input option { background: var(--bg); color: var(--text); }
 .input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.25); }
 .textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
 .bare { background: transparent; border: none; outline: none; color: inherit; font: inherit; width: 100%; padding: 0; }

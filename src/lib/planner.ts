@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { db } from './db';
 import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
 import { endOfDay, startOfDay } from './schedule';
-import { FOCUS_BUDGET_SHARE, REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits } from './study-plan';
+import {
+  FOCUS_BUDGET_SHARE, REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits, type FocusRole,
+} from './study-plan';
 import { getCardQueue } from './cards';
 import { getLevelsWithProgress, type LevelWithProgress } from './levels';
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from './day-focus';
@@ -62,9 +64,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** рівні live-code на день: повтори в термін і нові по порядку */
 const MAX_LEVEL_REDOS = 2;
 const MAX_NEW_LEVELS = 2;
-/** день з фокусом на live-code: рівнів більше, і вони беруть ~60% бюджету */
+/** день з фокусом на live-code: рівні беруть до ~60% бюджету (вправи по 15-30 хв, тож нових до 6) */
 const MAX_FOCUS_LEVEL_REDOS = 4;
-const MAX_FOCUS_NEW_LEVELS = 3;
+const MAX_FOCUS_NEW_LEVELS = 6;
 
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
@@ -201,11 +203,18 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
 
   // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
   const problemIds = new Set<number>();
+  // день з фокусом: решта планів ділить між собою те, що лишається після частки фокусу (~40%), по черзі;
+  // кому не лишилось, той сьогодні відпочиває
+  let otherMinutesLeft = Math.round(options.budget * (1 - FOCUS_BUDGET_SHARE));
   for (const plan of studyPlans) {
     for (const id of problemTopicIds(plan)) problemIds.add(id);
     const focused = isFocused(plan.source.id);
+    const role: FocusRole = focused ? 'this' : options.focus === NO_FOCUS ? 'none' : 'other';
+    if (role === 'other' && otherMinutesLeft <= 0) continue;
     const group = `plan:${plan.source.id}`;
-    const { redos, steps } = selectToday(plan, due, now, todayLimits(plan, focused, options.budget));
+    const limits = todayLimits(plan, role, options.budget);
+    const { redos, steps } = selectToday(plan, due, now, role === 'other' ? { ...limits, minutes: Math.min(limits.minutes, otherMinutesLeft) } : limits);
+    if (role === 'other') otherMinutesLeft -= redos.length * REDO_MINUTES + steps.reduce((sum, step) => sum + step.minutes, 0);
     for (const topic of redos) {
       candidates.push({
         id: `recall:${topic.id}`,

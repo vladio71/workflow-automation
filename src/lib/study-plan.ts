@@ -47,16 +47,21 @@ export interface TodayLimits {
   newProblems: number;
 }
 
-/** День фокусу: план бере щонайменше таку частку бюджету дня. */
+/** День фокусу: те, що у фокусі, бере щонайменше таку частку бюджету дня. */
 export const FOCUS_BUDGET_SHARE = 0.6;
 const FOCUS_NEW_PROBLEMS = 2;
 
-export function todayLimits(plan: StudyPlan, focused: boolean, dayBudgetMinutes: number): TodayLimits {
-  if (!focused) return { minutes: plan.source.planDailyMinutes, newProblems: 1 };
-  return {
-    minutes: Math.max(plan.source.planDailyMinutes, Math.round(dayBudgetMinutes * FOCUS_BUDGET_SHARE)),
-    newProblems: FOCUS_NEW_PROBLEMS,
-  };
+/** 'this' = цей план у фокусі, 'other' = у фокусі щось інше (інший план або рівні), 'none' = фокусу нема. */
+export type FocusRole = 'this' | 'other' | 'none';
+
+export function todayLimits(plan: StudyPlan, role: FocusRole, dayBudgetMinutes: number): TodayLimits {
+  const daily = plan.source.planDailyMinutes;
+  if (role === 'this') {
+    return { minutes: Math.max(daily, Math.round(dayBudgetMinutes * FOCUS_BUDGET_SHARE)), newProblems: FOCUS_NEW_PROBLEMS };
+  }
+  // у фокусі щось інше: план іде в режимі підтримки, не більше решти бюджету після частки фокусу
+  if (role === 'other') return { minutes: Math.min(daily, Math.round(dayBudgetMinutes * (1 - FOCUS_BUDGET_SHARE))), newProblems: 1 };
+  return { minutes: daily, newProblems: 1 };
 }
 
 export async function getStudyPlans(): Promise<StudyPlan[]> {

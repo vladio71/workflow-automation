@@ -69,6 +69,7 @@ export default async function LevelPage({ params }: LevelPageProps) {
         </div>
         <LevelPlay
           levelKey={level.key}
+          title={level.title}
           fileName={level.stubFile}
           stub={details.stub}
           minutes={level.minutes}

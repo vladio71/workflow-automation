@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { giveUpLevel, runLevelAttempt } from '@/app/actions';
+import { adoptLevelSession, openRules, stopSession } from '@/lib/live-code-session';
 
 interface LevelPlayProps {
   levelKey: string;
+  /** назва рівня: так його підпише нагадування */
+  title: string;
   /** index.ts або index.tsx: так файл і називатиметься в копії вправи */
   fileName: string;
   stub: string;
@@ -78,6 +81,15 @@ export function LevelPlay(props: LevelPlayProps) {
     writeStorage(startKey, String(start));
     setStartedAt(start);
   }, [draftKey, startKey]);
+
+  // нагадування "перевір, де ти" (LiveCodeCoach) іде від старту рівня; пройшов або відкрив еталон, і таймер не потрібен
+  const sessionHref = `/levels/${props.levelKey}`;
+  const active = !passed && reference === null;
+  useEffect(() => {
+    if (startedAt === null) return;
+    if (active) adoptLevelSession({ href: sessionHref, label: props.title, startedAt });
+    else stopSession(sessionHref);
+  }, [startedAt, active, sessionHref, props.title]);
 
   useEffect(() => {
     if (startedAt === null || passed) return;
@@ -158,6 +170,7 @@ export function LevelPlay(props: LevelPlayProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
         <span className="mono faint">{props.fileName}</span>
         <span style={{ flex: 1 }} />
+        <button type="button" className="btn ghost sm" onClick={openRules} title="Правила live code: 20 хв без плану = стоп">📏 Rules</button>
         {passed ? (
           <span className="tag green">✓ cleared today</span>
         ) : (

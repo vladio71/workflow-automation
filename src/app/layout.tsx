@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import '@fontsource-variable/inter';
 import './globals.css';
 import { NavLink } from '@/components/NavLink';
+import { LiveCodeCoach } from '@/components/LiveCodeCoach';
 import { db } from '@/lib/db';
 import { getDueCount } from '@/lib/queries';
 import { getStreak } from '@/lib/activity';
@@ -43,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/sources" icon="🔗" label="Sources" />
             <div className="sidebar-section">Practice</div>
             <NavLink href="/levels" icon="⚔️" label="Levels" count={dueLevels} />
+            <LiveCodeCoach />
             <NavLink href="/loot" icon="🎁" label="Loot" />
             <NavLink href="/mock" icon="🎙️" label="Mock interview" />
             <div className="sidebar-section">System</div>

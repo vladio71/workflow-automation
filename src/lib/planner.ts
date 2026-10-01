@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { db } from './db';
 import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
 import { endOfDay, startOfDay } from './schedule';
-import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits } from './study-plan';
+import { FOCUS_BUDGET_SHARE, REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits } from './study-plan';
 import { getCardQueue } from './cards';
-import { getLevelsWithProgress } from './levels';
+import { getLevelsWithProgress, type LevelWithProgress } from './levels';
+import { LEVELS_FOCUS, NO_FOCUS, planFocus } from './day-focus';
 import { pickMandatory, toPlanItem } from './plan-order';
 
 /**
@@ -35,13 +36,14 @@ export interface PlanCandidate {
 }
 
 export interface CandidateOptions {
-  /** навчальний план у фокусі сьогодні (Source.id) */
-  focusSourceId: number | null;
+  /** фокус дня: '' (нема), 'levels' або 'plan:<sourceId>', див. day-focus.ts */
+  focus: string;
   /** бюджет дня в хвилинах: від нього рахується частка фокусу */
   budget: number;
 }
 
 export const DEFAULT_BUDGET = 300;
+const DEFAULT_OPTIONS: CandidateOptions = { focus: NO_FOCUS, budget: DEFAULT_BUDGET };
 
 export interface PlanItem extends PlanCandidate {
   minutes: number;
@@ -60,6 +62,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** рівні live-code на день: повтори в термін і нові по порядку */
 const MAX_LEVEL_REDOS = 2;
 const MAX_NEW_LEVELS = 2;
+/** день з фокусом на live-code: рівнів більше, і вони беруть ~60% бюджету */
+const MAX_FOCUS_LEVEL_REDOS = 4;
+const MAX_FOCUS_NEW_LEVELS = 3;
 
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
@@ -113,10 +118,45 @@ async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidat
   return { recurring, once };
 }
 
-export async function buildCandidates(
-  now: Date = new Date(),
-  options: CandidateOptions = { focusSourceId: null, budget: DEFAULT_BUDGET },
-): Promise<PlanCandidate[]> {
+function levelCandidate(level: LevelWithProgress, redo: boolean): PlanCandidate {
+  return {
+    id: `level:${level.key}`,
+    kind: 'LEVEL',
+    title: redo ? `Level redo: ${level.title}` : `Level: ${level.title}`,
+    href: `/levels/${level.key}`,
+    topicId: null,
+    defaultMinutes: level.minutes,
+    hint: redo ? 'Настав термін повтору: та сама вправа з нуля, без еталону.' : `${level.groupTitle}: наступна вправа live-code по порядку.`,
+  };
+}
+
+/**
+ * Рівні live-code: спершу повтори, в яких настав термін, потім наступні нові вправи по порядку репо.
+ * У день фокусу на live-code рівні обов'язкові, поки влазять у ~60% бюджету (повтори першими); решта лишається на вибір.
+ */
+function levelCandidates(levels: LevelWithProgress[], focused: boolean, budget: number): PlanCandidate[] {
+  const redos = levels
+    .filter((level) => level.progress.status === 'DUE' && !level.progress.passedToday)
+    .sort((a, b) => (a.progress.dueAt?.getTime() ?? 0) - (b.progress.dueAt?.getTime() ?? 0))
+    .slice(0, focused ? MAX_FOCUS_LEVEL_REDOS : MAX_LEVEL_REDOS)
+    .map((level) => levelCandidate(level, true));
+  const fresh = levels
+    .filter((level) => level.progress.status === 'NEW')
+    .slice(0, focused ? MAX_FOCUS_NEW_LEVELS : MAX_NEW_LEVELS)
+    .map((level) => levelCandidate(level, false));
+  const all = [...redos, ...fresh];
+  if (!focused) return all;
+
+  const limit = Math.round(budget * FOCUS_BUDGET_SHARE);
+  let used = 0;
+  return all.map((candidate, index) => {
+    if (index > 0 && used + candidate.defaultMinutes > limit) return candidate;
+    used += candidate.defaultMinutes;
+    return { ...candidate, mandatory: true, group: LEVELS_FOCUS, hint: `Фокус дня · ${candidate.hint ?? ''}` };
+  });
+}
+
+export async function buildCandidates(now: Date = new Date(), options: CandidateOptions = DEFAULT_OPTIONS): Promise<PlanCandidate[]> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
   const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, allStudyPlans, cardQueue, levelsState, tasks] = await Promise.all([
     getDueTopics(now),
@@ -131,7 +171,7 @@ export async function buildCandidates(
     buildTaskCandidates(now),
   ]);
   // план у фокусі йде першим: його кроки першими займають бюджет, решта планів у залишок
-  const isFocused = (sourceId: number): boolean => sourceId === options.focusSourceId;
+  const isFocused = (sourceId: number): boolean => options.focus === planFocus(sourceId);
   const studyPlans = [...allStudyPlans].sort((a, b) => Number(isFocused(b.source.id)) - Number(isFocused(a.source.id)));
 
   const candidates: PlanCandidate[] = [];
@@ -156,33 +196,8 @@ export async function buildCandidates(
     { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 },
   );
 
-  // рівні live-code: спершу повтори, в яких настав термін, потім наступні нові вправи по порядку репо
-  const levels = levelsState.levels;
-  const dueLevels = levels
-    .filter((level) => level.progress.status === 'DUE' && !level.progress.passedToday)
-    .sort((a, b) => (a.progress.dueAt?.getTime() ?? 0) - (b.progress.dueAt?.getTime() ?? 0));
-  for (const level of dueLevels.slice(0, MAX_LEVEL_REDOS)) {
-    candidates.push({
-      id: `level:${level.key}`,
-      kind: 'LEVEL',
-      title: `Level redo: ${level.title}`,
-      href: `/levels/${level.key}`,
-      topicId: null,
-      defaultMinutes: level.minutes,
-      hint: 'Настав термін повтору: та сама вправа з нуля, без еталону.',
-    });
-  }
-  for (const level of levels.filter((candidate) => candidate.progress.status === 'NEW').slice(0, MAX_NEW_LEVELS)) {
-    candidates.push({
-      id: `level:${level.key}`,
-      kind: 'LEVEL',
-      title: `Level: ${level.title}`,
-      href: `/levels/${level.key}`,
-      topicId: null,
-      defaultMinutes: level.minutes,
-      hint: `${level.groupTitle}: наступна вправа live-code по порядку.`,
-    });
-  }
+  // рівні live-code (у день фокусу на них обов'язкові і стоять перед кроками навчальних планів)
+  candidates.push(...levelCandidates(levelsState.levels, options.focus === LEVELS_FOCUS, options.budget));
 
   // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
   const problemIds = new Set<number>();

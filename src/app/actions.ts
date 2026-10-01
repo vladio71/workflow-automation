@@ -15,7 +15,8 @@ import { getStudyPlans, markAttemptDone } from '@/lib/study-plan';
 import { getCardCounts, reviewCard, type ReviewInput } from '@/lib/cards';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
-import { findLevel, getLevelDetails, levelsDir } from '@/lib/levels';
+import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels';
+import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
 import { finishRest, openChest, type OpenChestResult } from '@/lib/loot';
 import { refillPool, type RefillResult } from '@/lib/loot-refill';
@@ -255,10 +256,21 @@ export type PlanActionResult = { ok: true; note?: string } | { ok: false; error:
 
 export interface PlanSetup {
   budget: number;
-  /** навчальний план у фокусі (Source.id) або null */
-  focusSourceId: number | null;
+  /** фокус дня: '' (нема), 'levels' або 'plan:<sourceId>', див. day-focus.ts */
+  focus: string;
   /** побажання на день вільним текстом */
   wish: string;
+}
+
+/** Фокус з клієнта перевіряємо: тільки існуючий навчальний план або рівні, якщо вони є. Назва йде в промпт. */
+async function resolveFocus(focus: string): Promise<{ key: string; name: string | null }> {
+  if (focus === LEVELS_FOCUS) {
+    const scan = await scanLevels();
+    return scan.levels.length > 0 ? { key: LEVELS_FOCUS, name: 'Live code (рівні)' } : { key: NO_FOCUS, name: null };
+  }
+  const studyPlans = await getStudyPlans();
+  const plan = studyPlans.find((studyPlan) => planFocus(studyPlan.source.id) === focus);
+  return plan ? { key: focus, name: plan.source.planName || plan.source.repo } : { key: NO_FOCUS, name: null };
 }
 
 const MAX_WISH_LENGTH = 300;
@@ -272,11 +284,9 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
   const day = dayKey(now);
   const minutesBudget = Math.min(720, Math.max(30, Math.round(setup.budget)));
   const wish = setup.wish.trim().slice(0, MAX_WISH_LENGTH);
-  const studyPlans = await getStudyPlans();
-  const focusPlan = studyPlans.find((plan) => plan.source.id === setup.focusSourceId) ?? null;
-  const focusSourceId = focusPlan?.source.id ?? null;
+  const focus = await resolveFocus(setup.focus);
 
-  const candidates = await buildCandidates(now, { focusSourceId, budget: minutesBudget });
+  const candidates = await buildCandidates(now, { focus: focus.key, budget: minutesBudget });
   const yesterday = await db.dailyPlan.findUnique({ where: { day: dayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000)) } });
   const yesterdayUndone = yesterday
     ? (await withStatus(parsePlanItems(yesterday.items), new Date(now.getTime() - 24 * 60 * 60 * 1000)))
@@ -293,7 +303,7 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
       const result = await generateDayPlan({
         weekday: now.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' }),
         minutesBudget,
-        focus: focusPlan ? focusPlan.source.planName || focusPlan.source.repo : null,
+        focus: focus.name,
         wish,
         candidates: candidates.map(({ id, kind, title, defaultMinutes, mandatory, hint }) => ({
           id,
@@ -345,8 +355,8 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
 
   await db.dailyPlan.upsert({
     where: { day },
-    create: { day, items: toJson(items), summary, focusSourceId, wish, budget: minutesBudget, startedAt: null },
-    update: { items: toJson(items), summary, review: '', focusSourceId, wish, budget: minutesBudget, startedAt: null },
+    create: { day, items: toJson(items), summary, focus: focus.key, wish, budget: minutesBudget, startedAt: null },
+    update: { items: toJson(items), summary, review: '', focus: focus.key, wish, budget: minutesBudget, startedAt: null },
   });
   refresh();
   return { ok: true, note };
@@ -385,7 +395,7 @@ export async function addPlanItem(candidateId: string): Promise<PlanActionResult
   const now = new Date();
   const plan = await db.dailyPlan.findUnique({ where: { day: dayKey(now) } });
   const candidates = await buildCandidates(now, {
-    focusSourceId: plan?.focusSourceId ?? null,
+    focus: plan?.focus ?? NO_FOCUS,
     budget: plan?.budget || DEFAULT_BUDGET,
   });
   return editDraft((items) => addToDraft(items, candidateId, candidates));

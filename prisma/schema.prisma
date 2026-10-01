@@ -197,10 +197,10 @@ model DailyPlan {
   summary       String    @default("")
   /// вечірній огляд: що зроблено, що перенести
   review        String    @default("")
-  /// null = чернетка: пункти можна прибирати, додавати, переставляти. Після "Start the day" лишаються тільки галочки
+  /// null = чернетка: пункти можна прибирати, додавати, переставляти. Після "Start the day" план стає картою
   startedAt     DateTime?
-  /// навчальний план (Source.id), якому віддали більшу частину бюджету
-  focusSourceId Int?
+  /// фокус дня (src/lib/day-focus.ts): '' без фокусу, 'levels' рівні live-code, 'plan:<Source.id>' навчальний план
+  focus         String    @default("")
   /// побажання на день вільним текстом, іде в промпт
   wish          String    @default("")
   /// бюджет хвилин, з яким складали план

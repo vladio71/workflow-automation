@@ -10,6 +10,7 @@ import { Chest } from '@/components/Chest';
 import { DayMap, type NodeState } from '@/components/DayMap';
 import { MIN_ITEM_MINUTES, canMove, findBossId } from '@/lib/plan-order';
 import type { ChestState } from '@/lib/loot';
+import { NO_FOCUS, type FocusOption } from '@/lib/day-focus';
 import type { PlanItemKind, PlanItemWithStatus } from '@/lib/planner';
 
 export interface PlanCardPlan {
@@ -18,7 +19,8 @@ export interface PlanCardPlan {
   items: PlanItemWithStatus[];
   /** false = чернетка: пункти ще можна правити; true = день почато, план став картою */
   started: boolean;
-  focusSourceId: number | null;
+  /** '' без фокусу, 'levels' або 'plan:<id>' (day-focus.ts) */
+  focus: string;
   wish: string;
   budget: number;
 }
@@ -29,12 +31,6 @@ export interface AddableItem {
   kind: PlanItemKind;
   title: string;
   minutes: number;
-}
-
-/** Навчальний план, який можна взяти у фокус. */
-export interface FocusOption {
-  id: number;
-  name: string;
 }
 
 interface PlanCardProps {
@@ -77,7 +73,7 @@ function ItemLink({ item, children, className }: { item: PlanItemWithStatus; chi
 
 export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: PlanCardProps) {
   const [budget, setBudget] = useState(plan?.budget || DEFAULT_BUDGET);
-  const [focus, setFocus] = useState<number | null>(plan?.focusSourceId ?? null);
+  const [focus, setFocus] = useState(plan?.focus ?? NO_FOCUS);
   const [wish, setWish] = useState(plan?.wish ?? '');
   const [addId, setAddId] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
@@ -97,7 +93,7 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
     setNote(null);
     setPickedId(null);
     startPlanning(async () => {
-      const result = await generatePlan({ budget, focusSourceId: focus, wish });
+      const result = await generatePlan({ budget, focus, wish });
       if (!result.ok) setNote(result.error);
       else if (result.note) setNote(result.note);
     });
@@ -168,14 +164,14 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
             <div style={ROW_STYLE}>
               <span className="faint" style={LABEL_STYLE}>Focus</span>
               {focusOptions.map((option) => {
-                const active = focus === option.id;
+                const active = focus === option.key;
                 return (
                   <button
-                    key={option.id}
+                    key={option.key}
                     type="button"
                     className={`btn sm ${active ? 'primary' : ''}`}
-                    title="План у фокусі бере ~60% бюджету і до 2 нових задач"
-                    onClick={() => setFocus(active ? null : option.id)}
+                    title="Фокус бере ~60% бюджету: більше кроків цього плану або більше рівнів"
+                    onClick={() => setFocus(active ? NO_FOCUS : option.key)}
                   >
                     {active ? '★ ' : ''}{option.name}
                   </button>

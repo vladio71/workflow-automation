@@ -8,6 +8,8 @@ import { isGeminiConfigured } from '@/lib/gemini';
 import { DEFAULT_BUDGET, buildCandidates, getTodayPlan } from '@/lib/planner';
 import { addableCandidates } from '@/lib/plan-order';
 import { getChestState } from '@/lib/loot';
+import { scanLevels } from '@/lib/levels';
+import { LEVELS_FOCUS, planFocus, type FocusOption } from '@/lib/day-focus';
 import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
 import { LootRefill } from '@/components/LootRefill';
@@ -20,7 +22,7 @@ import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest] = await Promise.all([
+  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest, levelScan] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -30,20 +32,25 @@ export default async function TodayPage() {
     getNextSystemDesignTopic(),
     getStudyPlans(),
     getChestState(now),
+    scanLevels(),
   ]);
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
     : [];
   // у чернетку можна додати те, що план не взяв: кандидати з тим самим фокусом і бюджетом
   const addable = plan && plan.startedAt === null
-    ? addableCandidates(plan.items, await buildCandidates(now, { focusSourceId: plan.focusSourceId, budget: plan.budget || DEFAULT_BUDGET }))
+    ? addableCandidates(plan.items, await buildCandidates(now, { focus: plan.focus, budget: plan.budget || DEFAULT_BUDGET }))
         .map((candidate) => ({ id: candidate.id, kind: candidate.kind, title: candidate.title, minutes: candidate.defaultMinutes }))
     : [];
-  const focusOptions = studyPlans.map((studyPlan) => ({
-    id: studyPlan.source.id,
-    // "System design · 4 тижні + екзамен" -> "System design"
-    name: (studyPlan.source.planName || studyPlan.source.repo).split(' · ')[0] ?? studyPlan.source.repo,
-  }));
+  // у фокус можна взяти рівні live-code (якщо LEVELS_DIR налаштований) або будь-який навчальний план
+  const focusOptions: FocusOption[] = [
+    ...(levelScan.levels.length > 0 ? [{ key: LEVELS_FOCUS, name: 'Live code' }] : []),
+    ...studyPlans.map((studyPlan) => ({
+      key: planFocus(studyPlan.source.id),
+      // "System design · 4 тижні + екзамен" -> "System design"
+      name: (studyPlan.source.planName || studyPlan.source.repo).split(' · ')[0] ?? studyPlan.source.repo,
+    })),
+  ];
 
   const dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const isSunday = now.getDay() === 0;
@@ -64,7 +71,7 @@ export default async function TodayPage() {
           review: plan.review,
           items: plan.items,
           started: plan.startedAt !== null,
-          focusSourceId: plan.focusSourceId,
+          focus: plan.focus,
           wish: plan.wish,
           budget: plan.budget,
         } : null}

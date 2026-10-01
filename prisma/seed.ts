@@ -2,7 +2,7 @@
  * Стартові дані: одна тема GraphQL з твоїми нотатками, прив'язана до репо vladio71/graphql-base.
  * Картки приходять тільки з learn/ у репо: перший Sync (або відкриття Today) їх підтягне.
  * Решту тем і циклів додаєш сам. Запуск: npm run db:seed.
- * УВАГА: чистить усі дані (теми, питання, цикли, логи, плани, mock, inbox, спроби рівнів). Запускай один раз на старті.
+ * УВАГА: чистить усі дані (теми, питання, цикли, логи, плани, mock, inbox, спроби рівнів, справи). Запускай один раз на старті.
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
@@ -15,6 +15,8 @@ async function main(): Promise<void> {
   await db.$transaction([
     db.mockSession.deleteMany(),
     db.levelAttempt.deleteMany(),
+    db.taskTick.deleteMany(),
+    db.task.deleteMany(),
     db.inboxItem.deleteMany(),
     db.dailyLog.deleteMany(),
     db.activityLog.deleteMany(),

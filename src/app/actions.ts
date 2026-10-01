@@ -20,6 +20,7 @@ import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
 import { finishRest, openChest, type OpenChestResult } from '@/lib/loot';
 import { refillPool, type RefillResult } from '@/lib/loot-refill';
+import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
 import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -451,8 +452,59 @@ export async function createTask(formData: FormData): Promise<void> {
   if (!title) return;
   const repeatValue = String(formData.get('repeat') ?? 'ONCE');
   const repeat = TASK_REPEATS.find((value) => value === repeatValue) ?? 'ONCE';
-  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat } });
+  const target = clampTarget(Number(formData.get('target') ?? 0));
+  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat, target } });
   refresh();
+}
+
+/** Ціль на день: 0 = звичайна справа з галочкою, більше = сесія з лічильником і баштою. */
+export async function setTaskTarget(id: number, formData: FormData): Promise<void> {
+  await db.task.update({ where: { id }, data: { target: clampTarget(Number(formData.get('target') ?? 0)) } });
+  refresh();
+}
+
+export type TickResult = { ok: true; count: number; target: number } | { ok: false; error: string };
+
+const MAX_TICK_NOTE = 300;
+
+/** Разова справа закривається, коли сьогодні дійшла до цілі, і відкривається, якщо -1 опустив нижче. */
+async function syncOnceDone(taskId: number, count: number): Promise<TickResult> {
+  const task = await db.task.findUnique({ where: { id: taskId } });
+  if (!task) return { ok: false, error: 'Справу не знайдено' };
+  if (task.repeat === 'ONCE' && task.target > 0) {
+    const reached = count >= task.target;
+    if (reached && task.doneAt === null) await db.task.update({ where: { id: taskId }, data: { doneAt: new Date() } });
+    if (!reached && task.doneAt !== null) await db.task.update({ where: { id: taskId }, data: { doneAt: null } });
+  }
+  return { ok: true, count, target: task.target };
+}
+
+/** +1 у сесії: відправив резюме. note = компанія або посилання, можна порожнє. */
+export async function tickTask(taskId: number, note: string): Promise<TickResult> {
+  const task = await db.task.findUnique({ where: { id: taskId } });
+  if (!task || task.target <= 0) return { ok: false, error: 'Це не справа-сесія: постав їй ціль у Tasks' };
+  const now = new Date();
+  await db.taskTick.create({ data: { taskId, day: dayKey(now), note: note.trim().slice(0, MAX_TICK_NOTE) } });
+  const count = (await todayTickCounts([taskId], now)).get(taskId) ?? 0;
+  const result = await syncOnceDone(taskId, count);
+  refresh();
+  return result;
+}
+
+/** +1 зі сторінки Tasks: форма без нотатки. */
+export async function tickTaskForm(taskId: number): Promise<void> {
+  await tickTask(taskId, '');
+}
+
+/** -1: прибрати останній сьогоднішній крок (клікнув зайве). */
+export async function untickTask(taskId: number): Promise<TickResult> {
+  const now = new Date();
+  const last = await db.taskTick.findFirst({ where: { taskId, day: dayKey(now) }, orderBy: { createdAt: 'desc' } });
+  if (last) await db.taskTick.delete({ where: { id: last.id } });
+  const count = (await todayTickCounts([taskId], now)).get(taskId) ?? 0;
+  const result = await syncOnceDone(taskId, count);
+  refresh();
+  return result;
 }
 
 export async function setTaskDone(id: number, done: boolean): Promise<void> {

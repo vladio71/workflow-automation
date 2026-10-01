@@ -353,3 +353,62 @@ select.input option { background: var(--bg); color: var(--text); }
 .rule-check .box { margin-top: 3px; }
 .rule-check.on .label { color: var(--faint); }
 .modal .db td:nth-child(-n + 2) { white-space: nowrap; }
+
+/* ---------------- башта дня (справа-сесія) ---------------- */
+:root {
+  --tower-stone: #e3d8c8;
+  --tower-stone-edge: #a8977f;
+  --tower-window: #f2c14e;
+  --tower-dark-window: #8f8170;
+  --tower-bonus: #f3d98b;
+  --tower-scaffold: #b9ad9c;
+  --tower-ground: rgba(55, 53, 47, 0.18);
+  --tower-flag: #e2574c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tower-stone: #5b5248;
+    --tower-stone-edge: #8c7d6b;
+    --tower-window: #f2c94c;
+    --tower-dark-window: #3a332c;
+    --tower-bonus: #8d7228;
+    --tower-scaffold: #6c6257;
+    --tower-ground: rgba(255, 255, 255, 0.16);
+    --tower-flag: #eb5757;
+  }
+}
+.tower-card { padding: 14px 18px; margin-bottom: 8px; }
+.tower-card:hover { background: var(--bg); }
+.tower-row { display: flex; gap: 18px; align-items: flex-end; }
+.tower-row + .tower-row { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.tower-grow { transform-box: fill-box; transform-origin: bottom center; animation: tower-grow 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.25); }
+@keyframes tower-grow {
+  from { transform: translateY(-14px) scaleY(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tower-grow { animation: none; }
+}
+.modal-body.session { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: start; padding-top: 8px; }
+.session-tower { display: flex; align-items: flex-end; min-height: 200px; }
+.session-count { font-size: 44px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.session-count .faint { font-size: 26px; font-weight: 600; }
+.session-log { max-height: 180px; overflow-y: auto; }
+.session-log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .modal-body.session { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------------- кампанія навчального плану ---------------- */
+.campaign { margin: 14px 0 6px; }
+.campaign-region { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 4px; margin-bottom: 10px; background: var(--bg); }
+.campaign-region.conquered { background: color-mix(in srgb, var(--tag-green-bg) 45%, var(--bg)); border-color: color-mix(in srgb, var(--map-done) 35%, var(--border)); }
+.campaign-region.current { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.campaign-region.locked { background: var(--sidebar); }
+.campaign-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.campaign-details { border-top: 1px dashed var(--border-strong); margin: 4px 0 8px; padding-top: 8px; font-size: 14px; }
+.campaign-step { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.campaign-strip { display: block; margin: 6px 0 4px; border-radius: 8px; }
+.campaign-strip:hover { background: var(--hover); }
+.plan-list { margin-top: 6px; }
+.plan-list > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }

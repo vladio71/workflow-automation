@@ -10,6 +10,7 @@ import { getCardQueue } from './cards';
 import { getLevelsWithProgress, type LevelWithProgress } from './levels';
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from './day-focus';
 import { pickMandatory, toPlanItem } from './plan-order';
+import { todayTickCounts, type TaskProgress } from './task-sessions';
 
 /**
  * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
@@ -56,6 +57,8 @@ export interface PlanItem extends PlanCandidate {
 
 export interface PlanItemWithStatus extends PlanItem {
   done: boolean;
+  /** справа-сесія: скільки сьогодні з цілі (3/10); вузол закривається сам на цілі */
+  progress?: TaskProgress;
   /** true = апка сама побачила виконання (recall, питання, mock), false = тільки ручна галочка */
   autoDone: boolean;
 }
@@ -114,7 +117,8 @@ async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidat
       const days = daysSince(task.createdAt, now);
       once.push({ ...base, hint: days === 0 ? 'Разова справа, додана сьогодні.' : `Разова справа, висить ${days} дн.` });
     } else if (isTaskDueToday(task.repeat, now)) {
-      recurring.push({ ...base, hint: task.repeat === 'DAILY' ? 'Щоденна справа.' : 'Справа по буднях.', mandatory: true });
+      const every = task.repeat === 'DAILY' ? 'Щоденна справа' : 'Справа по буднях';
+      recurring.push({ ...base, hint: task.target > 0 ? `${every}, сесія: ${task.target} за день.` : `${every}.`, mandatory: true });
     }
   }
   return { recurring, once };
@@ -359,6 +363,7 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
     db.levelAttempt.findMany({ where: { passed: true, createdAt: { gte: from, lte: to } }, select: { levelKey: true } }),
     db.task.findMany({ where: { id: { in: taskIds } } }),
   ]);
+  const tickCounts = await todayTickCounts(tasks.filter((task) => task.target > 0).map((task) => task.id), now);
   const passedLevels = new Set(levelPasses.map((attempt) => attempt.levelKey));
   const recalled = new Set(recalls.map((r) => r.topicId));
   const stepById = new Map(planSteps.map((step) => [step.id, step]));
@@ -391,9 +396,14 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
         break;
       }
       case 'TASK': {
-        // разову справу можна закрити і на сторінці Tasks
+        // разову справу можна закрити і на сторінці Tasks; справа-сесія закривається сама, коли дійшла до цілі
         const task = taskById.get(Number(item.id.replace('task:', '')));
         const closedOnce = task !== undefined && task.repeat === 'ONCE' && task.doneAt !== null;
+        if (task && task.target > 0) {
+          const progress: TaskProgress = { count: tickCounts.get(task.id) ?? 0, target: task.target };
+          const reached = progress.count >= progress.target;
+          return { ...item, progress, autoDone: reached, done: reached || item.manualDone || closedOnce };
+        }
         return { ...item, autoDone: false, done: item.manualDone || closedOnce };
       }
     }

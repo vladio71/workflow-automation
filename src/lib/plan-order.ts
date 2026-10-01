@@ -246,7 +246,7 @@ export function addableCandidates(items: PlanItem[], candidates: PlanCandidate[]
 export function keepDone(previous: PlanItemWithStatus[], fresh: PlanItem[]): PlanItem[] {
   const kept: PlanItem[] = previous
     .filter((item) => item.done)
-    .map(({ done: _done, autoDone: _autoDone, ...item }) => item);
+    .map(({ done: _done, autoDone: _autoDone, progress: _progress, ...item }) => item);
   const keptIds = new Set(kept.map((item) => item.id));
   return [...kept, ...fresh.filter((item) => !keptIds.has(item.id))];
 }

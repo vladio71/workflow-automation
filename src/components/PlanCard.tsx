@@ -7,6 +7,7 @@ import {
   startDay, type PlanActionResult,
 } from '@/app/actions';
 import { Chest } from '@/components/Chest';
+import { openTaskSession } from '@/components/TowerCard';
 import { DayMap, type NodeState } from '@/components/DayMap';
 import { MIN_ITEM_MINUTES, canMove, findBossId } from '@/lib/plan-order';
 import type { ChestState } from '@/lib/loot';
@@ -311,8 +312,20 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
                   {selectedState === 'locked' && current && <>🔒 Opens after “{current.title}”.</>}
                   {selectedState === 'current' && 'Your next step. Just this one, the rest of the map waits.'}
                 </div>
+                {selected.progress && (
+                  <div style={{ fontSize: 13, marginTop: 4 }}>
+                    <span className={`tag ${selected.progress.count >= selected.progress.target ? 'green' : 'gray'}`}>
+                      {selected.progress.count}/{selected.progress.target} сьогодні
+                    </span>{' '}
+                    <span className="faint">вузол закриється сам на {selected.progress.target}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  {selectedState === 'current' && (
+                  {/* справа-сесія: замість переходу на Tasks відкривається сесія з баштою */}
+                  {selected.progress && selectedState !== 'locked' && (
+                    <button className="btn primary sm" onClick={() => openTaskSession(Number(selected.id.replace('task:', '')))}>▶ Сесія</button>
+                  )}
+                  {selectedState === 'current' && !selected.progress && (
                     <ItemLink item={selected} className="btn primary sm">Start</ItemLink>
                   )}
                   {/* рівень закривають тільки зелені тести, галочкою його не пройти */}

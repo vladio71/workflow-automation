@@ -130,6 +130,17 @@ export function DayMap({ items, icons, selectedId, bossId, stateOf, onSelect }: 
               {icons[item.kind]}
             </text>
             {isBoss && <text x={point.x} y={point.y - radius - 6} textAnchor="middle" style={{ fontSize: 18 }}>👑</text>}
+            {/* справа-сесія: кільце прогресу 3/10 */}
+            {item.progress && item.progress.target > 0 && state !== 'done' && (
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={radius + 4}
+                transform={`rotate(-90 ${point.x} ${point.y})`}
+                style={{ fill: 'none', stroke: 'var(--map-done)', strokeWidth: 3.5, strokeLinecap: 'round' }}
+                strokeDasharray={`${2 * Math.PI * (radius + 4) * Math.min(1, item.progress.count / item.progress.target)} ${2 * Math.PI * (radius + 4)}`}
+              />
+            )}
             {state === 'done' && (
               <g>
                 <circle cx={point.x + radius * 0.72} cy={point.y - radius * 0.72} r={9} style={{ fill: 'var(--map-done)' }} />
@@ -148,7 +159,7 @@ export function DayMap({ items, icons, selectedId, bossId, stateOf, onSelect }: 
               {shortTitle(item.title)}
             </text>
             <text x={point.x} y={point.y + radius + 34} textAnchor="middle" style={{ fontSize: 11.5, fill: 'var(--faint)' }}>
-              {item.minutes}m{isBoss ? ' · boss' : ''}
+              {item.progress ? `${item.progress.count}/${item.progress.target} · ` : ''}{item.minutes}m{isBoss ? ' · boss' : ''}
             </text>
           </g>
         );

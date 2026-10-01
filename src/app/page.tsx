@@ -9,6 +9,10 @@ import { DEFAULT_BUDGET, buildCandidates, getTodayPlan } from '@/lib/planner';
 import { addableCandidates } from '@/lib/plan-order';
 import { getChestState } from '@/lib/loot';
 import { scanLevels } from '@/lib/levels';
+import { getTowers } from '@/lib/task-sessions';
+import { buildCampaign } from '@/lib/campaign';
+import { TowerCard } from '@/components/TowerCard';
+import { CampaignStrip } from '@/components/CampaignMap';
 import { LEVELS_FOCUS, planFocus, type FocusOption } from '@/lib/day-focus';
 import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
@@ -22,7 +26,7 @@ import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest, levelScan] = await Promise.all([
+  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest, levelScan, towers] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -33,6 +37,7 @@ export default async function TodayPage() {
     getStudyPlans(),
     getChestState(now),
     scanLevels(),
+    getTowers(now),
   ]);
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
@@ -81,6 +86,14 @@ export default async function TodayPage() {
         addable={addable}
       />
 
+      {towers.length > 0 ? (
+        <TowerCard towers={towers} />
+      ) : (
+        <p className="faint" style={{ fontSize: 13, margin: '6px 2px 0' }}>
+          🏰 Башта дня з&apos;явиться, коли в <Link href="/tasks" style={{ textDecoration: 'underline' }}>Tasks</Link> поставиш справі ціль на день, наприклад «Розіслати резюме: 10».
+        </p>
+      )}
+
       {studyPlans.map((studyPlan) => {
         const progress = planProgress(studyPlan);
         const next = progress.next;
@@ -94,9 +107,7 @@ export default async function TodayPage() {
                   step {Math.min(progress.done + 1, progress.total)}/{progress.total}{next ? ` · ${next.group}` : ' · done'}
                 </span>
               </div>
-              <div className="progress" style={{ margin: '8px 0' }}>
-                <div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
-              </div>
+              <CampaignStrip campaign={buildCampaign(studyPlan, now)} />
               {next ? (
                 <div style={{ fontSize: 14 }}>
                   <span className="faint">Next: </span>

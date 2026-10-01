@@ -10,6 +10,7 @@ import { refUrl } from '@/lib/sync';
  *   1. спершу переробки задач, у яких настав термін (максимум 2, по 45 хв);
  *   2. далі наступні кроки плану, поки влазять у ліміт;
  *   3. максимум одна НОВА задача на день (ATTEMPT або EXAM): пам'яті потрібен час між задачами.
+ * День фокусу на план: ліміт = щонайменше 60% бюджету дня і до 2 нових задач.
  * Переробка = recall теми-задачі: після спроби ставиш колір, і розклад 2/7/21 днів робить решту.
  */
 
@@ -37,6 +38,25 @@ export interface PlanProgress {
 export interface TodaySelection {
   redos: Topic[];
   steps: PlanStep[];
+}
+
+export interface TodayLimits {
+  /** скільки хвилин план бере сьогодні; за замовчуванням ліміт плану з plan.md (dailyMinutes) */
+  minutes: number;
+  /** скільки НОВИХ задач (ATTEMPT або EXAM) за день; у день фокусу на цей план 2, інакше 1 */
+  newProblems: number;
+}
+
+/** День фокусу: план бере щонайменше таку частку бюджету дня. */
+export const FOCUS_BUDGET_SHARE = 0.6;
+const FOCUS_NEW_PROBLEMS = 2;
+
+export function todayLimits(plan: StudyPlan, focused: boolean, dayBudgetMinutes: number): TodayLimits {
+  if (!focused) return { minutes: plan.source.planDailyMinutes, newProblems: 1 };
+  return {
+    minutes: Math.max(plan.source.planDailyMinutes, Math.round(dayBudgetMinutes * FOCUS_BUDGET_SHARE)),
+    newProblems: FOCUS_NEW_PROBLEMS,
+  };
 }
 
 export async function getStudyPlans(): Promise<StudyPlan[]> {
@@ -85,7 +105,12 @@ export function problemTopicIds(plan: StudyPlan): Set<number> {
  * Що з плану робити сьогодні. dueTopics уже відсортовані (червоні, потім найстаріші).
  * Кроки, зроблені сьогодні, теж входять: інакше повторне "Re-plan" увечері видавало б понад ліміт.
  */
-export function selectToday(plan: StudyPlan, dueTopics: Topic[], now: Date): TodaySelection {
+export function selectToday(
+  plan: StudyPlan,
+  dueTopics: Topic[],
+  now: Date,
+  limits: TodayLimits = { minutes: plan.source.planDailyMinutes, newProblems: 1 },
+): TodaySelection {
   const from = startOfDay(now);
   const to = endOfDay(now);
   const problemIds = problemTopicIds(plan);
@@ -94,7 +119,7 @@ export function selectToday(plan: StudyPlan, dueTopics: Topic[], now: Date): Tod
     .filter((topic) => problemIds.has(topic.id) && topic.nextReviewAt !== null && topic.nextReviewAt <= to)
     .slice(0, MAX_REDOS_PER_DAY);
 
-  let remaining = plan.source.planDailyMinutes - redos.length * REDO_MINUTES;
+  let remaining = limits.minutes - redos.length * REDO_MINUTES;
   let attempts = 0;
   const steps: PlanStep[] = [];
 
@@ -103,7 +128,7 @@ export function selectToday(plan: StudyPlan, dueTopics: Topic[], now: Date): Tod
     if (step.doneAt !== null && !doneToday) continue; // зроблено раніше
 
     const isProblem = step.kind === 'ATTEMPT' || step.kind === 'EXAM';
-    if (isProblem && attempts >= 1) break; // одна нова задача на день
+    if (isProblem && attempts >= limits.newProblems) break; // нових задач на день: 1, у день фокусу 2
     const allowance = step.kind === 'SUMMARY' ? SUMMARY_OVERFLOW_MINUTES : 0;
     const fits = step.minutes <= remaining + allowance;
     // перший крок дня беремо, навіть якщо він довший за ліміт, інакше план застрягне назавжди

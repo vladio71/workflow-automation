@@ -77,11 +77,11 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
 | `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
 | `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
-| `src/lib/plan-order.ts` | AI не може викинути чи переставити кроки плану |
+| `src/lib/plan-order.ts` | AI не може викинути чи переставити кроки плану; правки чернетки дня (прибрати, порядок, додати, перепланування) |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
 | `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер (стрімінг), план дня і вечірній огляд |
 | `src/lib/activity.ts` | лог часу, стрік, аналітика |
-| `src/lib/planner.ts` | кандидати для плану з даних, план за правилами без AI, автовизначення виконаного |
+| `src/lib/planner.ts` | кандидати для плану з даних (з фокусом і справами), план за правилами без AI, автовизначення виконаного |
 | `src/components/DayMap.tsx` | план дня як карта: вузли, стежка, бос, фініш |
 | `src/lib/levels.ts` | рівні: читає вправи з `LEVELS_DIR`, прогрес з таблиці спроб |
 | `src/lib/level-runner.ts` | прогін коду: тимчасова копія вправи + vitest з live-code, таймаут 30 с |
@@ -92,6 +92,7 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/lib/loot.ts` | стан скрині з плану на сьогодні, відкрити скриню, закінчити відпочинок |
 | `src/lib/loot-refill.ts` | пул карток: xkcd, Gemini + Google Search, запасний Hacker News |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
+| `src/app/tasks` | справи поза навчанням (Task): повторювані і разові |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats |
 | `src/app/api/sync` | автосинк з Today (route handler, щоб не блокувати кнопки) |

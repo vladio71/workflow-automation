@@ -191,14 +191,41 @@ model MockMessage {
 
 /// План на день від AI. items = JSON масив PlanItem (src/lib/planner.ts).
 model DailyPlan {
-  day       DateTime @id @db.Date
-  items     Json
+  day           DateTime  @id @db.Date
+  items         Json
   /// коротке пояснення, чому саме такий план
-  summary   String   @default("")
+  summary       String    @default("")
   /// вечірній огляд: що зроблено, що перенести
-  review    String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  review        String    @default("")
+  /// null = чернетка: пункти можна прибирати, додавати, переставляти. Після "Start the day" лишаються тільки галочки
+  startedAt     DateTime?
+  /// навчальний план (Source.id), якому віддали більшу частину бюджету
+  focusSourceId Int?
+  /// побажання на день вільним текстом, іде в промпт
+  wish          String    @default("")
+  /// бюджет хвилин, з яким складали план
+  budget        Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum TaskRepeat {
+  /// разова: пропонується в план, поки не зробиш
+  ONCE
+  DAILY
+  /// пн-пт
+  WEEKDAYS
+}
+
+/// Справа поза навчанням (розіслати резюме, задеплоїти апку). У плані дня це пункт TASK.
+model Task {
+  id        Int        @id @default(autoincrement())
+  title     String
+  minutes   Int        @default(30)
+  repeat    TaskRepeat @default(ONCE)
+  /// разова справа: коли зроблено. Повторювані відмічаються тільки в плані дня
+  doneAt    DateTime?
+  createdAt DateTime   @default(now())
 }
 
 /// Репо, з якого апка підтягує картки: learn/topic.md + learn/questions.md

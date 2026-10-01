@@ -3,17 +3,19 @@ import { z } from 'zod';
 import { db } from './db';
 import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
 import { endOfDay, startOfDay } from './schedule';
-import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref } from './study-plan';
+import { REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits } from './study-plan';
 import { getCardQueue } from './cards';
 import { getLevelsWithProgress } from './levels';
+import { pickMandatory, toPlanItem } from './plan-order';
 
 /**
  * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
- * (що прострочене, який цикл, навчальний план з репо), а AI лише вибирає, впорядковує і пояснює.
+ * (що прострочене, який цикл, навчальний план з репо, твої справи), а AI лише вибирає, впорядковує і пояснює.
  * Кроки навчального плану (PLAN) і переробки задач відбирає код, а не AI: вони обов'язкові і йдуть по порядку.
+ * Повторювані справи (TASK) теж обов'язкові; разові AI пропонує, поки ти їх не зробиш.
  */
 /** ANKI лишився тільки для старих планів у БД; нові плани мають CARDS. */
-export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN' | 'LEVEL';
+export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN' | 'LEVEL' | 'TASK';
 
 export interface PlanCandidate {
   id: string;
@@ -24,9 +26,22 @@ export interface PlanCandidate {
   defaultMinutes: number;
   /** пояснення за замовчуванням (коли план без AI) */
   hint?: string;
-  /** частина навчального плану на сьогодні: AI не може її викинути чи переставити */
+  /** частина навчального плану на сьогодні або повторювана справа: AI не може її викинути */
   mandatory?: boolean;
+  /** навчальний план, з якого пункт ("plan:<sourceId>"): кроки одного плану йдуть строго по порядку */
+  group?: string;
+  /** позиція кроку в плані (тільки PLAN) */
+  order?: number;
 }
+
+export interface CandidateOptions {
+  /** навчальний план у фокусі сьогодні (Source.id) */
+  focusSourceId: number | null;
+  /** бюджет дня в хвилинах: від нього рахується частка фокусу */
+  budget: number;
+}
+
+export const DEFAULT_BUDGET = 300;
 
 export interface PlanItem extends PlanCandidate {
   minutes: number;
@@ -49,7 +64,7 @@ const MAX_NEW_LEVELS = 2;
 /** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
 const PlanItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL']),
+  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL', 'TASK']),
   title: z.string(),
   href: z.string(),
   topicId: z.number().nullable(),
@@ -59,15 +74,51 @@ const PlanItemSchema = z.object({
   manualDone: z.boolean(),
   hint: z.string().optional(),
   mandatory: z.boolean().optional(),
+  group: z.string().optional(),
+  order: z.number().optional(),
 });
 
 export function parsePlanItems(json: unknown): PlanItem[] {
   return z.array(PlanItemSchema).parse(json);
 }
 
-export async function buildCandidates(now: Date = new Date()): Promise<PlanCandidate[]> {
+/** Повторювана справа сьогодні в плані? WEEKDAYS = пн-пт. */
+function isTaskDueToday(repeat: 'ONCE' | 'DAILY' | 'WEEKDAYS', now: Date): boolean {
+  if (repeat === 'DAILY') return true;
+  if (repeat === 'WEEKDAYS') return now.getDay() >= 1 && now.getDay() <= 5;
+  return false;
+}
+
+function daysSince(from: Date, now: Date): number {
+  return Math.floor((startOfDay(now).getTime() - startOfDay(from).getTime()) / DAY_MS);
+}
+
+async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidate[]; once: PlanCandidate[] }> {
+  // разова справа, зроблена сьогодні, лишається кандидатом: інакше перепланування ввечері її загубить
+  const tasks = await db.task.findMany({
+    where: { OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }] },
+    orderBy: { createdAt: 'asc' },
+  });
+  const recurring: PlanCandidate[] = [];
+  const once: PlanCandidate[] = [];
+  for (const task of tasks) {
+    const base = { id: `task:${task.id}`, kind: 'TASK' as const, title: task.title, href: '/tasks', topicId: null, defaultMinutes: task.minutes, group: 'tasks' };
+    if (task.repeat === 'ONCE') {
+      const days = daysSince(task.createdAt, now);
+      once.push({ ...base, hint: days === 0 ? 'Разова справа, додана сьогодні.' : `Разова справа, висить ${days} дн.` });
+    } else if (isTaskDueToday(task.repeat, now)) {
+      recurring.push({ ...base, hint: task.repeat === 'DAILY' ? 'Щоденна справа.' : 'Справа по буднях.', mandatory: true });
+    }
+  }
+  return { recurring, once };
+}
+
+export async function buildCandidates(
+  now: Date = new Date(),
+  options: CandidateOptions = { focusSourceId: null, budget: DEFAULT_BUDGET },
+): Promise<PlanCandidate[]> {
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, studyPlans, cardQueue, levelsState] = await Promise.all([
+  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, allStudyPlans, cardQueue, levelsState, tasks] = await Promise.all([
     getDueTopics(now),
     getActiveCycle(),
     getNextSystemDesignTopic(),
@@ -77,7 +128,11 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
     getStudyPlans(),
     getCardQueue(now),
     getLevelsWithProgress(now),
+    buildTaskCandidates(now),
   ]);
+  // план у фокусі йде першим: його кроки першими займають бюджет, решта планів у залишок
+  const isFocused = (sourceId: number): boolean => sourceId === options.focusSourceId;
+  const studyPlans = [...allStudyPlans].sort((a, b) => Number(isFocused(b.source.id)) - Number(isFocused(a.source.id)));
 
   const candidates: PlanCandidate[] = [];
   const cardsToday = cardQueue.due.length + cardQueue.fresh.length;
@@ -133,7 +188,9 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
   const problemIds = new Set<number>();
   for (const plan of studyPlans) {
     for (const id of problemTopicIds(plan)) problemIds.add(id);
-    const { redos, steps } = selectToday(plan, due, now);
+    const focused = isFocused(plan.source.id);
+    const group = `plan:${plan.source.id}`;
+    const { redos, steps } = selectToday(plan, due, now, todayLimits(plan, focused, options.budget));
     for (const topic of redos) {
       candidates.push({
         id: `recall:${topic.id}`,
@@ -144,6 +201,7 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
         defaultMinutes: REDO_MINUTES,
         hint: 'Настав термін переробки: 45 хв з таймером, потім звір з минулою спробою.',
         mandatory: true,
+        group,
       });
     }
     for (const step of steps) {
@@ -154,11 +212,16 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
         href: stepHref(plan, step),
         topicId: plan.topicByPath.get(step.topicPath)?.id ?? null,
         defaultMinutes: step.minutes,
-        hint: `${plan.source.planName} · ${step.group} · крок ${step.position + 1}/${plan.steps.length}`,
+        hint: `${focused ? 'Фокус дня · ' : ''}${plan.source.planName} · ${step.group} · крок ${step.position + 1}/${plan.steps.length}`,
         mandatory: true,
+        group,
+        order: step.position,
       });
     }
   }
+
+  // справи поза навчанням: повторювані обов'язкові, разові пропонуються, поки не зробиш (найстаріші першими)
+  candidates.push(...tasks.recurring, ...tasks.once);
 
   // задачі плану повторюються тільки як Redo (45 хв), не як звичайний 15-хвилинний recall
   for (const topic of due.filter((dueTopic) => !problemIds.has(dueTopic.id)).slice(0, 6)) {
@@ -225,39 +288,34 @@ export async function buildCandidates(now: Date = new Date()): Promise<PlanCandi
 
 /** План без AI (нема ключа або Gemini впав): прості правила. */
 export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { items: PlanItem[]; summary: string } {
-  const mandatory = candidates.filter((c) => c.mandatory === true);
   const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] =>
     candidates.filter((c) => c.kind === kind && c.mandatory !== true).slice(0, limit);
-  const ordered = [
-    ...pick('CARDS', 1),
-    ...mandatory,
+  const cards = pick('CARDS', 1);
+  const tasks = candidates.filter((c) => c.mandatory === true && c.kind === 'TASK');
+  const reserved = [...cards, ...tasks].reduce((sum, c) => sum + c.defaultMinutes, 0);
+  // кроки планів по порядку (план у фокусі першим), поки влазять; не вліз крок, наступні цього плану теж ні
+  const study = pickMandatory(candidates.filter((c) => c.mandatory === true && c.kind !== 'TASK'), minutesBudget - reserved);
+
+  const items: PlanItem[] = [...cards, ...study, ...tasks].map(toPlanItem);
+  let used = items.reduce((sum, item) => sum + item.minutes, 0);
+  const optional = [
     ...pick('LEVEL', 2),
     ...pick('RECALL', 2),
     ...pick('CYCLE', 1),
     ...pick('QUESTIONS', 1),
     ...pick('SYSTEM_DESIGN', 1),
+    ...pick('TASK', 1),
     ...pick('OUT_LOUD', 1),
   ];
-  const items: PlanItem[] = [];
-  let used = 0;
-  let planCut = false;
-  for (const candidate of ordered) {
+  for (const candidate of optional) {
     const fits = used + candidate.defaultMinutes <= minutesBudget;
-    if (candidate.mandatory === true) {
-      // кроки плану йдуть строго по порядку: не влізла один, наступні теж не беремо
-      if (planCut || (!fits && items.length >= 3)) {
-        planCut = true;
-        continue;
-      }
-    } else if (!fits && items.length >= 3) {
-      continue;
-    }
+    if (!fits && items.length >= 3) continue;
     used += candidate.defaultMinutes;
-    items.push({ ...candidate, minutes: candidate.defaultMinutes, why: candidate.hint ?? '', manualDone: false });
+    items.push(toPlanItem(candidate));
   }
-  const summary = mandatory.length > 0
-    ? 'План за правилами (без AI): картки, кроки навчального плану по порядку, повторення, решта в цикл.'
-    : 'План за правилами (без AI): картки, прострочені повторення, робота по циклу, system design.';
+  const summary = study.length > 0
+    ? 'План за правилами (без AI): картки, кроки навчального плану по порядку, справи, повторення, решта в цикл.'
+    : 'План за правилами (без AI): картки, справи, прострочені повторення, робота по циклу, system design.';
   return { items, summary };
 }
 
@@ -266,7 +324,8 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
   const from = startOfDay(now);
   const to = endOfDay(now);
   const planStepIds = items.filter((item) => item.kind === 'PLAN').map((item) => Number(item.id.replace('plan:', '')));
-  const [log, recalls, questions, mockToday, inboxCount, planSteps, levelPasses] = await Promise.all([
+  const taskIds = items.filter((item) => item.kind === 'TASK').map((item) => Number(item.id.replace('task:', '')));
+  const [log, recalls, questions, mockToday, inboxCount, planSteps, levelPasses, tasks] = await Promise.all([
     getTodayLog(now),
     db.recallLog.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.question.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
@@ -274,10 +333,12 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
     db.inboxItem.count(),
     db.planStep.findMany({ where: { id: { in: planStepIds } } }),
     db.levelAttempt.findMany({ where: { passed: true, createdAt: { gte: from, lte: to } }, select: { levelKey: true } }),
+    db.task.findMany({ where: { id: { in: taskIds } } }),
   ]);
   const passedLevels = new Set(levelPasses.map((attempt) => attempt.levelKey));
   const recalled = new Set(recalls.map((r) => r.topicId));
   const stepById = new Map(planSteps.map((step) => [step.id, step]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
   const questionsByTopic = new Map<number, number>();
   for (const q of questions) if (q.topicId) questionsByTopic.set(q.topicId, (questionsByTopic.get(q.topicId) ?? 0) + 1);
 
@@ -304,6 +365,12 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
           return { ...item, autoDone: attemptDone, done: step.doneAt !== null || attemptDone };
         }
         break;
+      }
+      case 'TASK': {
+        // разову справу можна закрити і на сторінці Tasks
+        const task = taskById.get(Number(item.id.replace('task:', '')));
+        const closedOnce = task !== undefined && task.repeat === 'ONCE' && task.doneAt !== null;
+        return { ...item, autoDone: false, done: item.manualDone || closedOnce };
       }
     }
     return { ...item, autoDone, done: autoDone || item.manualDone };

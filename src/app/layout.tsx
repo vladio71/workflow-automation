@@ -12,12 +12,13 @@ export const metadata: Metadata = { title: 'Learn it. Keep it.' };
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [dueCount, inboxCount, streak, cards, dueLevels] = await Promise.all([
+  const [dueCount, inboxCount, streak, cards, dueLevels, openTasks] = await Promise.all([
     getDueCount(),
     db.inboxItem.count(),
     getStreak(),
     getCardCounts(),
     getDueLevelCount(),
+    db.task.count({ where: { repeat: 'ONCE', doneAt: null } }),
   ]);
 
   return (
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/" icon="☀️" label="Today" count={dueCount} />
             <NavLink href="/cards" icon="🃏" label="Cards" count={cards.due + cards.fresh} />
             <NavLink href="/inbox" icon="📥" label="Inbox" count={inboxCount} />
+            <NavLink href="/tasks" icon="📌" label="Tasks" count={openTasks} />
             <div className="sidebar-section">Knowledge</div>
             <NavLink href="/topics" icon="🗂️" label="Topics" />
             <NavLink href="/questions" icon="❓" label="Questions" />

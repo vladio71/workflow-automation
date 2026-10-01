@@ -35,7 +35,7 @@ const PLAN_TOTAL_MS = 180_000;
 const REVIEW_TOTAL_MS = 120_000;
 const GRADE_TOTAL_MS = 150_000;
 const CHECK_TIMEOUT_MS = 30_000;
-/** 503 = Google перевантажений: одна пауза і ще спроба на тій самій моделі, далі наступна */
+/** пауза перед єдиним повтором: 503 чи обрив в останньої моделі списку (інші на 503 одразу поступаються наступній) */
 const RETRY_PAUSE_MS = 2_000;
 
 /** Тести ставлять менші пороги через env (разом з GEMINI_BASE_URL на підставний сервер). */
@@ -110,9 +110,19 @@ interface Classified {
   detail: string;
 }
 
+/**
+ * Модель почала відповідати, і відповідь обірвалась: потік закінчився посеред шматка
+ * (SDK кидає "Incomplete JSON segment at the end") або з'єднання закрили з того боку (fetch кидає TypeError "terminated").
+ */
+function isCutStream(error: Error): boolean {
+  return error.message === 'Incomplete JSON segment at the end' || (error instanceof TypeError && error.message === 'terminated');
+}
+
 function classify(error: unknown, abortReason: AbortReason | null, stallLimitMs: number): Classified {
   if (abortReason === 'stalled') return { outcome: 'stalled', detail: `завис: ${Math.round(stallLimitMs / 1000)} с без відповіді` };
   if (abortReason === 'deadline') return { outcome: 'timeout', detail: 'не вклався в загальний час' };
+  // обрив посеред відповіді зазвичай те саме перевантаження, що й 503: і обробляємо так само
+  if (error instanceof Error && isCutStream(error)) return { outcome: 'overloaded', detail: 'Google обірвав відповідь' };
   if (error instanceof ApiError) {
     if (error.status === 429) return { outcome: 'quota', detail: `${quotaLabel(error)} (429)` };
     if (error.status === 401 || error.status === 403) return { outcome: 'auth', detail: `ключ не підходить (${error.status})` };
@@ -128,10 +138,13 @@ function classify(error: unknown, abortReason: AbortReason | null, stallLimitMs:
 
 type NextStep = 'retry' | 'next-model' | 'stop';
 
-/** 503 = ще раз на тій самій моделі; ліміт, зависання, 404, 400 = одразу наступна; ключ або загальний час = стоп. */
-function nextStep(outcome: AttemptOutcome, attempt: number): NextStep {
+/**
+ * Ліміт, 503, обрив, зависання, 404, 400 = одразу наступна модель; ключ або загальний час = стоп.
+ * Повтор тієї самої моделі є тільки на 503 чи обрив в останньої в списку: далі йти вже нема куди.
+ */
+function nextStep(outcome: AttemptOutcome, attempt: number, lastModel: boolean): NextStep {
   if (outcome === 'auth' || outcome === 'timeout') return 'stop';
-  if (outcome === 'overloaded' && attempt === 1) return 'retry';
+  if (outcome === 'overloaded' && lastModel && attempt === 1) return 'retry';
   return 'next-model';
 }
 
@@ -220,7 +233,8 @@ async function streamWithFallback<T>(request: StreamRequest, parse: (text: strin
     throw new GeminiError(job.error, job.attempts);
   };
 
-  for (const model of MODELS) {
+  for (const [index, model] of MODELS.entries()) {
+    const lastModel = index === MODELS.length - 1;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const result = await streamOnce(model, request, job, deadline);
       if (result.ok) {
@@ -235,7 +249,7 @@ async function streamWithFallback<T>(request: StreamRequest, parse: (text: strin
         }
       }
       job.attempts.push(result.attempt);
-      const step = nextStep(result.attempt.outcome, attempt);
+      const step = nextStep(result.attempt.outcome, attempt, lastModel);
       if (step === 'stop') return finishFailed();
       if (step === 'retry' && Date.now() + RETRY_PAUSE_MS < deadline) {
         await sleep(RETRY_PAUSE_MS);
@@ -402,7 +416,8 @@ function toContents(history: ChatTurn[]): Content[] {
 /** Старт стріму з переходом між моделями. Тільки на старті: коли текст уже пішов у чат, модель не міняємо. */
 async function startStream(contents: Content[], config: GenerateContentConfig): Promise<AsyncGenerator<GenerateContentResponse>> {
   const attempts: AttemptRecord[] = [];
-  for (const model of MODELS) {
+  for (const [index, model] of MODELS.entries()) {
+    const lastModel = index === MODELS.length - 1;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const started = Date.now();
       try {
@@ -410,7 +425,7 @@ async function startStream(contents: Content[], config: GenerateContentConfig): 
       } catch (error) {
         const { outcome, detail } = classify(error, null, 0);
         attempts.push({ model, outcome, detail, ms: Date.now() - started });
-        const step = nextStep(outcome, attempt);
+        const step = nextStep(outcome, attempt, lastModel);
         if (step === 'stop') throw new GeminiError(describeAttempts(attempts), attempts);
         if (step === 'retry') {
           await sleep(RETRY_PAUSE_MS);
@@ -425,8 +440,13 @@ async function startStream(contents: Content[], config: GenerateContentConfig): 
 
 export async function* streamMockReply(problem: string, history: ChatTurn[]): AsyncGenerator<string> {
   const stream = await startStream(toContents(history), { systemInstruction: mockInstruction(problem), temperature: 0.6 });
-  for await (const chunk of stream) {
-    if (chunk.text) yield chunk.text;
+  try {
+    for await (const chunk of stream) {
+      if (chunk.text) yield chunk.text;
+    }
+  } catch (error) {
+    // посеред репліки модель уже не міняємо, але причину показуємо зрозуміло ("Google обірвав відповідь")
+    throw new Error(classify(error, null, 0).detail);
   }
 }
 

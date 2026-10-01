@@ -91,7 +91,7 @@ export default async function SourcesPage() {
       {isGeminiConfigured() ? (
         <div style={{ fontSize: 14 }}>
           <p className="muted" style={{ marginBottom: 8 }}>
-            Моделі по черзі: {geminiModels().map(modelLabel).join(' → ')}. На ліміт, зависання чи 404 апка одразу йде до наступної.
+            Моделі по черзі: {geminiModels().map(modelLabel).join(' → ')}. На ліміт, перевантаження (503), обрив відповіді, зависання чи 404 апка одразу йде до наступної.
             Пошук для скрині: {LOOT_SEARCH_LABEL[lootAiSearchState()]}.
           </p>
           <GeminiCheck />

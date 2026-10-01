@@ -72,7 +72,6 @@ export default async function LevelPage({ params }: LevelPageProps) {
           title={level.title}
           fileName={level.stubFile}
           stub={details.stub}
-          minutes={level.minutes}
           initialReference={revealed ? details.reference : null}
           passedToday={progress.passedToday}
           gaveUpToday={progress.gaveUpToday}

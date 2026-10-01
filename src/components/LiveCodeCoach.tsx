@@ -13,17 +13,13 @@ import {
  * Правила live code в попапі + нагадування на 25-й хвилині.
  * Кнопка в меню відкриває правила (почитати перед стартом і звірити себе). Таймер стартує тут вручну
  * або сам, коли відкриваєш рівень. На 25:00 (налаштовується) приходить сповіщення браузера, на сторінці
- * відкривається попап "перевір, де ти", а у вкладці з'являється ⏰.
+ * відкривається попап "перевір, де ти", а у вкладці з'являється 👀. Годинника ніде не показуємо.
  */
 type View = 'rules' | 'reminder' | 'look' | 'solved';
 type Permission = NotificationPermission | 'unsupported';
 
-const TITLE_MARK = '⏰ ';
-
-function clock(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
+/** позначка у вкладці, поки нагадування без відповіді. Годинника ніде нема: він тисне, а не допомагає */
+const TITLE_MARK = '👀 ';
 
 function currentPermission(): Permission {
   return 'Notification' in window ? Notification.permission : 'unsupported';
@@ -38,7 +34,7 @@ function notify(title: string, body: string): void {
       notification.close();
     };
   } catch {
-    // браузер без підтримки сповіщень зі сторінки: лишаються попап і ⏰ у вкладці
+    // браузер без підтримки сповіщень зі сторінки: лишаються попап і 👀 у вкладці
   }
 }
 
@@ -117,7 +113,6 @@ export function LiveCodeCoach() {
   }, [session]);
 
   const pending = session !== null && now >= session.remindAt;
-  const elapsedMinutes = session ? Math.floor((now - session.startedAt) / MINUTE_MS) : 0;
 
   // час вийшов: попап на сторінці і одне системне сповіщення на весь браузер
   useEffect(() => {
@@ -128,14 +123,11 @@ export function LiveCodeCoach() {
     const latest = readSession();
     if (latest && latest.remindAt === session.remindAt && !latest.notified) {
       writeSession({ ...latest, notified: true });
-      notify(
-        `Live code: ${Math.round((session.remindAt - session.startedAt) / MINUTE_MS)} хв`,
-        `${session.label}. Перевір, в якому стані рішення. Може, краще піти дивитись?`,
-      );
+      notify('Live code: перевір, де ти', `${session.label}. В якому стані рішення? Може, краще піти дивитись?`);
     }
   }, [session, pending]);
 
-  // ⏰ у назві вкладки, поки нагадування без відповіді (Next міняє title при переходах, тож ставимо щосекунди)
+  // 👀 у назві вкладки, поки нагадування без відповіді (Next міняє title при переходах, тож ставимо щосекунди)
   useEffect(() => {
     if (pending && !document.title.startsWith(TITLE_MARK)) document.title = TITLE_MARK + document.title;
     if (!pending && document.title.startsWith(TITLE_MARK)) document.title = document.title.slice(TITLE_MARK.length);
@@ -197,11 +189,8 @@ export function LiveCodeCoach() {
       <button type="button" className="nav-link nav-button" onClick={openFromMenu} data-testid="live-code-menu">
         <span style={{ width: 20, textAlign: 'center' }}>📏</span>
         <span>Live code rules</span>
-        {session && now > 0 && (
-          <span className={`count mono ${pending ? 'alert' : ''}`} title={session.label}>
-            {pending ? TITLE_MARK : ''}{clock(now - session.startedAt)}
-          </span>
-        )}
+        {session && pending && <span className="count alert" title={session.label}>перевір</span>}
+        {session && !pending && <span className="count" title={`${session.label}: нагадування увімкнене`}>●</span>}
       </button>
 
       <dialog
@@ -216,7 +205,7 @@ export function LiveCodeCoach() {
         <div className="modal-head">
           <h2 id="live-code-title">
             {view === 'rules' && '📏 Live code: правила'}
-            {view === 'reminder' && `⏰ ${elapsedMinutes} хв: перевір, де ти`}
+            {view === 'reminder' && '👀 Перевір, де ти'}
             {view === 'look' && '🔎 Іду дивитись'}
             {view === 'solved' && "🏁 Розв'язав"}
           </h2>
@@ -284,10 +273,7 @@ export function LiveCodeCoach() {
         <div className="modal-foot">
           {view === 'rules' && session && (
             <>
-              <span className="mono">⏱ {clock(now - session.startedAt)}</span>
-              <span className="faint" style={{ fontSize: 13 }}>
-                {session.label} · нагадаю на {Math.round((session.remindAt - session.startedAt) / MINUTE_MS)}-й хв
-              </span>
+              <span className="faint" style={{ fontSize: 13 }}>{session.label} · нагадаю перевірити, де ти</span>
               <span style={{ flex: 1 }} />
               <button type="button" className="btn sm" onClick={() => stopSession()}>■ Стоп</button>
             </>
@@ -314,7 +300,7 @@ export function LiveCodeCoach() {
           )}
           {view === 'reminder' && (
             <>
-              <button type="button" className="btn primary sm" onClick={snooze}>Є рух, ще {SNOOZE_MINUTES} хв</button>
+              <button type="button" className="btn primary sm" onClick={snooze}>Є рух, працюю далі</button>
               <button type="button" className="btn sm" onClick={() => finish('look')}>Іду дивитись</button>
               <button type="button" className="btn sm" onClick={() => finish('solved')}>Розв&apos;язав</button>
               <span style={{ flex: 1 }} />
@@ -333,7 +319,7 @@ export function LiveCodeCoach() {
           )}
           {view === 'rules' && (permission === 'denied' || permission === 'unsupported') && (
             <span className="faint" style={{ fontSize: 12, flexBasis: '100%' }}>
-              Сповіщення браузера вимкнені: нагадування буде тільки тут і ⏰ у назві вкладки.
+              Сповіщення браузера вимкнені: нагадування буде тільки тут і 👀 у назві вкладки.
             </span>
           )}
         </div>

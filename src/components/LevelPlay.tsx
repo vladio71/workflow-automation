@@ -12,7 +12,6 @@ interface LevelPlayProps {
   /** index.ts або index.tsx: так файл і називатиметься в копії вправи */
   fileName: string;
   stub: string;
-  minutes: number;
   /** еталон видно, тільки якщо сьогодні вже пройшов або здався */
   initialReference: string | null;
   passedToday: boolean;
@@ -32,12 +31,6 @@ interface RunView {
 function localDay(): string {
   const now = new Date();
   return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-}
-
-function formatClock(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function readStorage(key: string): string | null {
@@ -62,8 +55,8 @@ export function LevelPlay(props: LevelPlayProps) {
   const startKey = `level-start:${props.levelKey}:${localDay()}`;
 
   const [code, setCode] = useState(props.stub);
+  // годинника на сторінці нема (тиснув, а не допомагав): старт тільки для часу в Stats і нагадування "перевір, де ти"
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const [run, setRun] = useState<RunView | null>(null);
   const [reference, setReference] = useState<string | null>(props.initialReference);
   const [passed, setPassed] = useState(props.passedToday);
@@ -90,14 +83,6 @@ export function LevelPlay(props: LevelPlayProps) {
     if (active) adoptLevelSession({ href: sessionHref, label: props.title, startedAt });
     else stopSession(sessionHref);
   }, [startedAt, active, sessionHref, props.title]);
-
-  useEffect(() => {
-    if (startedAt === null || passed) return;
-    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [startedAt, passed]);
 
   function changeCode(value: string) {
     setCode(value);
@@ -159,8 +144,6 @@ export function LevelPlay(props: LevelPlayProps) {
     });
   }
 
-  const limitSeconds = props.minutes * 60;
-  const overTime = !passed && elapsed > limitSeconds;
   const shownRun: RunView | null = run ?? (props.lastOutput && props.lastOutput.output
     ? { passed: props.lastOutput.passed, timedOut: false, output: props.lastOutput.output, durationMs: 0 }
     : null);
@@ -171,13 +154,7 @@ export function LevelPlay(props: LevelPlayProps) {
         <span className="mono faint">{props.fileName}</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn ghost sm" onClick={openRules} title="Правила live code: 20 хв без плану = стоп">📏 Rules</button>
-        {passed ? (
-          <span className="tag green">✓ cleared today</span>
-        ) : (
-          <span className={`tag ${overTime ? 'red' : 'gray'}`} title="Time from the README; running over is fine, finish and compare">
-            ⏱ {formatClock(elapsed)} / {props.minutes}:00
-          </span>
-        )}
+        {passed && <span className="tag green">✓ cleared today</span>}
       </div>
 
       <textarea
@@ -207,9 +184,6 @@ export function LevelPlay(props: LevelPlayProps) {
         )}
       </div>
 
-      {overTime && (
-        <p className="faint" style={{ fontSize: 13, marginTop: 8 }}>Time is up. Finish it anyway, then compare with the reference.</p>
-      )}
       {error && <p style={{ color: 'var(--tag-red-fg)', fontSize: 14, marginTop: 8 }}>{error}</p>}
 
       {shownRun && (

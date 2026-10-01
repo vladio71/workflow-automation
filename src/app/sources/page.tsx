@@ -3,8 +3,28 @@ import { addSource, removeSource, syncAllNow, syncSourceNow } from '../actions';
 import { SyncButton } from '@/components/SyncButton';
 import { db } from '@/lib/db';
 import { repoUrl } from '@/lib/sync';
+import { GeminiCheck } from '@/components/GeminiCheck';
+import { geminiModels, isGeminiConfigured } from '@/lib/gemini';
+import { modelLabel } from '@/lib/ai-labels';
+import { recentJobs, type AiJob } from '@/lib/ai-status';
+import { lootAiSearchState, type LootAiSearchState } from '@/lib/loot-refill';
+
+const LOOT_SEARCH_LABEL: Record<LootAiSearchState, string> = {
+  off: 'вимкнено (LOOT_AI_SEARCH у .env)',
+  on: 'увімкнено',
+  blocked: 'на сьогодні вимкнено: пошук уперся в ліміт',
+};
+
+function jobLine(job: AiJob): string {
+  const seconds = Math.round(((job.endedAt ?? Date.now()) - job.startedAt) / 1000);
+  if (job.state === 'running') return `іде ${seconds} с, ${job.model ? modelLabel(job.model) : 'Gemini'}`;
+  if (job.state === 'failed') return `не вийшло за ${seconds} с: ${job.error ?? ''}`;
+  const trail = job.attempts.map((attempt) => `${modelLabel(attempt.model)}: ${attempt.detail}`).join(' → ');
+  return `${job.model ? modelLabel(job.model) : 'Gemini'} за ${seconds} с${trail ? ` (до цього ${trail})` : ''}`;
+}
 
 export default async function SourcesPage() {
+  const jobs = recentJobs();
   const sources = await db.source.findMany({
     include: { topics: { select: { id: true, name: true }, orderBy: [{ sourcePath: 'asc' }] }, _count: { select: { questions: true } } },
     orderBy: { id: 'asc' },
@@ -66,6 +86,37 @@ export default async function SourcesPage() {
         <input name="branch" className="input" placeholder="main" style={{ maxWidth: 120 }} autoComplete="off" />
         <button className="btn">Add & sync</button>
       </form>
+
+      <h2 className="block-title" id="gemini">Gemini</h2>
+      {isGeminiConfigured() ? (
+        <div style={{ fontSize: 14 }}>
+          <p className="muted" style={{ marginBottom: 8 }}>
+            Моделі по черзі: {geminiModels().map(modelLabel).join(' → ')}. На ліміт, зависання чи 404 апка одразу йде до наступної.
+            Пошук для скрині: {LOOT_SEARCH_LABEL[lootAiSearchState()]}.
+          </p>
+          <GeminiCheck />
+          {jobs.length > 0 && (
+            <>
+              <h3 className="block-title">Останні запити</h3>
+              <table className="db" data-testid="ai-jobs">
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td style={{ width: 130 }}>{job.label}</td>
+                      <td className="faint mono" style={{ width: 60 }}>{new Date(job.startedAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td><span className={`tag ${job.state === 'done' ? 'green' : job.state === 'failed' ? 'red' : 'blue'}`}>{job.state === 'done' ? 'ок' : job.state === 'failed' ? 'впав' : 'іде'}</span></td>
+                      <td className="muted">{jobLine(job)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="faint" style={{ fontSize: 12 }}>Список живе, поки працює апка: після перезапуску він порожній.</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <p className="faint" style={{ fontSize: 14 }}>GEMINI_API_KEY не задано в .env: план за правилами, без AI-оцінки і mock-інтерв&apos;ю.</p>
+      )}
 
       <h2 className="block-title">Format</h2>
       <p className="muted" style={{ fontSize: 14 }}>

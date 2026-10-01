@@ -1,6 +1,8 @@
 import 'server-only';
-import { ApiError, GoogleGenAI, ThinkingLevel, type Content } from '@google/genai';
+import { ApiError, GoogleGenAI, ThinkingLevel, type Content, type GenerateContentConfig, type GenerateContentResponse } from '@google/genai';
 import { z } from 'zod';
+import { startJob, type AiJob, type AiTask, type AttemptOutcome, type AttemptRecord } from './ai-status';
+import { modelLabel } from './ai-labels';
 
 /**
  * Gemini напряму, без абстракцій. Ключ і модель з .env.
@@ -11,52 +13,239 @@ import { z } from 'zod';
  */
 /**
  * GEMINI_MODEL може бути списком через кому: перша модель основна, решта запасні.
- * Наприклад GEMINI_MODEL="gemini-3.8-flash,gemini-2.5-flash-lite".
+ * Наприклад GEMINI_MODEL="gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash-lite".
  */
 const MODELS: string[] = (process.env.GEMINI_MODEL || 'gemini-3.8-flash')
   .split(',')
   .map((model) => model.trim())
   .filter((model) => model.length > 0);
 
-/**
- * SDK за замовчуванням не має таймауту: запит може висіти скільки завгодно, а кнопка "Planning…" разом з ним.
- * Таймаут на одну спробу; спливло = одразу помилка (і план за правилами), без переходу на інші моделі,
- * щоб загальне очікування було передбачуване.
- */
-const PLAN_TIMEOUT_MS = 30_000;
-const GRADE_TIMEOUT_MS = 60_000;
+export function geminiModels(): string[] {
+  return [...MODELS];
+}
 
-/** 429 = ліміт free tier, 500/503 = Google перевантажений. Це минає, тому пробуємо ще раз. */
-const TEMPORARY_STATUSES = [429, 500, 503];
-const RETRIES_PER_MODEL = 2;
+/**
+ * Відповідь іде шматками (stream), тож видно, що модель жива. Мертвою вважаємо, якщо нічого не приходить:
+ * до першого шматка 45 с (модель може думати), між шматками 30 с. Тоді обриваємо і йдемо до наступної моделі.
+ * Загальний час на всі моделі разом обмежений окремо для кожної дії (план, огляд, оцінка).
+ */
+const FIRST_CHUNK_MS = envMs('GEMINI_FIRST_CHUNK_MS', 45_000);
+const STALL_MS = envMs('GEMINI_STALL_MS', 30_000);
+const PLAN_TOTAL_MS = 180_000;
+const REVIEW_TOTAL_MS = 120_000;
+const GRADE_TOTAL_MS = 150_000;
+const CHECK_TIMEOUT_MS = 30_000;
+/** 503 = Google перевантажений: одна пауза і ще спроба на тій самій моделі, далі наступна */
+const RETRY_PAUSE_MS = 2_000;
+
+/** Тести ставлять менші пороги через env (разом з GEMINI_BASE_URL на підставний сервер). */
+function envMs(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Виклик з повторами: тимчасова помилка -> пауза і ще раз; модель зайнята або прибрана (404) -> наступна зі списку.
- * Інші помилки (невалідний ключ, поганий запит) кидаємо одразу, повтор їх не вилікує.
- */
-async function callWithFallback<T>(call: (model: string) => Promise<T>): Promise<T> {
-  for (const model of MODELS) {
-    for (let attempt = 1; attempt <= RETRIES_PER_MODEL; attempt += 1) {
-      try {
-        return await call(model);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error(`Gemini (${model}) не відповів вчасно, спробуй ще раз пізніше`);
+/** Помилка після всіх спроб: message = людський ланцюжок "3.8 Flash: ліміт на день (429) → 3.7 Flash: ...". */
+export class GeminiError extends Error {
+  readonly attempts: AttemptRecord[];
+
+  constructor(message: string, attempts: AttemptRecord[]) {
+    super(message);
+    this.name = 'GeminiError';
+    this.attempts = attempts;
+  }
+}
+
+export function describeAttempts(attempts: readonly AttemptRecord[]): string {
+  return attempts.map((attempt) => `${modelLabel(attempt.model)}: ${attempt.detail}`).join(' → ');
+}
+
+/** Тіло помилки Gemini: SDK кладе JSON відповіді в message. */
+const ApiErrorInfoSchema = z.object({
+  message: z.string().optional(),
+  details: z.array(z.object({
+    violations: z.array(z.object({ quotaId: z.string().optional(), quotaMetric: z.string().optional() })).optional(),
+  }).passthrough()).optional(),
+}).passthrough();
+const ApiErrorBodySchema = z.object({ error: ApiErrorInfoSchema });
+type ApiErrorInfo = z.infer<typeof ApiErrorInfoSchema>;
+
+function apiErrorBody(error: ApiError): ApiErrorInfo | null {
+  // помилка на старті: message = JSON; помилка посеред стріму: "got status: X. {JSON}"
+  const start = error.message.indexOf('{');
+  if (start === -1) return null;
+  try {
+    const parsed = ApiErrorBodySchema.safeParse(JSON.parse(error.message.slice(start)));
+    return parsed.success ? parsed.data.error : null;
+  } catch {
+    return null;
+  }
+}
+
+function short(text: string, max = 90): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+/** Який саме ліміт: з quotaId помилки 429 ("...PerDay...", "...PerMinute...", пошук Google). */
+function quotaLabel(error: ApiError): string {
+  const body = apiErrorBody(error);
+  const ids = (body?.details ?? [])
+    .flatMap((detail) => detail.violations ?? [])
+    .map((violation) => `${violation.quotaId ?? ''} ${violation.quotaMetric ?? ''}`)
+    .join(' ');
+  if (/search|grounding/i.test(ids)) return 'ліміт пошуку Google';
+  if (/PerDay/i.test(ids)) return 'ліміт на день';
+  if (/PerMinute/i.test(ids)) return 'ліміт на хвилину';
+  return 'ліміт';
+}
+
+type AbortReason = 'stalled' | 'deadline';
+
+interface Classified {
+  outcome: AttemptOutcome;
+  detail: string;
+}
+
+function classify(error: unknown, abortReason: AbortReason | null, stallLimitMs: number): Classified {
+  if (abortReason === 'stalled') return { outcome: 'stalled', detail: `завис: ${Math.round(stallLimitMs / 1000)} с без відповіді` };
+  if (abortReason === 'deadline') return { outcome: 'timeout', detail: 'не вклався в загальний час' };
+  if (error instanceof ApiError) {
+    if (error.status === 429) return { outcome: 'quota', detail: `${quotaLabel(error)} (429)` };
+    if (error.status === 401 || error.status === 403) return { outcome: 'auth', detail: `ключ не підходить (${error.status})` };
+    if (error.status === 404) return { outcome: 'not-found', detail: 'модель не знайдена (404)' };
+    if (error.status >= 500) return { outcome: 'overloaded', detail: `Google перевантажений (${error.status})` };
+    const message = apiErrorBody(error)?.message ?? error.message;
+    if (error.status === 400) return { outcome: 'bad-request', detail: `помилка запиту (400): ${short(message)}` };
+    return { outcome: 'error', detail: `${error.status}: ${short(message)}` };
+  }
+  if (error instanceof Error) return { outcome: 'error', detail: short(error.message) };
+  return { outcome: 'error', detail: 'невідома помилка' };
+}
+
+type NextStep = 'retry' | 'next-model' | 'stop';
+
+/** 503 = ще раз на тій самій моделі; ліміт, зависання, 404, 400 = одразу наступна; ключ або загальний час = стоп. */
+function nextStep(outcome: AttemptOutcome, attempt: number): NextStep {
+  if (outcome === 'auth' || outcome === 'timeout') return 'stop';
+  if (outcome === 'overloaded' && attempt === 1) return 'retry';
+  return 'next-model';
+}
+
+interface StreamRequest {
+  task: AiTask;
+  label: string;
+  jobId?: string;
+  totalMs: number;
+  contents: string | Content[];
+  config: GenerateContentConfig;
+}
+
+type StreamResult = { ok: true; text: string } | { ok: false; attempt: AttemptRecord };
+
+/** Одна спроба одної моделі: читаємо шматки, оновлюємо статус, обриваємо, якщо модель замовкла. */
+async function streamOnce(model: string, request: StreamRequest, job: AiJob, deadline: number): Promise<StreamResult> {
+  const controller = new AbortController();
+  const started = Date.now();
+  const watch: { lastActivity: number; gotChunk: boolean; reason: AbortReason | null } = { lastActivity: started, gotChunk: false, reason: null };
+  job.model = model;
+  job.phase = 'waiting';
+  job.attemptStartedAt = started;
+  job.chars = 0;
+  job.thoughts = 0;
+  job.lastChunkAt = null;
+
+  const watchdog = setInterval(() => {
+    const now = Date.now();
+    if (now >= deadline) {
+      watch.reason = 'deadline';
+      controller.abort();
+      return;
+    }
+    const limit = watch.gotChunk ? STALL_MS : FIRST_CHUNK_MS;
+    if (now - watch.lastActivity > limit) {
+      watch.reason = 'stalled';
+      controller.abort();
+    }
+  }, 1000);
+
+  try {
+    const stream = await gemini().models.generateContentStream({
+      model,
+      contents: request.contents,
+      config: { ...request.config, abortSignal: controller.signal },
+    });
+    let text = '';
+    for await (const chunk of stream) {
+      const now = Date.now();
+      watch.lastActivity = now;
+      watch.gotChunk = true;
+      job.lastChunkAt = now;
+      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+        if (part.thought === true) {
+          job.thoughts += 1;
+          if (job.phase === 'waiting') job.phase = 'thinking';
+        } else if (typeof part.text === 'string' && part.text.length > 0) {
+          text += part.text;
+          job.chars = text.length;
+          job.phase = 'writing';
         }
-        if (!(error instanceof ApiError)) throw error;
-        if (error.status === 404) break; // модель недоступна: одразу до наступної
-        if (!TEMPORARY_STATUSES.includes(error.status)) throw error;
-        if (attempt < RETRIES_PER_MODEL) await sleep(1500 * attempt);
       }
     }
+    if (text.trim() === '') return { ok: false, attempt: { model, outcome: 'bad-answer', detail: 'порожня відповідь', ms: Date.now() - started } };
+    return { ok: true, text };
+  } catch (error) {
+    const { outcome, detail } = classify(error, watch.reason, watch.gotChunk ? STALL_MS : FIRST_CHUNK_MS);
+    return { ok: false, attempt: { model, outcome, detail, ms: Date.now() - started } };
+  } finally {
+    clearInterval(watchdog);
   }
-  throw new Error(
-    `Gemini is busy or unavailable (tried: ${MODELS.join(', ')}). Try again in a minute, or add a fallback model to GEMINI_MODEL.`,
-  );
+}
+
+/**
+ * Запит з переходом між моделями і статусом наживо. parse перевіряє відповідь;
+ * якщо вона не розбирається, це теж невдала спроба, і йдемо до наступної моделі.
+ */
+async function streamWithFallback<T>(request: StreamRequest, parse: (text: string) => T): Promise<T> {
+  const job = startJob(request.task, request.label, request.jobId);
+  const deadline = job.startedAt + request.totalMs;
+  const finishFailed = (): never => {
+    job.state = 'failed';
+    job.endedAt = Date.now();
+    job.error = describeAttempts(job.attempts);
+    console.error(`[gemini] ${request.label}: ${job.error}`);
+    throw new GeminiError(job.error, job.attempts);
+  };
+
+  for (const model of MODELS) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const result = await streamOnce(model, request, job, deadline);
+      if (result.ok) {
+        try {
+          const value = parse(result.text);
+          job.state = 'done';
+          job.endedAt = Date.now();
+          return value;
+        } catch {
+          job.attempts.push({ model, outcome: 'bad-answer', detail: 'відповідь не розібрати', ms: Date.now() - job.attemptStartedAt });
+          break;
+        }
+      }
+      job.attempts.push(result.attempt);
+      const step = nextStep(result.attempt.outcome, attempt);
+      if (step === 'stop') return finishFailed();
+      if (step === 'retry' && Date.now() + RETRY_PAUSE_MS < deadline) {
+        await sleep(RETRY_PAUSE_MS);
+        continue;
+      }
+      break;
+    }
+    if (Date.now() >= deadline) break;
+  }
+  return finishFailed();
 }
 
 export function isGeminiConfigured(): boolean {
@@ -66,8 +255,48 @@ export function isGeminiConfigured(): boolean {
 let client: GoogleGenAI | undefined;
 function gemini(): GoogleGenAI {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
-  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, ...geminiHttpOptions() });
   return client;
+}
+
+/** Для тестів: GEMINI_BASE_URL веде запити на підставний сервер замість Google. */
+function geminiHttpOptions(): { httpOptions?: { baseUrl: string } } {
+  const baseUrl = process.env.GEMINI_BASE_URL?.trim();
+  return baseUrl ? { httpOptions: { baseUrl } } : {};
+}
+
+export interface ModelCheck {
+  model: string;
+  outcome: AttemptOutcome;
+  detail: string;
+  ms: number;
+}
+
+/** Кнопка "Перевірити Gemini": по одному крихітному запиту на кожну модель зі списку. */
+export async function checkModels(): Promise<ModelCheck[]> {
+  const results: ModelCheck[] = [];
+  for (const model of MODELS) {
+    const started = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+    try {
+      const response = await gemini().models.generateContent({
+        model,
+        contents: 'Reply with one word: ok',
+        config: { temperature: 0, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, abortSignal: controller.signal },
+      });
+      const text = (response.text ?? '').trim();
+      results.push({ model, outcome: text ? 'ok' : 'bad-answer', detail: text ? 'працює' : 'порожня відповідь', ms: Date.now() - started });
+    } catch (error) {
+      const check: Classified = controller.signal.aborted
+        ? { outcome: 'stalled', detail: `не відповів за ${CHECK_TIMEOUT_MS / 1000} с` }
+        : classify(error, null, 0);
+      results.push({ model, outcome: check.outcome, detail: check.detail, ms: Date.now() - started });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return results;
 }
 
 // ------------------------------------------------------------------ 1-2. оцінка відповіді
@@ -115,7 +344,7 @@ const GRADER_INSTRUCTION = `Ти екзаменатор для senior backend р
 - suggested: GREEN якщо суть повна і без помилок, AMBER якщо дрібні прогалини, RED якщо пропущене ключове або є помилка.
 - Пункти covered/missed/wrong пиши українською.`;
 
-export async function gradeAnswer(input: GradeInput): Promise<GradeResult> {
+export async function gradeAnswer(input: GradeInput, jobId?: string): Promise<GradeResult> {
   const prompt = [
     `Тема: ${input.topic}`,
     `Питання: ${input.question}`,
@@ -124,19 +353,25 @@ export async function gradeAnswer(input: GradeInput): Promise<GradeResult> {
     `Відповідь з пам'яті:\n${input.answer}`,
   ].join('\n\n');
 
-  const response = await callWithFallback((model) => gemini().models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      systemInstruction: GRADER_INSTRUCTION,
-      responseMimeType: 'application/json',
-      responseJsonSchema: GRADE_JSON_SCHEMA,
-      temperature: 0.2,
-      httpOptions: { timeout: GRADE_TIMEOUT_MS },
-    },
-  }));
   // Межа з мережею: навіть зі structured output перевіряємо форму, а не віримо на слово.
-  return GradeSchema.parse(JSON.parse(response.text ?? '{}'));
+  return streamWithFallback(
+    {
+      task: 'grade',
+      label: 'Оцінка відповіді',
+      jobId,
+      totalMs: GRADE_TOTAL_MS,
+      contents: prompt,
+      config: {
+        systemInstruction: GRADER_INSTRUCTION,
+        responseMimeType: 'application/json',
+        responseJsonSchema: GRADE_JSON_SCHEMA,
+        temperature: 0.2,
+        // роздуми приходять шматками ще до відповіді: так видно, що модель жива
+        thinkingConfig: { includeThoughts: true },
+      },
+    },
+    (text) => GradeSchema.parse(JSON.parse(text)),
+  );
 }
 
 // ------------------------------------------------------------------ 3. mock system design
@@ -164,13 +399,32 @@ function toContents(history: ChatTurn[]): Content[] {
   }));
 }
 
+/** Старт стріму з переходом між моделями. Тільки на старті: коли текст уже пішов у чат, модель не міняємо. */
+async function startStream(contents: Content[], config: GenerateContentConfig): Promise<AsyncGenerator<GenerateContentResponse>> {
+  const attempts: AttemptRecord[] = [];
+  for (const model of MODELS) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const started = Date.now();
+      try {
+        return await gemini().models.generateContentStream({ model, contents, config });
+      } catch (error) {
+        const { outcome, detail } = classify(error, null, 0);
+        attempts.push({ model, outcome, detail, ms: Date.now() - started });
+        const step = nextStep(outcome, attempt);
+        if (step === 'stop') throw new GeminiError(describeAttempts(attempts), attempts);
+        if (step === 'retry') {
+          await sleep(RETRY_PAUSE_MS);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+  throw new GeminiError(describeAttempts(attempts), attempts);
+}
+
 export async function* streamMockReply(problem: string, history: ChatTurn[]): AsyncGenerator<string> {
-  // Повтор тільки на старті: коли текст уже пішов у чат, переключати модель посеред відповіді не можна.
-  const stream = await callWithFallback((model) => gemini().models.generateContentStream({
-    model,
-    contents: toContents(history),
-    config: { systemInstruction: mockInstruction(problem), temperature: 0.6 },
-  }));
+  const stream = await startStream(toContents(history), { systemInstruction: mockInstruction(problem), temperature: 0.6 });
   for await (const chunk of stream) {
     if (chunk.text) yield chunk.text;
   }
@@ -237,7 +491,7 @@ export interface DayPlanInput {
   yesterdayUndone: string[];
 }
 
-export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResult> {
+export async function generateDayPlan(input: DayPlanInput, jobId?: string): Promise<DayPlanResult> {
   const prompt = [
     `Сьогодні: ${input.weekday}. Бюджет часу: ${input.minutesBudget} хв.`,
     input.focus ? `Фокус дня: ${input.focus}.` : 'Фокусу на день немає.',
@@ -247,20 +501,25 @@ export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResul
     ...input.candidates.map((c) => `${c.mandatory ? '[MUST] ' : ''}${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв${c.note ? ` | ${c.note}` : ''}`),
   ].filter((line) => line !== '').join('\n');
 
-  const response = await callWithFallback((model) => gemini().models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      systemInstruction: PLANNER_INSTRUCTION,
-      responseMimeType: 'application/json',
-      responseJsonSchema: DAY_PLAN_JSON_SCHEMA,
-      temperature: 0.3,
-      // план з готових кандидатів не потребує глибоких роздумів: LOW у рази швидше за дефолтний medium
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      httpOptions: { timeout: PLAN_TIMEOUT_MS },
+  return streamWithFallback(
+    {
+      task: 'plan',
+      label: 'План дня',
+      jobId,
+      totalMs: PLAN_TOTAL_MS,
+      contents: prompt,
+      config: {
+        systemInstruction: PLANNER_INSTRUCTION,
+        responseMimeType: 'application/json',
+        responseJsonSchema: DAY_PLAN_JSON_SCHEMA,
+        temperature: 0.3,
+        // план з готових кандидатів не потребує глибоких роздумів: LOW у рази швидше за дефолтний medium;
+        // роздуми приходять шматками ще до відповіді, тож видно, що модель жива
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW, includeThoughts: true },
+      },
     },
-  }));
-  return DayPlanSchema.parse(JSON.parse(response.text ?? '{}'));
+    (text) => DayPlanSchema.parse(JSON.parse(text)),
+  );
 }
 
 export interface DayReviewInput {
@@ -268,26 +527,30 @@ export interface DayReviewInput {
   recalls: string[];
 }
 
-export async function reviewDay(input: DayReviewInput): Promise<string> {
+export async function reviewDay(input: DayReviewInput, jobId?: string): Promise<string> {
   const prompt = [
     'План на сьогодні і що виконано:',
     ...input.items.map((item) => `[${item.done ? 'x' : ' '}] ${item.title} (${item.minutes} хв)`),
     input.recalls.length ? `Повторення сьогодні (тема: колір): ${input.recalls.join('; ')}` : 'Повторень сьогодні не було.',
   ].join('\n');
 
-  const response = await callWithFallback((model) => gemini().models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      systemInstruction: `Ти коуч з навчання. Дай короткий вечірній огляд українською, 3-5 речень, без води і без похвали заради похвали:
+  return streamWithFallback(
+    {
+      task: 'review',
+      label: 'Огляд дня',
+      jobId,
+      totalMs: REVIEW_TOTAL_MS,
+      contents: prompt,
+      config: {
+        systemInstruction: `Ти коуч з навчання. Дай короткий вечірній огляд українською, 3-5 речень, без води і без похвали заради похвали:
 1) що зроблено (конкретно), 2) що не зроблено і чи варто це переносити на завтра, 3) одна порада на завтра.
 Якщо повторення були червоними, нагадай, що через 2 дні їх треба повторити з нуля. Не пропонуй нові теми.`,
-      temperature: 0.4,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      httpOptions: { timeout: PLAN_TIMEOUT_MS },
+        temperature: 0.4,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW, includeThoughts: true },
+      },
     },
-  }));
-  return (response.text ?? '').trim();
+    (text) => text.trim(),
+  );
 }
 
 // ------------------------------------------------------------------ 5. картки відпочинку для скрині
@@ -386,38 +649,40 @@ function parseRestCards(text: string): RestCardDraft[] {
 
 const REST_TIMEOUT_MS = 90_000;
 
+/** Один запит пошуку на основну модель, без повторів і запасних моделей: пошук має свій маленький ліміт. */
+async function searchOnce(contents: string, config: GenerateContentConfig): Promise<string> {
+  const model = MODELS[0] ?? 'gemini-3.8-flash';
+  const started = Date.now();
+  try {
+    const response = await gemini().models.generateContent({ model, contents, config: { ...config, httpOptions: { timeout: REST_TIMEOUT_MS } } });
+    return response.text ?? '';
+  } catch (error) {
+    const { outcome, detail } = classify(error, null, 0);
+    const attempt: AttemptRecord = { model, outcome, detail, ms: Date.now() - started };
+    throw new GeminiError(describeAttempts([attempt]), [attempt]);
+  }
+}
+
 /**
- * Gemini + Google Search: новини, статті, музика, аніме, фільм для скрині.
+ * Gemini + Google Search: новини, статті, музика, аніме, фільм для скрині (тільки з LOOT_AI_SEARCH=true).
  * Structured output разом з пошуком підтримують моделі Gemini 3; якщо API відмовить (400), просимо JSON текстом.
  */
 export async function findRestCards(request: RestCardsRequest): Promise<RestCardDraft[]> {
   const prompt = restCardsPrompt(request);
   try {
-    const response = await callWithFallback((model) => gemini().models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        systemInstruction: REST_CARDS_INSTRUCTION,
-        tools: [{ googleSearch: {} }],
-        responseMimeType: 'application/json',
-        responseJsonSchema: REST_CARDS_JSON_SCHEMA,
-        temperature: 0.9,
-        httpOptions: { timeout: REST_TIMEOUT_MS },
-      },
+    return parseRestCards(await searchOnce(prompt, {
+      systemInstruction: REST_CARDS_INSTRUCTION,
+      tools: [{ googleSearch: {} }],
+      responseMimeType: 'application/json',
+      responseJsonSchema: REST_CARDS_JSON_SCHEMA,
+      temperature: 0.9,
     }));
-    return parseRestCards(response.text ?? '');
   } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 400) throw error;
-    const response = await callWithFallback((model) => gemini().models.generateContent({
-      model,
-      contents: `${prompt}\nВідповідай тільки JSON, без тексту навколо.`,
-      config: {
-        systemInstruction: REST_CARDS_INSTRUCTION,
-        tools: [{ googleSearch: {} }],
-        temperature: 0.9,
-        httpOptions: { timeout: REST_TIMEOUT_MS },
-      },
+    if (!(error instanceof GeminiError) || error.attempts[0]?.outcome !== 'bad-request') throw error;
+    return parseRestCards(await searchOnce(`${prompt}\nВідповідай тільки JSON, без тексту навколо.`, {
+      systemInstruction: REST_CARDS_INSTRUCTION,
+      tools: [{ googleSearch: {} }],
+      temperature: 0.9,
     }));
-    return parseRestCards(response.text ?? '');
   }
 }

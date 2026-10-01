@@ -79,6 +79,7 @@ export default async function TodayPage() {
           focus: plan.focus,
           wish: plan.wish,
           budget: plan.budget,
+          aiError: plan.aiError,
         } : null}
         geminiEnabled={isGeminiConfigured()}
         chest={chest}

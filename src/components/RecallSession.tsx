@@ -6,6 +6,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { gradeRecall, saveRecall } from '@/app/actions';
 import type { GradeResult } from '@/lib/gemini';
+import { AiStatus } from '@/components/AiStatus';
+import { newJobId } from '@/lib/ai-labels';
 
 interface RecallTopic {
   id: number;
@@ -62,6 +64,8 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [grading, startGrading] = useTransition();
+  /** запит до Gemini, статус якого показуємо під кнопкою, поки він іде */
+  const [jobId, setJobId] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
   useEffect(() => {
@@ -76,8 +80,10 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
 
   function check() {
     setError(null);
+    const id = newJobId();
+    setJobId(id);
     startGrading(async () => {
-      const response = await gradeRecall({ topic: topic.name, question: prompt, reference, notes: topic.notes, answer });
+      const response = await gradeRecall({ topic: topic.name, question: prompt, reference, notes: topic.notes, answer }, id);
       if (response.ok) setGrade(response.result);
       else setError(response.error);
       setRevealed(true);
@@ -155,6 +161,7 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
         )}
         <button className="btn" onClick={() => setRevealed(true)}>{isTask ? 'Done, show the solution' : 'Show reference'}</button>
       </div>
+      {!isTask && <AiStatus jobId={jobId} active={grading} />}
       {!geminiEnabled && !isTask && <p className="faint" style={{ fontSize: 13 }}>Set GEMINI_API_KEY in .env to get AI feedback. Without it, compare with the reference yourself.</p>}
       {error && <div className="callout" style={{ color: '#eb5757' }}><span className="emoji">⚠️</span><div>{error}</div></div>}
 

@@ -8,6 +8,8 @@ import {
 } from '@/app/actions';
 import { Chest } from '@/components/Chest';
 import { openTaskSession } from '@/components/TowerCard';
+import { AiStatus } from '@/components/AiStatus';
+import { newJobId } from '@/lib/ai-labels';
 import { DayMap, type NodeState } from '@/components/DayMap';
 import { MIN_ITEM_MINUTES, canMove, findBossId } from '@/lib/plan-order';
 import type { ChestState } from '@/lib/loot';
@@ -24,6 +26,8 @@ export interface PlanCardPlan {
   focus: string;
   wish: string;
   budget: number;
+  /** чому Gemini не склав план; '' = склав (або ключа нема) */
+  aiError: string;
 }
 
 /** Кандидат, якого план не взяв: його можна додати в чернетку. */
@@ -80,6 +84,9 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
   const [taskTitle, setTaskTitle] = useState('');
   const [taskMinutes, setTaskMinutes] = useState(30);
   const [note, setNote] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  /** запит до Gemini, статус якого показуємо під кнопками */
+  const [jobId, setJobId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [planning, startPlanning] = useTransition();
   const [editing, startEditing] = useTransition();
@@ -92,10 +99,13 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
   function draftPlan() {
     if (isStarted && !window.confirm('Перепланувати? Зроблене сьогодні лишиться на карті, решту складу заново як чернетку.')) return;
     setNote(null);
+    setFailure(null);
     setPickedId(null);
+    const id = newJobId();
+    setJobId(id);
     startPlanning(async () => {
-      const result = await generatePlan({ budget, focus, wish });
-      if (!result.ok) setNote(result.error);
+      const result = await generatePlan({ budget, focus, wish, jobId: id });
+      if (!result.ok) setFailure(result.error);
       else if (result.note) setNote(result.note);
     });
   }
@@ -121,9 +131,13 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
 
   function review() {
     setNote(null);
+    setFailure(null);
+    const id = newJobId();
+    setJobId(id);
     startReviewing(async () => {
-      const result = await reviewToday();
-      if (!result.ok) setNote(result.error);
+      const result = await reviewToday(id);
+      if (!result.ok) setFailure(result.error);
+      else if (result.note) setFailure(result.note);
     });
   }
 
@@ -200,7 +214,18 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
         </div>
       )}
 
+      {geminiEnabled && <AiStatus jobId={jobId} active={planning || reviewing} />}
       {note && <p className="faint" style={{ fontSize: 13, marginTop: 8 }}>{note}</p>}
+      {failure && <p className="ai-failure" data-testid="ai-failure">⚠️ {failure}</p>}
+      {plan?.aiError && !planning && (
+        <div className="callout ai-error" data-testid="plan-ai-error">
+          <span className="emoji">⚠️</span>
+          <div style={{ fontSize: 14 }}>
+            <b>Gemini не склав план</b>, тому він за правилами. {plan.aiError}.{' '}
+            <Link href="/sources#gemini" style={{ textDecoration: 'underline' }}>Перевірити Gemini →</Link>
+          </div>
+        </div>
+      )}
       {!plan && (
         <p className="muted" style={{ fontSize: 14, marginTop: 8 }}>
           {geminiEnabled

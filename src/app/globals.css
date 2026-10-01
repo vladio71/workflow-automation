@@ -412,3 +412,10 @@ select.input option { background: var(--bg); color: var(--text); }
 .campaign-strip:hover { background: var(--hover); }
 .plan-list { margin-top: 6px; }
 .plan-list > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
+
+/* ---------------- статус запитів до Gemini ---------------- */
+.ai-status { font-size: 13px; margin-top: 8px; color: var(--text); }
+.ai-status-quiet { color: var(--tag-orange-fg); background: var(--tag-orange-bg); border-radius: 3px; padding: 0 4px; }
+.ai-failure { font-size: 13px; margin-top: 8px; color: var(--tag-red-fg); }
+.callout.ai-error { background: var(--tag-red-bg); color: var(--tag-red-fg); margin: 10px 0 0; padding: 10px 14px; }
+.callout.ai-error a { color: inherit; }

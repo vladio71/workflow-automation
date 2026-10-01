@@ -1,13 +1,15 @@
 import 'server-only';
 import { db } from './db';
-import { findRestCards, isGeminiConfigured, type RestCardDraft, type SearchedRestKind } from './gemini';
+import { GeminiError, findRestCards, isGeminiConfigured, type RestCardDraft, type SearchedRestKind } from './gemini';
+import { endOfDay } from './schedule';
 import { INTERESTS, POOL_MINUTES, POOL_RARITY, POOL_TARGETS, POOL_TTL_DAYS, type PoolKind } from './loot.config';
 
 /**
  * Наповнення пулу скрині. Запускається само при відкритті Today (не частіше ніж раз на 30 хв) і кнопкою Refill на /loot.
  *   - MEME: випадковий комікс xkcd (без AI і без ключа);
- *   - NEWS, ARTICLE, MUSIC, ANIME, FILM: Gemini з Google Search (один запит на всю партію);
- *   - без ключа Gemini або якщо він впав: новини і статті з Hacker News.
+ *   - NEWS, ARTICLE, MUSIC, ANIME, FILM: Gemini з Google Search, тільки якщо LOOT_AI_SEARCH=true (один запит на всю партію);
+ *   - без AI-пошуку (за замовчуванням) або якщо Gemini впав: новини і статті з Hacker News, музика й гра зі статичних карток.
+ * Пошук Google у безкоштовного Gemini має свій маленький ліміт (буває нульовий): на першу 429 AI-пошук вимикається до кінця дня.
  * Протерміновані картки видаляються, той самий комікс чи статтю не додаємо двічі (dedupeKey).
  */
 export interface RefillResult {
@@ -35,6 +37,16 @@ const SEARCHED_KINDS: readonly SearchedRestKind[] = ['NEWS', 'ARTICLE', 'MUSIC',
 
 // стан живе в процесі next start: цього досить, щоб не смикати мережу на кожне відкриття Today
 let lastRefillAt = 0;
+/** після 429 на пошуку: до цього часу AI-пошук не пробуємо */
+let aiSearchBlockedUntil = 0;
+
+export type LootAiSearchState = 'off' | 'on' | 'blocked';
+
+/** AI-пошук для скрині: вмикається в .env (LOOT_AI_SEARCH=true), і не тоді, коли сьогодні вже вперлись у ліміт. */
+export function lootAiSearchState(now: Date = new Date()): LootAiSearchState {
+  if (process.env.LOOT_AI_SEARCH !== 'true' || !isGeminiConfigured()) return 'off';
+  return now.getTime() < aiSearchBlockedUntil ? 'blocked' : 'on';
+}
 let lastResult: RefillResult | null = null;
 let running: Promise<RefillResult> | null = null;
 
@@ -153,7 +165,7 @@ async function doRefill(now: Date): Promise<RefillResult> {
   const searchedTotal = SEARCHED_KINDS.reduce((sum, kind) => sum + counts[kind], 0);
 
   let fromGemini: NewCard[] = [];
-  if (searchedTotal > 0 && isGeminiConfigured()) {
+  if (searchedTotal > 0 && lootAiSearchState(now) === 'on') {
     try {
       const drafts = await findRestCards({
         today: now.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
@@ -169,7 +181,9 @@ async function doRefill(now: Date): Promise<RefillResult> {
       }).map(fromDraft);
       if (fromGemini.length === 0) errors.push('Gemini: no usable cards in the answer (no https links or an empty list).');
     } catch (error) {
-      errors.push(`Gemini: ${error instanceof Error ? error.message : 'error'}`);
+      const quota = error instanceof GeminiError && error.attempts.some((attempt) => attempt.outcome === 'quota');
+      if (quota) aiSearchBlockedUntil = endOfDay(now).getTime();
+      errors.push(`Gemini: ${error instanceof Error ? error.message : 'error'}${quota ? '. AI-пошук вимкнено до завтра.' : ''}`);
     }
   }
   cards.push(...fromGemini);

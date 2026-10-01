@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { dayKey, getDueTopics } from '@/lib/queries';
 import { endOfDay, schedule, startOfDay } from '@/lib/schedule';
-import { generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult } from '@/lib/gemini';
+import {
+  checkModels, generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult, type ModelCheck,
+} from '@/lib/gemini';
 import { DEFAULT_BUDGET, buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import {
   addToDraft, clampMinutes, enforceMandatory, keepDone, momentumOrder, moveInDraft, removeFromDraft, setMinutesInDraft, toPlanItem,
@@ -179,14 +181,15 @@ export async function setCycleStatus(id: number, status: CycleStatus): Promise<v
 
 export type GradeResponse = { ok: true; result: GradeResult } | { ok: false; error: string };
 
-export async function gradeRecall(input: GradeInput): Promise<GradeResponse> {
+/** jobId: клієнт питає /api/ai/status?job=<id>, поки чекає (модель, секунди, що впало). */
+export async function gradeRecall(input: GradeInput, jobId?: string): Promise<GradeResponse> {
   if (!isGeminiConfigured()) return { ok: false, error: 'GEMINI_API_KEY не задано в .env' };
   if (!input.answer.trim()) return { ok: false, error: 'Спершу напиши відповідь з пам\'яті' };
   try {
-    return { ok: true, result: await gradeAnswer(input) };
+    return { ok: true, result: await gradeAnswer(input, jobId) };
   } catch (error) {
     console.error(error);
-    return { ok: false, error: error instanceof Error ? error.message : 'Gemini request failed' };
+    return { ok: false, error: `Gemini не оцінив: ${error instanceof Error ? error.message : 'помилка'}` };
   }
 }
 
@@ -261,6 +264,8 @@ export interface PlanSetup {
   focus: string;
   /** побажання на день вільним текстом */
   wish: string;
+  /** статус запиту до Gemini наживо: /api/ai/status?job=<id> */
+  jobId?: string;
 }
 
 /** Фокус з клієнта перевіряємо: тільки існуючий навчальний план або рівні, якщо вони є. Назва йде в промпт. */
@@ -298,6 +303,8 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
   let items: PlanItem[];
   let summary: string;
   let note: string | undefined;
+  // чому Gemini не склав план: зберігаємо з планом, щоб червоний рядок не зник після перезавантаження
+  let aiError = '';
 
   if (isGeminiConfigured()) {
     try {
@@ -316,7 +323,7 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
           note: kind === 'TASK' ? hint ?? '' : '',
         })),
         yesterdayUndone,
-      });
+      }, setup.jobId);
       const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
       // AI може вибирати тільки з кандидатів: невідомі id відкидаємо, дублікати теж
       const seen = new Set<string>();
@@ -328,12 +335,12 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
         items.push({ ...candidate, minutes: picked.minutes, why: picked.why, manualDone: false });
       }
       summary = result.summary;
-      if (items.length === 0) throw new Error('Gemini returned no valid items');
+      if (items.length === 0) throw new Error('Gemini вибрав пункти, яких нема серед кандидатів');
       items = enforceMandatory(items, candidates, minutesBudget);
     } catch (error) {
       console.error(error);
       ({ items, summary } = rulePlan(candidates, minutesBudget));
-      note = `Gemini не відповів (${error instanceof Error ? error.message.slice(0, 120) : 'error'}), склав план за правилами.`;
+      aiError = error instanceof Error ? error.message : 'невідома помилка';
     }
   } else {
     ({ items, summary } = rulePlan(candidates, minutesBudget));
@@ -356,8 +363,8 @@ export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> 
 
   await db.dailyPlan.upsert({
     where: { day },
-    create: { day, items: toJson(items), summary, focus: focus.key, wish, budget: minutesBudget, startedAt: null },
-    update: { items: toJson(items), summary, review: '', focus: focus.key, wish, budget: minutesBudget, startedAt: null },
+    create: { day, items: toJson(items), summary, focus: focus.key, wish, budget: minutesBudget, startedAt: null, aiError },
+    update: { items: toJson(items), summary, review: '', focus: focus.key, wish, budget: minutesBudget, startedAt: null, aiError },
   });
   refresh();
   return { ok: true, note };
@@ -533,7 +540,7 @@ export async function skipPlanItem(itemId: string): Promise<void> {
 }
 
 /** Вечірня перевірка: апка сама рахує виконане, Gemini пише короткий огляд. */
-export async function reviewToday(): Promise<PlanActionResult> {
+export async function reviewToday(jobId?: string): Promise<PlanActionResult> {
   const now = new Date();
   const plan = await getTodayPlan(now);
   if (!plan) return { ok: false, error: 'Спершу склади план на сьогодні' };
@@ -543,20 +550,32 @@ export async function reviewToday(): Promise<PlanActionResult> {
   let review = `Зроблено ${done.length} з ${plan.items.length}.` +
     (undone.length ? ` Не зроблено: ${undone.map((item) => item.title).join('; ')}.` : ' Все виконано.');
 
+  let note: string | undefined;
   if (isGeminiConfigured()) {
     try {
       review = await reviewDay({
         items: plan.items.map((item) => ({ title: item.title, minutes: item.minutes, done: item.done })),
         recalls: await todayRecallSummary(now),
-      });
+      }, jobId);
     } catch (error) {
       console.error(error);
-      review += ' (Gemini недоступний, огляд без AI.)';
+      review += ' (огляд без AI)';
+      note = `Gemini не написав огляд: ${error instanceof Error ? error.message : 'помилка'}`;
     }
   }
   await db.dailyPlan.update({ where: { day: dayKey(now) }, data: { review } });
   refresh();
-  return { ok: true };
+  return { ok: true, note };
+}
+
+// ================================================================== Gemini: перевірка моделей
+
+export type GeminiCheckResponse = { ok: true; results: ModelCheck[] } | { ok: false; error: string };
+
+/** Кнопка "Перевірити Gemini" на Sources: по крихітному запиту на кожну модель з GEMINI_MODEL. */
+export async function checkGeminiNow(): Promise<GeminiCheckResponse> {
+  if (!isGeminiConfigured()) return { ok: false, error: 'GEMINI_API_KEY не задано в .env' };
+  return { ok: true, results: await checkModels() };
 }
 
 // ================================================================== activity log

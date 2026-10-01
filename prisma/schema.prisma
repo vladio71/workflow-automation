@@ -205,6 +205,8 @@ model DailyPlan {
   wish          String    @default("")
   /// бюджет хвилин, з яким складали план
   budget        Int       @default(0)
+  /// чому Gemini не склав план (ланцюжок спроб по моделях); '' = склав або ключа нема
+  aiError       String    @default("")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

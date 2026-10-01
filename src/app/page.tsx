@@ -5,7 +5,8 @@ import { PlanCard } from '@/components/PlanCard';
 import { LogTime } from '@/components/LogTime';
 import { formatMinutes, getAnalytics } from '@/lib/activity';
 import { isGeminiConfigured } from '@/lib/gemini';
-import { getTodayPlan } from '@/lib/planner';
+import { DEFAULT_BUDGET, buildCandidates, getTodayPlan } from '@/lib/planner';
+import { addableCandidates } from '@/lib/plan-order';
 import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
 import { Tag } from '@/components/Tag';
@@ -30,6 +31,16 @@ export default async function TodayPage() {
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
     : [];
+  // у чернетку можна додати те, що план не взяв: кандидати з тим самим фокусом і бюджетом
+  const addable = plan && plan.startedAt === null
+    ? addableCandidates(plan.items, await buildCandidates(now, { focusSourceId: plan.focusSourceId, budget: plan.budget || DEFAULT_BUDGET }))
+        .map((candidate) => ({ id: candidate.id, kind: candidate.kind, title: candidate.title, minutes: candidate.defaultMinutes }))
+    : [];
+  const focusOptions = studyPlans.map((studyPlan) => ({
+    id: studyPlan.source.id,
+    // "System design · 4 тижні + екзамен" -> "System design"
+    name: (studyPlan.source.planName || studyPlan.source.repo).split(' · ')[0] ?? studyPlan.source.repo,
+  }));
 
   const dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const isSunday = now.getDay() === 0;
@@ -44,8 +55,18 @@ export default async function TodayPage() {
       </p>
 
       <PlanCard
-        plan={plan ? { summary: plan.summary, review: plan.review, items: plan.items } : null}
+        plan={plan ? {
+          summary: plan.summary,
+          review: plan.review,
+          items: plan.items,
+          started: plan.startedAt !== null,
+          focusSourceId: plan.focusSourceId,
+          wish: plan.wish,
+          budget: plan.budget,
+        } : null}
         geminiEnabled={isGeminiConfigured()}
+        focusOptions={focusOptions}
+        addable={addable}
       />
 
       {studyPlans.map((studyPlan) => {

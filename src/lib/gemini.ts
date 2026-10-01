@@ -206,14 +206,18 @@ const DAY_PLAN_JSON_SCHEMA = {
 
 const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior backend розробника, який шукає роботу і вчить Node, system design, AI на TypeScript і Python.
 Склади план на СЬОГОДНІ тільки з наданих кандидатів (використовуй їхні id без змін, нічого не вигадуй).
-Кандидати з позначкою [MUST] — сьогоднішня частина навчального плану, вже відібрана по порядку і в межах ліміту:
-бери їх УСІ, в тому ж порядку, хвилини не міняй. PLAN = крок плану, RECALL "Redo" = переробка задачі з нуля.
+Кандидати з позначкою [MUST] — сьогоднішня частина навчальних планів і повторювані справи, вже відібрані кодом:
+бери їх УСІ, кроки одного плану в тому ж порядку, хвилини не міняй. PLAN = крок плану, RECALL "Redo" = переробка задачі з нуля.
 Інші кандидати додавай тільки в залишок бюджету.
 Правила системи:
 - CARDS (картки на сьогодні) і хоча б одне повторення (RECALL) щодня, якщо вони є серед кандидатів.
 - Спершу червоні/найстаріші повторення, потім робота по поточному циклу. Не більше 2-3 повторень за день.
 - Одна тема циклу за раз. QUESTIONS для теми, над якою працюєш, це частина роботи, а не окрема тема.
 - SYSTEM_DESIGN і MOCK (якщо є серед кандидатів) приблизно раз на тиждень; MOCK краще у вихідні або коли є 45+ хвилин.
+- TASK = справа поза навчанням (резюме, деплой). [MUST] TASK постав туди, де її зручно зробити.
+  Разову TASK бери, коли є місце в бюджеті, особливо якщо вона висить кілька днів; одну-дві за день, не більше.
+- Якщо вказано фокус дня, кроки цього плану вже стоять першими серед [MUST]; з решти кандидатів бери те, що не заважає фокусу.
+- Побажання користувача на день враховуй, але вибирай тільки з кандидатів.
 - Вклади план у бюджет часу. Краще 3-5 пунктів, які реально зробити, ніж 8.
 - Порядок пунктів = порядок виконання.
 - why: одне коротке речення українською, чому цей пункт сьогодні.
@@ -222,17 +226,23 @@ const PLANNER_INSTRUCTION = `Ти коуч з навчання для senior bac
 export interface DayPlanInput {
   weekday: string;
   minutesBudget: number;
-  candidates: { id: string; kind: string; title: string; defaultMinutes: number; mandatory: boolean }[];
+  /** назва навчального плану у фокусі або null */
+  focus: string | null;
+  /** побажання на день вільним текстом, може бути порожнім */
+  wish: string;
+  candidates: { id: string; kind: string; title: string; defaultMinutes: number; mandatory: boolean; note: string }[];
   yesterdayUndone: string[];
 }
 
 export async function generateDayPlan(input: DayPlanInput): Promise<DayPlanResult> {
   const prompt = [
     `Сьогодні: ${input.weekday}. Бюджет часу: ${input.minutesBudget} хв.`,
+    input.focus ? `Фокус дня: ${input.focus}.` : 'Фокусу на день немає.',
+    input.wish ? `Побажання на день: ${input.wish}` : '',
     input.yesterdayUndone.length ? `Вчора не зроблено: ${input.yesterdayUndone.join('; ')}` : 'Вчора план виконано або його не було.',
-    'Кандидати (id | тип | що | звичайний час):',
-    ...input.candidates.map((c) => `${c.mandatory ? '[MUST] ' : ''}${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв`),
-  ].join('\n');
+    'Кандидати (id | тип | що | звичайний час | примітка):',
+    ...input.candidates.map((c) => `${c.mandatory ? '[MUST] ' : ''}${c.id} | ${c.kind} | ${c.title} | ${c.defaultMinutes} хв${c.note ? ` | ${c.note}` : ''}`),
+  ].filter((line) => line !== '').join('\n');
 
   const response = await callWithFallback((model) => gemini().models.generateContent({
     model,

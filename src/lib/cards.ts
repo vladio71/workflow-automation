@@ -47,6 +47,10 @@ export interface CardView {
   dueAt: Date | null;
   interval: number;
   lapses: number;
+  /** картка прийшла з репо (learn/questions.md) */
+  fromRepo: boolean;
+  /** картку з репо змінили в апці: Sync її більше не оновлює */
+  editedInApp: boolean;
 }
 
 type QuestionWithTopic = Question & { topic: { id: number; name: string } | null };
@@ -62,6 +66,8 @@ function toView(question: QuestionWithTopic): CardView {
     dueAt: question.cardDueAt,
     interval: question.cardInterval,
     lapses: question.cardLapses,
+    fromRepo: question.sourceId !== null,
+    editedInApp: question.sourceId !== null && question.editedInApp,
   };
 }
 
@@ -172,4 +178,79 @@ async function syncCardsActivity(now: Date): Promise<void> {
   } else if (minutes > 0) {
     await db.activityLog.create({ data: { day, kind: 'CARDS', minutes, note: 'cards' } });
   }
+}
+
+// ------------------------------------------------------------------ додати / змінити / видалити (All cards)
+
+export interface NewCardInput {
+  question: string;
+  answer: string;
+  topicId: number | null;
+}
+
+export interface CardTextInput {
+  question: string;
+  answer: string;
+}
+
+/** Нова картка, зроблена в апці: звичайний рядок Question без sourceId, Sync її не чіпає. Порожнє питання = нічого. */
+export async function createCard(input: NewCardInput): Promise<number | null> {
+  const question = input.question.trim();
+  if (!question) return null;
+  const created = await db.question.create({
+    data: { kind: 'CONCEPT', question, reference: input.answer.trim(), topicId: input.topicId },
+  });
+  return created.id;
+}
+
+/**
+ * Змінити текст картки. Розклад лишається як був.
+ * Картка з репо після зміни позначається editedInApp: Sync далі не перезаписує її текст з questions.md.
+ * sourceKey не міняємо: за ним Sync упізнає, що картка з репо вже є, і не створює дублікат.
+ */
+export async function updateCard(id: number, input: CardTextInput): Promise<void> {
+  const current = await db.question.findUnique({ where: { id } });
+  if (!current) return;
+  const question = input.question.trim();
+  if (!question) return;
+  const answer = input.answer.trim();
+  // у формі видно reference, а якщо його нема, то відповідь з пам'яті: незмінений текст не пишемо в reference
+  const shownAnswer = current.reference || current.myAnswer;
+  // пробіли по краях не рахуються зміною: інакше Save без правок позначив би картку з репо як змінену
+  const questionChanged = question !== current.question.trim();
+  const answerChanged = answer !== shownAnswer.trim();
+  if (!questionChanged && !answerChanged) return;
+
+  // updateMany: якщо картку тим часом видалили (тут чи через Sync), це не помилка
+  await db.question.updateMany({
+    where: { id },
+    data: {
+      ...(questionChanged ? { question } : {}),
+      ...(answerChanged ? { reference: answer } : {}),
+      ...(current.sourceId !== null ? { editedInApp: true } : {}),
+    },
+  });
+}
+
+/**
+ * Видалити картку. Для картки з репо лишаємо запис у DeletedCard з її ключем,
+ * інакше наступний Sync побачив би її в questions.md і створив знову.
+ */
+export async function deleteCard(id: number): Promise<void> {
+  const current = await db.question.findUnique({ where: { id } });
+  if (!current) return;
+  const { sourceId, sourceKey } = current;
+
+  if (sourceId === null || sourceKey === null) {
+    await db.question.delete({ where: { id } });
+    return;
+  }
+  await db.$transaction([
+    db.deletedCard.upsert({
+      where: { sourceId_sourceKey: { sourceId, sourceKey } },
+      update: { question: current.question },
+      create: { sourceId, sourceKey, question: current.question },
+    }),
+    db.question.delete({ where: { id } }),
+  ]);
 }

@@ -73,9 +73,9 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt, RestCard, RestPull |
+| `prisma/schema.prisma` | Topic, Question, DeletedCard, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt, RestCard, RestPull |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
-| `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану |
+| `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану; картки, змінені чи видалені в апці, не чіпає |
 | `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
 | `src/lib/plan-order.ts` | AI не може викинути чи переставити кроки плану; правки чернетки дня (прибрати, порядок, додати, перепланування) |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
@@ -104,6 +104,6 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/app/actions.ts` | усі зміни даних (server actions) |
 | `src/app/tasks` | справи поза навчанням (Task): повторювані і разові |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
-| `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats |
+| `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats; додати, змінити, видалити картку |
 | `src/app/api/sync` | автосинк з Today (route handler, щоб не блокувати кнопки) |
 | `src/bot/` | Telegram-бот: `main.ts` (polling і щоденна розсилка), `bot.ts` (картки, кнопки, захист від дублів), `format.ts` (тексти, markdown карток у Telegram HTML) |

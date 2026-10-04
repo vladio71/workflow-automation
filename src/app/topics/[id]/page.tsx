@@ -112,7 +112,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
       <h2 className="block-title">Questions <span className="faint" style={{ fontWeight: 400, fontSize: 15 }}>{topic.questions.length}</span></h2>
       <p className="faint" style={{ fontSize: 13, marginBottom: 8 }}>
         {synced
-          ? 'Cards marked "repo" come from learn/questions.md: edit them in the repo, the app pulls changes on Sync.'
+          ? 'Cards marked "repo" come from learn/questions.md. Edit or delete them on Cards → All cards: a card changed there is no longer updated by Sync.'
           : 'Close the source, write 3-5 questions, answer from memory, then fill the reference.'}
       </p>
       {topic.questions.map((question) => {
@@ -124,6 +124,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
             <span style={{ display: 'flex', gap: 4, paddingTop: 2 }}>
               <Tag color={isTask ? 'orange' : 'blue'}>{isTask ? 'Task' : 'Q'}</Tag>
               {fromRepo && <Tag color="gray">repo</Tag>}
+              {fromRepo && question.editedInApp && <Tag color="orange">edited</Tag>}
             </span>
             <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'pre-wrap' }}>
               {fromRepo ? question.question : <InlineText value={question.question} action={updateQuestionText.bind(null, question.id, 'question')} multiline />}

@@ -20,7 +20,10 @@ import { isUrl, parsePlan, parseQuestions, parseTopic, type ParsedCard, type Par
  *   - змінилась відповідь картки: оновлюється текст, розклад картки (Cards) лишається;
  *   - твоя відповідь з пам'яті (myAnswer), колір теми і розклад Sync не чіпає ніколи;
  *   - папку теми видалили з репо: її картки зникають, сама тема лишається як звичайна (з історією);
- *   - питання, додані руками в апці, Sync не чіпає.
+ *   - питання, додані руками в апці, Sync не чіпає;
+ *   - картку з репо змінили в апці (All cards → Edit): Sync більше не перезаписує її текст,
+ *     а якщо питання зникло з репо, картка лишається в апці як звичайна;
+ *   - картку з репо видалили в апці: Sync не створює її знову, поки це питання є в репо.
  */
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
@@ -225,11 +228,15 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
     async (tx) => {
     const existing = await tx.question.findMany({ where: { sourceId: source.id } });
     const byKey = new Map(existing.map((question) => [question.sourceKey, question]));
+    const deletedRows = await tx.deletedCard.findMany({ where: { sourceId: source.id }, select: { sourceKey: true } });
+    const deletedInApp = new Set(deletedRows.map((row) => row.sourceKey));
     const keysInRepo = new Set<string>();
     let added = 0;
     let updated = 0;
     let concepts = 0;
     let tasks = 0;
+    let keptEdited = 0;
+    let keptDeleted = 0;
 
     for (const folder of folders) {
       const topicData = {
@@ -250,6 +257,11 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
 
         const sourceKey = cardKey(source.repo, folder.path, card);
         keysInRepo.add(sourceKey);
+        // видалили в апці: не створюємо знову
+        if (deletedInApp.has(sourceKey)) {
+          keptDeleted += 1;
+          continue;
+        }
         const data = {
           kind: card.kind,
           question: card.question,
@@ -265,6 +277,11 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
           added += 1;
           continue;
         }
+        // змінили в апці: текст з репо більше не накладаємо
+        if (current.editedInApp) {
+          keptEdited += 1;
+          continue;
+        }
 
         const changed =
           current.question !== data.question ||
@@ -274,13 +291,30 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
           current.topicId !== data.topicId;
         if (!changed) continue;
 
-        await tx.question.update({ where: { id: current.id }, data });
-        updated += 1;
+        // умова в самому запиті: якщо картку встигли змінити чи видалити в апці, поки йде Sync, її не чіпаємо
+        const result = await tx.question.updateMany({ where: { id: current.id, editedInApp: false }, data });
+        updated += result.count;
       }
     }
 
-    const removedIds = existing.filter((question) => !keysInRepo.has(question.sourceKey ?? '')).map((question) => question.id);
-    if (removedIds.length > 0) await tx.question.deleteMany({ where: { id: { in: removedIds } } });
+    const gone = existing.filter((question) => !keysInRepo.has(question.sourceKey ?? ''));
+    const removedIds = gone.filter((question) => !question.editedInApp).map((question) => question.id);
+    if (removedIds.length > 0) await tx.question.deleteMany({ where: { id: { in: removedIds }, editedInApp: false } });
+
+    // змінена в апці картка, якої в репо вже нема: не видаляємо, далі вона живе як звичайна картка апки
+    const detachedIds = gone.filter((question) => question.editedInApp).map((question) => question.id);
+    if (detachedIds.length > 0) {
+      await tx.question.updateMany({
+        where: { id: { in: detachedIds } },
+        data: { sourceId: null, sourceKey: null, editedInApp: false },
+      });
+    }
+
+    // записи про видалені в апці картки, яких у репо вже нема, більше не потрібні
+    const staleDeleted = [...deletedInApp].filter((sourceKey) => !keysInRepo.has(sourceKey));
+    if (staleDeleted.length > 0) {
+      await tx.deletedCard.deleteMany({ where: { sourceId: source.id, sourceKey: { in: staleDeleted } } });
+    }
 
     // теми, чиї папки зникли з репо: від'єднуємо, історія і кольори лишаються
     const livePaths = folders.map((folder) => folder.path);
@@ -315,7 +349,12 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
 
     const topicsLabel = folders.length === 1 ? '' : `${folders.length} topics · `;
     const planLabel = plan ? ` · plan: ${plan.steps.length} steps` : '';
-    return `${topicsLabel}${concepts} Q · ${tasks} tasks (+${added} new, ${updated} updated, ${removedIds.length} removed)${planLabel}`;
+    const inAppParts: string[] = [];
+    if (keptEdited > 0) inAppParts.push(`${keptEdited} edited in app`);
+    if (keptDeleted > 0) inAppParts.push(`${keptDeleted} deleted in app`);
+    if (detachedIds.length > 0) inAppParts.push(`${detachedIds.length} edited kept after leaving the repo`);
+    const inAppLabel = inAppParts.length > 0 ? ` · ${inAppParts.join(', ')}` : '';
+    return `${topicsLabel}${concepts} Q · ${tasks} tasks (+${added} new, ${updated} updated, ${removedIds.length} removed)${inAppLabel}${planLabel}`;
     },
     // багато дрібних upsert-ів (картки, кроки плану): дефолтних 5 с може не вистачити
     { timeout: 30_000 },

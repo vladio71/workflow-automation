@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CardBrowser, type BrowseCard } from '@/components/CardBrowser';
 import { CardReviewSession, type ReviewCard } from '@/components/CardReviewSession';
 import { NEW_PER_DAY, getAllCards, getCardQueue, type CardView } from '@/lib/cards';
+import { db } from '@/lib/db';
 import { relativeDay } from '@/lib/schedule';
 
 interface CardsPageProps {
@@ -18,7 +19,11 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
   const { tab, topic } = await searchParams;
   const showAll = tab === 'all';
   const now = new Date();
-  const [queue, all] = await Promise.all([getCardQueue(now), getAllCards()]);
+  const [queue, all, topics] = await Promise.all([
+    getCardQueue(now),
+    getAllCards(),
+    db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  ]);
   const todayCount = queue.due.length + queue.fresh.length;
 
   const reviewCards: ReviewCard[] = [...queue.due, ...queue.fresh].map((card) => ({
@@ -36,6 +41,8 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
     topicName: card.topicName,
     dueLabel: dueLabel(card, now),
     lapses: card.lapses,
+    fromRepo: card.fromRepo,
+    editedInApp: card.editedInApp,
   }));
 
   return (
@@ -45,6 +52,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
       <p className="page-sub">
         Your Q&amp;A instead of Anki. <b>Review</b> shows what is due today on its schedule (plus up to {NEW_PER_DAY} new cards a day).{' '}
         <b>All cards</b> shows everything, any time: browse, search, go through a topic without touching the schedule.
+        Add, edit and delete cards there too.
       </p>
 
       <div className="db-toolbar">
@@ -56,7 +64,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
 
       <div style={{ marginTop: 16 }}>
         {showAll ? (
-          <CardBrowser cards={browseCards} initialTopicId={topic ? Number(topic) : null} />
+          <CardBrowser cards={browseCards} initialTopicId={topic ? Number(topic) : null} topics={topics} />
         ) : (
           <CardReviewSession cards={reviewCards} />
         )}

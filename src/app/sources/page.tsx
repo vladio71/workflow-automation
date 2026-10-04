@@ -36,8 +36,9 @@ export default async function SourcesPage() {
       <h1 className="page-title">Sources</h1>
       <p className="page-sub">
         Repos with a <code>learn/</code> folder: <code>learn/topic.md</code> makes one topic for the repo,
-        <code>learn/&lt;module&gt;/topic.md</code> makes a topic per folder. Cards are edited in the repo, the app pulls them on Sync
-        and when Today opens (at most every 10 min, and only if there are new commits).
+        <code>learn/&lt;module&gt;/topic.md</code> makes a topic per folder. The app pulls cards on Sync
+        and when Today opens (at most every 10 min, and only if there are new commits). A card you edit or delete on Cards → All cards
+        is left alone by Sync after that.
       </p>
 
       <div className="db-toolbar">

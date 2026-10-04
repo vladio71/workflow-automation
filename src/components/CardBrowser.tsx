@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { finishCardSession, gradeCard } from '@/app/actions';
+import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
+import { finishCardSession, gradeCard, removeCard } from '@/app/actions';
+import { EditCardForm, NewCardForm, type TopicChoice } from '@/components/CardForms';
 import { Markdown } from '@/components/Markdown';
 
 export interface BrowseCard {
@@ -13,11 +14,17 @@ export interface BrowseCard {
   /** "new", "today", "in 3d" */
   dueLabel: string;
   lapses: number;
+  /** картка прийшла з репо */
+  fromRepo: boolean;
+  /** картку з репо змінили в апці: Sync її більше не оновлює */
+  editedInApp: boolean;
 }
 
 interface CardBrowserProps {
   cards: BrowseCard[];
   initialTopicId: number | null;
+  /** усі теми, для вибору в New card (у фільтрі тільки ті, де вже є картки) */
+  topics: TopicChoice[];
 }
 
 interface TopicOption {
@@ -26,13 +33,25 @@ interface TopicOption {
   count: number;
 }
 
-/** Усі картки без розкладу: фільтр, пошук, показати відповіді, пройти вибрані підряд. */
-export function CardBrowser({ cards, initialTopicId }: CardBrowserProps) {
+const ROW_STYLE: CSSProperties = { padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 };
+
+/** Усі картки без розкладу: фільтр, пошук, показати відповіді, пройти вибрані підряд; додати, змінити, видалити. */
+export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBrowserProps) {
   const [topicId, setTopicId] = useState<number | null>(initialTopicId);
   const [search, setSearch] = useState('');
   const [showAnswers, setShowAnswers] = useState(false);
   const [onlyForgotten, setOnlyForgotten] = useState(false);
   const [practice, setPractice] = useState<BrowseCard[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [, startTransition] = useTransition();
+
+  const remove = (card: BrowseCard): void => {
+    const title = card.question.length > 80 ? `${card.question.slice(0, 80)}…` : card.question;
+    const note = card.fromRepo ? '\n\nIt comes from the repo: Sync will not bring it back.' : '';
+    if (!window.confirm(`Delete this card?\n\n${title}${note}`)) return;
+    startTransition(() => removeCard(card.id));
+  };
 
   const topics = useMemo<TopicOption[]>(() => {
     const byTopic = new Map<string, TopicOption>();
@@ -94,23 +113,39 @@ export function CardBrowser({ cards, initialTopicId }: CardBrowserProps) {
           <input type="checkbox" checked={onlyForgotten} onChange={(event) => setOnlyForgotten(event.target.checked)} /> Only ever forgotten
         </label>
         <span style={{ flex: 1 }} />
+        <button className="btn" data-testid="new-card-button" disabled={adding} onClick={() => setAdding(true)}>+ New card</button>
         <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(filtered)}>▶ Go through {filtered.length}</button>
         <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(shuffle(filtered))}>🔀 Shuffled</button>
       </div>
 
+      {adding && <NewCardForm topics={allTopics} defaultTopicId={topicId} onClose={() => setAdding(false)} />}
+
       {filtered.length === 0 && <p className="faint">No cards match.</p>}
-      {filtered.map((card) => (
-        <details key={card.id} open={showAnswers} className="row-hover" style={{ padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 }}>
-          <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', gap: 10, alignItems: 'baseline' }}>
-            <span style={{ flex: 1, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{card.question}</span>
-            {card.lapses > 0 && <span className="tag red" title="Times forgotten">×{card.lapses}</span>}
-            <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{card.topicName} · {card.dueLabel}</span>
-          </summary>
-          <div style={{ marginTop: 6, fontSize: 14 }}>
-            {card.answer ? <Markdown>{card.answer}</Markdown> : <span className="faint">No answer yet.</span>}
+      {filtered.map((card) =>
+        editingId === card.id ? (
+          <div key={card.id} style={{ ...ROW_STYLE, padding: '10px 6px 12px' }}>
+            <EditCardForm card={card} onDone={() => setEditingId(null)} />
           </div>
-        </details>
-      ))}
+        ) : (
+          <details key={card.id} open={showAnswers} className="row-hover" style={ROW_STYLE} data-testid={`card-row-${card.id}`}>
+            <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+              <span style={{ flex: 1, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{card.question}</span>
+              {card.editedInApp && <span className="tag orange" title="Changed in the app: Sync no longer updates this card from the repo">edited</span>}
+              {card.lapses > 0 && <span className="tag red" title="Times forgotten">×{card.lapses}</span>}
+              <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{card.topicName} · {card.dueLabel}</span>
+              <span style={{ display: 'flex', gap: 2 }}>
+                <button type="button" className="btn sm ghost" title="Edit" aria-label="Edit card" data-testid={`card-edit-${card.id}`}
+                  onClick={(event) => { event.preventDefault(); setEditingId(card.id); }}>✎</button>
+                <button type="button" className="btn sm ghost" title="Delete" aria-label="Delete card" data-testid={`card-delete-${card.id}`}
+                  onClick={(event) => { event.preventDefault(); remove(card); }}>✕</button>
+              </span>
+            </summary>
+            <div style={{ marginTop: 6, fontSize: 14 }}>
+              {card.answer ? <Markdown>{card.answer}</Markdown> : <span className="faint">No answer yet.</span>}
+            </div>
+          </details>
+        ),
+      )}
     </div>
   );
 }

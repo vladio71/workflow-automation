@@ -110,10 +110,26 @@ model Question {
   sourceKey String?     @unique
   sourceId  Int?
   syncSource Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  /// картку з репо змінили в апці (All cards → Edit): Sync більше не перезаписує її текст
+  editedInApp Boolean   @default(false)
   topicId   Int?
   topic     Topic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
   recalls   RecallLog[]
   createdAt DateTime    @default(now())
+}
+
+/// Картка з репо, яку видалили в апці. Sync бачить її ключ тут і не створює картку знову.
+model DeletedCard {
+  id        Int      @id @default(autoincrement())
+  sourceId  Int
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// той самий ключ, що був у Question.sourceKey
+  sourceKey String
+  /// текст питання на момент видалення: щоб у базі було видно, що саме прибрали
+  question  String
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, sourceKey])
 }
 
 /// Одне відтворення з пам'яті: що написав, що сказав AI, який колір поставив.
@@ -264,6 +280,7 @@ model Source {
   topics       Topic[]
   planSteps    PlanStep[]
   questions    Question[]
+  deletedCards DeletedCard[]
   createdAt    DateTime   @default(now())
 }
 

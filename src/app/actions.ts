@@ -14,7 +14,7 @@ import {
   type MoveDirection,
 } from '@/lib/plan-order';
 import { getStudyPlans, markAttemptDone } from '@/lib/study-plan';
-import { getCardCounts, reviewCard, type ReviewInput } from '@/lib/cards';
+import { createCard, deleteCard, getCardCounts, reviewCard, updateCard, type CardTextInput, type NewCardInput, type ReviewInput } from '@/lib/cards';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
 import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels';
@@ -93,7 +93,7 @@ export async function createQuestion(topicId: number | null, formData: FormData)
 
 export async function updateQuestionText(id: number, field: QuestionTextField, value: string): Promise<void> {
   const question = await db.question.findUniqueOrThrow({ where: { id } });
-  // картки з репо редагуються в репо; в апці тільки твоя відповідь з пам'яті
+  // на цих сторінках картки з репо тільки для читання (крім твоєї відповіді з пам'яті); їх текст міняється через All cards → Edit
   if (question.sourceId !== null && field !== 'myAnswer') return;
   await db.question.update({ where: { id }, data: { [field]: value } });
   refresh();
@@ -101,7 +101,8 @@ export async function updateQuestionText(id: number, field: QuestionTextField, v
 
 
 export async function deleteQuestion(id: number): Promise<void> {
-  await db.question.delete({ where: { id } });
+  // через deleteCard: для питання з репо лишається запис, щоб Sync не створив його знову
+  await deleteCard(id);
   refresh();
 }
 
@@ -613,7 +614,7 @@ export async function addSource(formData: FormData): Promise<void> {
 /** Від'єднати репо. Тема і картки лишаються в апці як звичайні (їх можна редагувати руками). */
 export async function removeSource(id: number): Promise<void> {
   await db.$transaction([
-    db.question.updateMany({ where: { sourceId: id }, data: { sourceKey: null } }),
+    db.question.updateMany({ where: { sourceId: id }, data: { sourceKey: null, editedInApp: false } }),
     db.source.delete({ where: { id } }),
   ]);
   refresh();
@@ -657,6 +658,25 @@ export async function gradeCard(input: ReviewInput): Promise<{ remaining: number
 }
 
 export async function finishCardSession(): Promise<void> {
+  refresh();
+}
+
+/** All cards → New card. Повертає false, якщо питання порожнє і картку не створено. */
+export async function addCard(input: NewCardInput): Promise<boolean> {
+  const id = await createCard(input);
+  if (id !== null) refresh();
+  return id !== null;
+}
+
+/** All cards → Edit. Картка з репо після цього більше не оновлюється з questions.md. */
+export async function editCard(id: number, input: CardTextInput): Promise<void> {
+  await updateCard(id, input);
+  refresh();
+}
+
+/** All cards → Delete. Картку з репо Sync не поверне. */
+export async function removeCard(id: number): Promise<void> {
+  await deleteCard(id);
   refresh();
 }
 

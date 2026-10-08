@@ -53,14 +53,16 @@ export interface Streak {
  * Поточний стрік не рветься, якщо сьогодні ще нічого не зроблено: рахуємо до вчора.
  */
 export async function getStreak(now: Date = new Date()): Promise<Streak> {
-  const [logDays, dailyDays] = await Promise.all([
+  const [logDays, dailyDays, checkDays] = await Promise.all([
     db.activityLog.findMany({ distinct: ['day'], select: { day: true } }),
     db.dailyLog.findMany({
       where: { OR: [{ cardsDone: true }, { recallDone: true }, { outLoud: true }] },
       select: { day: true },
     }),
+    // галочки пунктів Daily, які додав сам
+    db.dailyCheck.findMany({ distinct: ['day'], select: { day: true } }),
   ]);
-  const days = new Set<string>([...logDays, ...dailyDays].map((row) => isoDay(row.day)));
+  const days = new Set<string>([...logDays, ...dailyDays, ...checkDays].map((row) => isoDay(row.day)));
 
   const today = dayKey(now);
   const activeToday = days.has(isoDay(today));

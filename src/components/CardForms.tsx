@@ -1,12 +1,9 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
-import { addCard, editCard } from '@/app/actions';
-
-export interface TopicChoice {
-  id: number;
-  name: string;
-}
+import { useRouter } from 'next/navigation';
+import { useLayoutEffect, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
+import { addCard, chooseCardCategory, editCard, removeCard } from '@/app/actions';
+import { CategoryPicker, type CategoryOption } from '@/components/CategoryPicker';
 
 interface AutoTextareaProps {
   value: string;
@@ -61,22 +58,23 @@ const LABEL_STYLE: CSSProperties = { fontSize: 12, margin: '8px 0 4px' };
 const FORM_STYLE: CSSProperties = { border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px 12px', marginBottom: 12 };
 
 interface NewCardFormProps {
-  topics: TopicChoice[];
-  /** тема, вибрана у фільтрі списку: нова картка за замовчуванням іде в неї */
+  categories: CategoryOption[];
+  /** категорія, з якої прийшов: нова картка за замовчуванням іде в неї */
   defaultTopicId: number | null;
-  onClose: () => void;
+  /** куди повертає Close і Esc */
+  backHref: string;
 }
 
-/** All cards → New card: питання, відповідь і тема одразу. Форма лишається відкритою, щоб додати кілька підряд. */
-export function NewCardForm({ topics, defaultTopicId, onClose }: NewCardFormProps) {
+/** Сторінка New card: питання, відповідь і категорія. Форма лишається відкритою, щоб додати кілька підряд. */
+export function NewCardForm({ categories, defaultTopicId, backHref }: NewCardFormProps) {
+  const router = useRouter();
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [topicId, setTopicId] = useState<number | null>(defaultTopicId);
   const [addedCount, setAddedCount] = useState(0);
   const [pending, startTransition] = useTransition();
   const questionRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => setTopicId(defaultTopicId), [defaultTopicId]);
+  const close = (): void => router.push(backHref);
 
   const canSubmit = question.trim().length > 0 && !pending;
   const submit = (): void => {
@@ -93,22 +91,19 @@ export function NewCardForm({ topics, defaultTopicId, onClose }: NewCardFormProp
 
   return (
     <div style={FORM_STYLE} data-testid="new-card-form">
-      <div className="faint" style={{ ...LABEL_STYLE, marginTop: 0 }}>Question</div>
+      <div className="faint" style={{ ...LABEL_STYLE, marginTop: 0 }}>Category</div>
+      <CategoryPicker value={topicId} categories={categories} onChoose={setTopicId} testId="new-card-category" />
+      <div className="faint" style={LABEL_STYLE}>Question</div>
       <AutoTextarea value={question} placeholder="What do you want to be asked?" testId="new-card-question" autoFocus
-        areaRef={questionRef} onChange={setQuestion} onSubmit={submit} onCancel={onClose} />
+        areaRef={questionRef} onChange={setQuestion} onSubmit={submit} onCancel={close} />
       <div className="faint" style={LABEL_STYLE}>Answer</div>
       <AutoTextarea value={answer} placeholder="The answer you want to remember (markdown works)" testId="new-card-answer"
-        onChange={setAnswer} onSubmit={submit} onCancel={onClose} />
+        onChange={setAnswer} onSubmit={submit} onCancel={close} />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-        <select className="input" style={{ width: 'auto', maxWidth: 320 }} data-testid="new-card-topic" value={topicId === null ? '' : String(topicId)}
-          onChange={(event) => setTopicId(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">No topic</option>
-          {topics.map((topic) => <option key={topic.id} value={String(topic.id)}>{topic.name}</option>)}
-        </select>
         <button type="button" className="btn primary" data-testid="new-card-submit" disabled={!canSubmit} onClick={submit}>
           Add card <span className="kbd">Ctrl+Enter</span>
         </button>
-        <button type="button" className="btn ghost" onClick={onClose}>Close</button>
+        <button type="button" className="btn ghost" onClick={close}>Close <span className="kbd">Esc</span></button>
         {addedCount > 0 && <span className="faint" style={{ fontSize: 13 }} data-testid="new-card-added">✓ {addedCount} added, new cards come up in Review</span>}
       </div>
     </div>
@@ -128,7 +123,7 @@ interface EditCardFormProps {
   onDone: () => void;
 }
 
-/** All cards → Edit: питання і відповідь на місці. Розклад картки не міняється. */
+/** Питання і відповідь картки. Розклад картки не міняється. */
 export function EditCardForm({ card, onDone }: EditCardFormProps) {
   const [question, setQuestion] = useState(card.question);
   const [answer, setAnswer] = useState(card.answer);
@@ -161,6 +156,62 @@ export function EditCardForm({ card, onDone }: EditCardFormProps) {
           Save <span className="kbd">Ctrl+Enter</span>
         </button>
         <button type="button" className="btn ghost" onClick={onDone}>Cancel <span className="kbd">Esc</span></button>
+      </div>
+    </div>
+  );
+}
+
+export interface EditorCard extends EditableCard {
+  topicId: number | null;
+  topicName: string;
+}
+
+interface CardEditorProps {
+  card: EditorCard;
+  categories: CategoryOption[];
+  /** куди повертає Save, Cancel і Delete */
+  backHref: string;
+}
+
+/** Сторінка картки: категорія, питання, відповідь, видалення. */
+export function CardEditor({ card, categories, backHref }: CardEditorProps) {
+  const router = useRouter();
+  const [topicId, setTopicId] = useState<number | null>(card.topicId);
+  const [, startTransition] = useTransition();
+  const back = (): void => router.push(backHref);
+
+  const choose = (next: number | null): void => {
+    setTopicId(next);
+    startTransition(async () => {
+      const changed = await chooseCardCategory(card.id, next);
+      if (!changed) setTopicId(card.topicId);
+    });
+  };
+
+  const remove = (): void => {
+    const note = card.fromRepo ? '\n\nIt comes from the repo: Sync will not bring it back.' : '';
+    if (!window.confirm(`Delete this card?${note}`)) return;
+    startTransition(async () => {
+      await removeCard(card.id);
+      back();
+    });
+  };
+
+  return (
+    <div style={FORM_STYLE}>
+      <div className="faint" style={{ ...LABEL_STYLE, marginTop: 0 }}>Category</div>
+      {card.fromRepo ? (
+        <div style={{ fontSize: 14 }}>
+          {card.topicName} <span className="faint" style={{ fontSize: 12 }}>· set by the card&apos;s folder in the repo</span>
+        </div>
+      ) : (
+        <CategoryPicker value={topicId} categories={categories} onChoose={choose} testId="card-category" />
+      )}
+      <div style={{ marginTop: 8 }}>
+        <EditCardForm card={card} onDone={back} />
+      </div>
+      <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 10 }}>
+        <button type="button" className="btn ghost sm" data-testid="card-delete" onClick={remove}>✕ Delete card</button>
       </div>
     </div>
   );

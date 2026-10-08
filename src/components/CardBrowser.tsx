@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
-import { finishCardSession, gradeCard, removeCard } from '@/app/actions';
-import { EditCardForm, NewCardForm, type TopicChoice } from '@/components/CardForms';
+import Link from 'next/link';
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
+import { chooseCardCategory, finishCardSession, gradeCard, removeCard } from '@/app/actions';
+import { CategoryPicker, type CategoryOption } from '@/components/CategoryPicker';
 import { Markdown } from '@/components/Markdown';
+import { categoryHref } from '@/lib/card-links';
 
 export interface BrowseCard {
   id: number;
@@ -11,7 +13,7 @@ export interface BrowseCard {
   answer: string;
   topicId: number | null;
   topicName: string;
-  /** "new", "today", "in 3d" */
+  /** "new", "due", "in 3d" */
   dueLabel: string;
   lapses: number;
   /** картка прийшла з репо */
@@ -20,11 +22,17 @@ export interface BrowseCard {
   editedInApp: boolean;
 }
 
+/** null у topicId = картки без категорії */
+export interface LockedCategory {
+  topicId: number | null;
+}
+
 interface CardBrowserProps {
   cards: BrowseCard[];
-  initialTopicId: number | null;
-  /** усі теми, для вибору в New card (у фільтрі тільки ті, де вже є картки) */
-  topics: TopicChoice[];
+  /** усі категорії для вибору на картці, спершу нещодавні */
+  categories: CategoryOption[];
+  /** сторінка однієї категорії: фільтра категорій нема, картки вже тільки її */
+  locked?: LockedCategory;
 }
 
 interface TopicOption {
@@ -33,17 +41,26 @@ interface TopicOption {
   count: number;
 }
 
-const ROW_STYLE: CSSProperties = { padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 };
+/** фільтр "усі категорії"; окреме значення, бо null уже означає "без категорії" */
+const ALL = 'all';
 
-/** Усі картки без розкладу: фільтр, пошук, показати відповіді, пройти вибрані підряд; додати, змінити, видалити. */
-export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBrowserProps) {
-  const [topicId, setTopicId] = useState<number | null>(initialTopicId);
+const ROW_STYLE: CSSProperties = { padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 };
+const DUE_STYLE: CSSProperties = { width: 78, textAlign: 'right', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 };
+
+function topicKey(topicId: number | null): string {
+  return topicId === null ? 'none' : String(topicId);
+}
+
+/**
+ * Картки без розкладу, згруповані по категоріях: пошук, показати відповіді, пройти вибрані підряд.
+ * Клік по картці відкриває її сторінку (правка), клік по категорії картки, доданої руками, міняє категорію.
+ */
+export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
+  const [filter, setFilter] = useState<string>(ALL);
   const [search, setSearch] = useState('');
   const [showAnswers, setShowAnswers] = useState(false);
   const [onlyForgotten, setOnlyForgotten] = useState(false);
   const [practice, setPractice] = useState<BrowseCard[] | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [, startTransition] = useTransition();
 
   const remove = (card: BrowseCard): void => {
@@ -56,7 +73,7 @@ export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBr
   const topics = useMemo<TopicOption[]>(() => {
     const byTopic = new Map<string, TopicOption>();
     for (const card of cards) {
-      const key = String(card.topicId);
+      const key = topicKey(card.topicId);
       const existing = byTopic.get(key);
       if (existing) existing.count += 1;
       else byTopic.set(key, { id: card.topicId, name: card.topicName, count: 1 });
@@ -67,12 +84,12 @@ export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBr
   const filtered = useMemo<BrowseCard[]>(() => {
     const needle = search.trim().toLowerCase();
     return cards.filter((card) => {
-      if (topicId !== null && card.topicId !== topicId) return false;
+      if (filter !== ALL && topicKey(card.topicId) !== filter) return false;
       if (onlyForgotten && card.lapses === 0) return false;
       if (!needle) return true;
       return card.question.toLowerCase().includes(needle) || card.answer.toLowerCase().includes(needle);
     });
-  }, [cards, topicId, search, onlyForgotten]);
+  }, [cards, filter, search, onlyForgotten]);
 
   if (practice) {
     return <CardPractice cards={practice} onExit={() => setPractice(null)} />;
@@ -92,16 +109,23 @@ export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBr
     return copy;
   };
 
+  const shownCounts = new Map<string, number>();
+  for (const card of filtered) shownCounts.set(topicKey(card.topicId), (shownCounts.get(topicKey(card.topicId)) ?? 0) + 1);
+  const newCardHref = locked
+    ? `/cards/new?topic=${topicKey(locked.topicId)}`
+    : filter === ALL ? '/cards/new' : `/cards/new?topic=${filter}`;
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
-        <select className="input" style={{ width: 'auto', maxWidth: 320 }} value={topicId === null ? '' : String(topicId)}
-          onChange={(event) => setTopicId(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">All topics ({cards.length})</option>
-          {topics.map((topic) => (
-            <option key={String(topic.id)} value={topic.id === null ? '' : String(topic.id)}>{topic.name} ({topic.count})</option>
-          ))}
-        </select>
+        {!locked && (
+          <select className="input" style={{ width: 'auto', maxWidth: 320 }} value={filter} onChange={(event) => setFilter(event.target.value)}>
+            <option value={ALL}>All categories ({cards.length})</option>
+            {topics.map((topic) => (
+              <option key={topicKey(topic.id)} value={topicKey(topic.id)}>{topic.name} ({topic.count})</option>
+            ))}
+          </select>
+        )}
         <input className="input" style={{ flex: 1, minWidth: 180 }} placeholder="Search questions and answers" value={search}
           onChange={(event) => setSearch(event.target.value)} />
       </div>
@@ -113,39 +137,51 @@ export function CardBrowser({ cards, initialTopicId, topics: allTopics }: CardBr
           <input type="checkbox" checked={onlyForgotten} onChange={(event) => setOnlyForgotten(event.target.checked)} /> Only ever forgotten
         </label>
         <span style={{ flex: 1 }} />
-        <button className="btn" data-testid="new-card-button" disabled={adding} onClick={() => setAdding(true)}>+ New card</button>
+        <Link className="btn" data-testid="new-card-button" href={newCardHref}>+ New card</Link>
         <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(filtered)}>▶ Go through {filtered.length}</button>
         <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(shuffle(filtered))}>🔀 Shuffled</button>
       </div>
 
-      {adding && <NewCardForm topics={allTopics} defaultTopicId={topicId} onClose={() => setAdding(false)} />}
-
       {filtered.length === 0 && <p className="faint">No cards match.</p>}
-      {filtered.map((card) =>
-        editingId === card.id ? (
-          <div key={card.id} style={{ ...ROW_STYLE, padding: '10px 6px 12px' }}>
-            <EditCardForm card={card} onDone={() => setEditingId(null)} />
-          </div>
-        ) : (
-          <details key={card.id} open={showAnswers} className="row-hover" style={ROW_STYLE} data-testid={`card-row-${card.id}`}>
-            <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', gap: 10, alignItems: 'baseline' }}>
-              <span style={{ flex: 1, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{card.question}</span>
-              {card.editedInApp && <span className="tag orange" title="Changed in the app: Sync no longer updates this card from the repo">edited</span>}
-              {card.lapses > 0 && <span className="tag red" title="Times forgotten">×{card.lapses}</span>}
-              <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{card.topicName} · {card.dueLabel}</span>
-              <span style={{ display: 'flex', gap: 2 }}>
-                <button type="button" className="btn sm ghost" title="Edit" aria-label="Edit card" data-testid={`card-edit-${card.id}`}
-                  onClick={(event) => { event.preventDefault(); setEditingId(card.id); }}>✎</button>
+      {filtered.map((card, index) => {
+        const previous = filtered[index - 1];
+        const startsGroup = !locked && (previous === undefined || previous.topicId !== card.topicId);
+        return (
+          <Fragment key={card.id}>
+            {startsGroup && (
+              <div className="card-group" data-testid={`card-group-${topicKey(card.topicId)}`}>
+                <Link href={categoryHref(card.topicId)}>{card.topicName}</Link>
+                <span className="faint">{shownCounts.get(topicKey(card.topicId)) ?? 0}</span>
+              </div>
+            )}
+            <div className="row-hover" style={ROW_STYLE} data-testid={`card-row-${card.id}`}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <Link href={`/cards/${card.id}`} className="card-question" title="Open the card">{card.question}</Link>
+                {card.editedInApp && <span className="tag orange" title="Changed in the app: Sync no longer updates this card from the repo">edited</span>}
+                {card.lapses > 0 && <span className="tag red" title="Times forgotten">×{card.lapses}</span>}
+                {!card.fromRepo && (
+                  <CategoryPicker
+                    value={card.topicId}
+                    categories={categories}
+                    testId={`card-category-${card.id}`}
+                    onChoose={(topicId) => startTransition(async () => { await chooseCardCategory(card.id, topicId); })}
+                  />
+                )}
+                <span className={card.dueLabel === 'due' ? '' : 'faint'} style={{ ...DUE_STYLE, color: card.dueLabel === 'due' ? '#eb5757' : undefined }}>
+                  {card.dueLabel}
+                </span>
                 <button type="button" className="btn sm ghost" title="Delete" aria-label="Delete card" data-testid={`card-delete-${card.id}`}
-                  onClick={(event) => { event.preventDefault(); remove(card); }}>✕</button>
-              </span>
-            </summary>
-            <div style={{ marginTop: 6, fontSize: 14 }}>
-              {card.answer ? <Markdown>{card.answer}</Markdown> : <span className="faint">No answer yet.</span>}
+                  onClick={() => remove(card)}>✕</button>
+              </div>
+              {showAnswers && (
+                <div style={{ marginTop: 6, fontSize: 14 }}>
+                  {card.answer ? <Markdown>{card.answer}</Markdown> : <span className="faint">No answer yet.</span>}
+                </div>
+              )}
             </div>
-          </details>
-        ),
-      )}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

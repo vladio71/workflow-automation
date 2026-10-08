@@ -192,6 +192,40 @@ export function moveInDraft(items: PlanItem[], itemId: string, direction: MoveDi
   return result;
 }
 
+/** Послідовність кроків кожного навчального плану: "plan:3" -> id кроків у порядку списку. */
+function planStepOrder(items: PlanItem[]): Map<string, string[]> {
+  const order = new Map<string, string[]>();
+  for (const item of items) {
+    if (item.kind !== 'PLAN' || item.group === undefined) continue;
+    const steps = order.get(item.group) ?? [];
+    steps.push(item.id);
+    order.set(item.group, steps);
+  }
+  return order;
+}
+
+/**
+ * Перетягнути пункт на позицію toIndex (індекс у вже готовому списку).
+ * null = так не можна: кроки одного плану помінялись би місцями.
+ */
+export function moveToIndex(items: PlanItem[], itemId: string, toIndex: number): PlanItem[] | null {
+  const from = items.findIndex((item) => item.id === itemId);
+  const moved = items[from];
+  if (!moved) return items;
+  const target = Math.min(items.length - 1, Math.max(0, Math.round(toIndex)));
+  if (target === from) return items;
+  const result = [...items];
+  result.splice(from, 1);
+  result.splice(target, 0, moved);
+
+  const before = planStepOrder(items);
+  const after = planStepOrder(result);
+  for (const [group, steps] of before) {
+    if ((after.get(group) ?? []).join('|') !== steps.join('|')) return null;
+  }
+  return result;
+}
+
 export function clampMinutes(minutes: number): number {
   if (!Number.isFinite(minutes)) return MIN_ITEM_MINUTES;
   return Math.min(MAX_ITEM_MINUTES, Math.max(MIN_ITEM_MINUTES, Math.round(minutes)));

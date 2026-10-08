@@ -61,7 +61,7 @@ function toView(question: QuestionWithTopic): CardView {
     question: question.question,
     answer: question.reference || question.myAnswer,
     topicId: question.topic?.id ?? null,
-    topicName: question.topic?.name ?? 'No topic',
+    topicName: question.topic?.name ?? NO_CATEGORY_NAME,
     isNew: question.cardDueAt === null,
     dueAt: question.cardDueAt,
     interval: question.cardInterval,
@@ -79,12 +79,21 @@ export interface CardQueue {
   reviewedToday: number;
 }
 
-/** Черга на сьогодні: усі, у кого настав термін (найстаріші першими) + нові в межах ліміту. */
-export async function getCardQueue(now: Date = new Date()): Promise<CardQueue> {
+/** Одна категорія карток: тема або "без категорії" (topicId: null). */
+export interface CategoryFilter {
+  topicId: number | null;
+}
+
+/**
+ * Черга на сьогодні: усі, у кого настав термін (найстаріші першими) + нові в межах ліміту.
+ * З filter у черзі тільки картки однієї категорії; ліміт нових на день лишається спільним.
+ */
+export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilter): Promise<CardQueue> {
   const from = startOfDay(now);
+  const inCategory = filter ? { topicId: filter.topicId } : {};
   const [due, newSeenToday, reviewedToday] = await Promise.all([
     db.question.findMany({
-      where: { kind: 'CONCEPT', cardDueAt: { lte: endOfDay(now) } },
+      where: { kind: 'CONCEPT', cardDueAt: { lte: endOfDay(now) }, ...inCategory },
       include: { topic: { select: { id: true, name: true } } },
       orderBy: { cardDueAt: 'asc' },
     }),
@@ -96,7 +105,7 @@ export async function getCardQueue(now: Date = new Date()): Promise<CardQueue> {
     newLeft === 0
       ? []
       : await db.question.findMany({
-          where: { kind: 'CONCEPT', cardDueAt: null },
+          where: { kind: 'CONCEPT', cardDueAt: null, ...inCategory },
           include: { topic: { select: { id: true, name: true } } },
           orderBy: { id: 'asc' },
           take: newLeft,
@@ -161,6 +170,7 @@ export async function reviewCard(input: ReviewInput, now: Date = new Date()): Pr
         ]
       : []),
   ]);
+  if (question.topicId !== null) await touchCategory(question.topicId, now);
   await syncCardsActivity(now);
 }
 
@@ -200,6 +210,7 @@ export async function createCard(input: NewCardInput): Promise<number | null> {
   const created = await db.question.create({
     data: { kind: 'CONCEPT', question, reference: input.answer.trim(), topicId: input.topicId },
   });
+  if (input.topicId !== null) await touchCategory(input.topicId);
   return created.id;
 }
 
@@ -253,4 +264,105 @@ export async function deleteCard(id: number): Promise<void> {
     }),
     db.question.delete({ where: { id } }),
   ]);
+}
+
+// ------------------------------------------------------------------ категорії карток
+
+/**
+ * Категорія картки = її тема (Topic). Окремої таблиці нема: картки з репо вже розкладені по темах,
+ * а картці, доданій руками, тему вибираєш сам (або створюєш нову прямо у виборі).
+ */
+export interface CardCategory {
+  /** null = картки без категорії */
+  id: number | null;
+  name: string;
+  total: number;
+  /** термін настав (сьогодні або раніше) */
+  due: number;
+  /** ще жодного разу не показані */
+  fresh: number;
+  /** найраніший термін серед уже показаних карток: коли категорія наступного разу стане due */
+  nextDueAt: Date | null;
+}
+
+export const NO_CATEGORY_NAME = 'No category';
+
+/** Категорії, в яких є картки, з лічильниками. Спершу ті, де є що повторювати, далі за назвою. */
+export async function getCardCategories(now: Date = new Date()): Promise<CardCategory[]> {
+  const until = endOfDay(now);
+  const questions = await db.question.findMany({
+    where: { kind: 'CONCEPT' },
+    select: { topicId: true, cardDueAt: true, topic: { select: { name: true } } },
+  });
+  const byKey = new Map<string, CardCategory>();
+  for (const question of questions) {
+    const key = String(question.topicId);
+    let category = byKey.get(key);
+    if (!category) {
+      category = { id: question.topicId, name: question.topic?.name ?? NO_CATEGORY_NAME, total: 0, due: 0, fresh: 0, nextDueAt: null };
+      byKey.set(key, category);
+    }
+    category.total += 1;
+    const dueAt = question.cardDueAt;
+    if (dueAt === null) {
+      category.fresh += 1;
+      continue;
+    }
+    if (dueAt <= until) category.due += 1;
+    if (category.nextDueAt === null || dueAt < category.nextDueAt) category.nextDueAt = dueAt;
+  }
+  return [...byKey.values()].sort((a, b) => {
+    const byDue = Number(b.due > 0) - Number(a.due > 0);
+    if (byDue !== 0) return byDue;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export interface CategoryChoice {
+  id: number;
+  name: string;
+}
+
+/** Усі теми для вибору категорії: спершу ті, якими користувався останніми, решта за назвою. */
+export async function getCategoryChoices(): Promise<CategoryChoice[]> {
+  const topics = await db.topic.findMany({ select: { id: true, name: true, cardsUsedAt: true } });
+  return topics
+    .sort((a, b) => {
+      const byUse = (b.cardsUsedAt?.getTime() ?? 0) - (a.cardsUsedAt?.getTime() ?? 0);
+      if (byUse !== 0) return byUse;
+      return a.name.localeCompare(b.name);
+    })
+    .map((topic) => ({ id: topic.id, name: topic.name }));
+}
+
+/** Категорією щойно користувались: вона піднімається нагору у виборі. */
+async function touchCategory(topicId: number, now: Date = new Date()): Promise<void> {
+  await db.topic.updateMany({ where: { id: topicId }, data: { cardsUsedAt: now } });
+}
+
+const MAX_CATEGORY_NAME = 120;
+
+/** Нова категорія = нова тема (трек Other). Якщо тема з такою назвою вже є, беремо її, а не робимо дублікат. */
+export async function createCategory(name: string): Promise<CategoryChoice | null> {
+  const text = name.trim().slice(0, MAX_CATEGORY_NAME);
+  if (!text) return null;
+  const existing = await db.topic.findFirst({ where: { name: { equals: text, mode: 'insensitive' } } });
+  if (existing) {
+    await touchCategory(existing.id);
+    return { id: existing.id, name: existing.name };
+  }
+  const created = await db.topic.create({ data: { name: text, track: 'OTHER', cardsUsedAt: new Date() } });
+  return { id: created.id, name: created.name };
+}
+
+/**
+ * Змінити категорію картки. Тільки для карток, доданих в апці:
+ * категорію картки з репо задає папка в learn/, і Sync повернув би її назад.
+ */
+export async function setCardCategory(id: number, topicId: number | null): Promise<boolean> {
+  const current = await db.question.findUnique({ where: { id } });
+  if (!current || current.sourceId !== null) return false;
+  await db.question.update({ where: { id }, data: { topicId } });
+  if (topicId !== null) await touchCategory(topicId);
+  return true;
 }

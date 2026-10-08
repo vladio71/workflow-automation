@@ -81,6 +81,9 @@ model Topic {
   questions    Question[]
   recalls      RecallLog[]
   activities   ActivityLog[]
+  /// тема як категорія карток: коли нею востаннє користувались (призначили картці, повторювали її картки).
+  /// За цим полем сортується список категорій у виборі.
+  cardsUsedAt  DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -180,6 +183,29 @@ model DailyLog {
   recallDone Boolean  @default(false)
   outLoud    Boolean  @default(false)
   note       String   @default("")
+}
+
+/// Пункт щоденного списку на Today. Список один на всі дні, галочки окремі на кожен день (DailyCheck).
+model DailyItem {
+  id        Int          @id @default(autoincrement())
+  title     String
+  position  Int
+  /// '' = звичайний пункт. 'cardsDone' | 'recallDone' | 'outLoud' = галочка живе в DailyLog і ставиться сама
+  auto      String       @default("")
+  checks    DailyCheck[]
+  createdAt DateTime     @default(now())
+
+  @@index([position])
+}
+
+/// Галочка звичайного пункту Daily за один день.
+model DailyCheck {
+  itemId Int
+  item   DailyItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  day    DateTime  @db.Date
+
+  @@id([itemId, day])
+  @@index([day])
 }
 
 model InboxItem {

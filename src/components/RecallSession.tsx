@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -62,16 +62,13 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
   const [revealed, setRevealed] = useState(false);
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [seconds, setSeconds] = useState(0);
+  /** коли відкрив сесію: час іде в лог, але на екрані не тікає */
+  const startedAt = useRef<number>(Date.now());
   const [grading, startGrading] = useTransition();
   /** запит до Gemini, статус якого показуємо під кнопкою, поки він іде */
   const [jobId, setJobId] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const question = useMemo(() => questions.find((item) => item.id === questionId) ?? null, [questions, questionId]);
   const prompt = question?.question ?? `Explain "${topic.name}" from memory: what it is, why, how it works, trade-offs.`;
@@ -98,13 +95,12 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
         answer,
         feedback: grade ? formatFeedback(grade) : '',
         confidence,
-        seconds,
+        seconds: Math.round((Date.now() - startedAt.current) / 1000),
       });
       router.push(nextTopicId ? `/recall/${nextTopicId}` : '/');
     });
   }
 
-  const minutes = Math.floor(seconds / 60);
   const done = revealed || grade !== null;
 
   return (
@@ -125,7 +121,6 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
           ))}
           <option value={FREE_RECALL}>Free recall: explain the whole topic</option>
         </select>
-        <span className="faint mono">{minutes}:{String(seconds % 60).padStart(2, '0')}</span>
       </div>
 
       <div className="callout">

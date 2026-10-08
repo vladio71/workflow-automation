@@ -96,7 +96,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
       <div style={{ display: 'flex', gap: 8 }}>
         <Link href={`/recall/${topic.id}`} className="btn primary">▶ Start recall</Link>
         {topic.questions.some((question) => question.kind === 'CONCEPT') && (
-          <Link href={`/cards?tab=all&topic=${topic.id}`} className="btn">🃏 Go through cards</Link>
+          <Link href={`/cards/category/${topic.id}`} className="btn">🃏 Cards of this topic</Link>
         )}
         <form action={deleteTopic.bind(null, topic.id)}><button className="btn ghost">Delete</button></form>
       </div>

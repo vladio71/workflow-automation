@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { setDaily } from './actions';
-import { CheckItem } from '@/components/CheckItem';
+import { DailyList } from '@/components/DailyList';
+import { CategoryTable } from '@/components/CategoryTable';
 import { PlanCard } from '@/components/PlanCard';
 import { LogTime } from '@/components/LogTime';
 import { formatMinutes, getAnalytics } from '@/lib/activity';
@@ -18,21 +18,23 @@ import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
 import { LootRefill } from '@/components/LootRefill';
 import { Tag } from '@/components/Tag';
-import { CONFIDENCES, TRACKS, optionFor } from '@/lib/labels';
-import { getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from '@/lib/queries';
-import { relativeDay } from '@/lib/schedule';
+import { CONFIDENCES, optionFor } from '@/lib/labels';
+import { getActiveCycle, getNextSystemDesignTopic } from '@/lib/queries';
+import { getCardCategories, getCardQueue } from '@/lib/cards';
+import { getDailyItems } from '@/lib/daily';
 import { db } from '@/lib/db';
 import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, log, cycle, due, sdTopic, studyPlans, chest, levelScan, towers] = await Promise.all([
+  const [plan, stats, allTopics, dailyItems, cycle, cardCategories, cardQueue, sdTopic, studyPlans, chest, levelScan, towers] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    getTodayLog(now),
+    getDailyItems(now),
     getActiveCycle(),
-    getDueTopics(now),
+    getCardCategories(now),
+    getCardQueue(now),
     getNextSystemDesignTopic(),
     getStudyPlans(),
     getChestState(now),
@@ -56,6 +58,10 @@ export default async function TodayPage() {
       name: (studyPlan.source.planName || studyPlan.source.repo).split(' · ')[0] ?? studyPlan.source.repo,
     })),
   ];
+
+  // Due for recall: категорії, де сьогодні є що повторювати (термін настав або ще лишились нові в межах ліміту на день)
+  const dueCategories = cardCategories.filter((category) => category.due > 0 || (category.fresh > 0 && cardQueue.newLeft > 0));
+  const dueCards = cardQueue.due.length + cardQueue.fresh.length;
 
   const dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const isSunday = now.getDay() === 0;
@@ -147,36 +153,17 @@ export default async function TodayPage() {
       <h2 className="block-title">Log time</h2>
       <LogTime topics={allTopics} />
 
-      <h2 className="block-title">Daily · 25 min</h2>
-      <CheckItem checked={log.cardsDone} label={<><Link href="/cards" style={{ textDecoration: 'underline' }}>Cards</Link>: everything due today (ticks itself when the queue is empty)</>} action={setDaily.bind(null, 'cardsDone')} />
-      <CheckItem checked={log.recallDone} label={<>1 recall from the list below: blank page, then check</>} action={setDaily.bind(null, 'recallDone')} />
-      <CheckItem checked={log.outLoud} label={<>1 question out loud in a minute</>} action={setDaily.bind(null, 'outLoud')} />
+      <h2 className="block-title">Daily</h2>
+      <DailyList items={dailyItems} />
 
-      <h2 className="block-title">Due for recall <span className="faint" style={{ fontWeight: 400, fontSize: 15 }}>{due.length}</span></h2>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 8 }}>Red first, then the oldest. Pick one, not all.</p>
-      {due.length === 0 ? (
-        <p className="faint">Nothing due. Work on the cycle.</p>
+      <h2 className="block-title">Due for recall <span className="faint" style={{ fontWeight: 400, fontSize: 15 }}>{dueCards}</span></h2>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
+        Cards by category. A card lands here when its own timer runs out: the grade you give it (forgot, hard, remembered) sets the next date.
+      </p>
+      {dueCategories.length === 0 ? (
+        <p className="faint">Nothing due. <Link href="/cards?tab=categories" style={{ textDecoration: 'underline' }}>All categories</Link>.</p>
       ) : (
-        <table className="db">
-          <thead>
-            <tr><th>Aa Name</th><th>Track</th><th>Confidence</th><th>Last recall</th><th></th></tr>
-          </thead>
-          <tbody>
-            {due.slice(0, 12).map((topic) => {
-              const track = optionFor(TRACKS, topic.track);
-              const confidence = optionFor(CONFIDENCES, topic.confidence);
-              return (
-                <tr key={topic.id}>
-                  <td className="title-cell"><Link href={`/topics/${topic.id}`}>{topic.name}</Link></td>
-                  <td><Tag color={track.color}>{track.label}</Tag></td>
-                  <td><Tag color={confidence.color}>{confidence.label}</Tag></td>
-                  <td className="muted">{relativeDay(topic.lastRecallAt, now) || '—'}</td>
-                  <td style={{ width: 90 }}><Link className="btn sm" href={`/recall/${topic.id}`}>Recall →</Link></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <CategoryTable categories={dueCategories} newLeft={cardQueue.newLeft} now={now} />
       )}
 
       {cycleTodo.length > 0 && (

@@ -76,6 +76,13 @@ export default async function TopicsPage({ searchParams }: TopicsPageProps) {
         ))}
       </div>
 
+      <form action={addTopicQuick} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+        <input name="name" className="bare" placeholder="+ New topic (Enter)" autoComplete="off" style={{ padding: '4px 8px' }} />
+        <select name="track" className="input" style={{ width: 160, height: 28, padding: '0 8px' }} defaultValue={track ?? 'OTHER'}>
+          {TRACKS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        <button className="btn sm">Add</button>
+      </form>
       <table className="db">
         <thead>
           <tr>
@@ -105,13 +112,6 @@ export default async function TopicsPage({ searchParams }: TopicsPageProps) {
           })}
         </tbody>
       </table>
-      <form action={addTopicQuick} style={{ display: 'flex', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-        <input name="name" className="bare" placeholder="+ New topic (Enter)" autoComplete="off" style={{ padding: '4px 8px' }} />
-        <select name="track" className="input" style={{ width: 160, height: 28, padding: '0 8px' }} defaultValue={track ?? 'OTHER'}>
-          {TRACKS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <button className="btn sm">Add</button>
-      </form>
       <p className="faint" style={{ fontSize: 13, marginTop: 8 }}>{topics.length} topics</p>
     </div>
   );

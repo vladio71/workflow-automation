@@ -10,11 +10,15 @@ import {
 } from '@/lib/gemini';
 import { DEFAULT_BUDGET, buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
 import {
-  addToDraft, clampMinutes, enforceMandatory, keepDone, momentumOrder, moveInDraft, removeFromDraft, setMinutesInDraft, toPlanItem,
+  addToDraft, clampMinutes, enforceMandatory, keepDone, momentumOrder, moveInDraft, moveToIndex, removeFromDraft, setMinutesInDraft, toPlanItem,
   type MoveDirection,
 } from '@/lib/plan-order';
 import { getStudyPlans, markAttemptDone } from '@/lib/study-plan';
-import { createCard, deleteCard, getCardCounts, reviewCard, updateCard, type CardTextInput, type NewCardInput, type ReviewInput } from '@/lib/cards';
+import {
+  createCard, createCategory, deleteCard, getCardCounts, reviewCard, setCardCategory, updateCard,
+  type CardTextInput, type CategoryChoice, type NewCardInput, type ReviewInput,
+} from '@/lib/cards';
+import { createDailyItem, deleteDailyItem, renameDailyItem, reorderDailyItems, setDailyItemChecked } from '@/lib/daily';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
 import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels';
@@ -108,12 +112,30 @@ export async function deleteQuestion(id: number): Promise<void> {
 
 // ================================================================== daily
 
-export type DailyField = 'cardsDone' | 'recallDone' | 'outLoud';
-
-export async function setDaily(field: DailyField, value: boolean): Promise<void> {
-  const day = dayKey(new Date());
-  await db.dailyLog.upsert({ where: { day }, create: { day, [field]: value }, update: { [field]: value } });
+/** Галочка пункту Daily. refresh(): від неї залежать стрік і стан вузлів плану дня. */
+export async function checkDailyItem(id: number, checked: boolean): Promise<void> {
+  await setDailyItemChecked(id, checked);
   refresh();
+}
+
+// Правки списку Daily без refresh(): список на клієнті вже показує зміну,
+// а перемальована сторінка збила б курсор у пункті, який саме пишеш.
+
+/** Новий пункт після afterId (null = у кінець). Повертає його id. */
+export async function addDailyItem(afterId: number | null, title: string): Promise<number> {
+  return createDailyItem(afterId, title);
+}
+
+export async function saveDailyItemTitle(id: number, title: string): Promise<void> {
+  await renameDailyItem(id, title);
+}
+
+export async function removeDailyItem(id: number): Promise<void> {
+  await deleteDailyItem(id);
+}
+
+export async function saveDailyOrder(ids: number[]): Promise<void> {
+  await reorderDailyItems(ids);
 }
 
 // ================================================================== inbox
@@ -395,6 +417,18 @@ export async function movePlanItem(itemId: string, direction: MoveDirection): Pr
   return editDraft((items) => moveInDraft(items, itemId, direction));
 }
 
+/** Перетягування в чернетці: пункт стає на позицію toIndex. */
+export async function reorderPlanItem(itemId: string, toIndex: number): Promise<PlanActionResult> {
+  let blocked = false;
+  const result = await editDraft((items) => {
+    const moved = moveToIndex(items, itemId, toIndex);
+    if (moved === null) blocked = true;
+    return moved ?? items;
+  });
+  if (result.ok && blocked) return { ok: false, error: 'Кроки одного навчального плану йдуть по порядку: місцями їх не поміняти' };
+  return result;
+}
+
 export async function setPlanItemMinutes(itemId: string, minutes: number): Promise<PlanActionResult> {
   return editDraft((items) => setMinutesInDraft(items, itemId, minutes));
 }
@@ -420,6 +454,25 @@ export async function addPlanTask(title: string, minutes: number): Promise<PlanA
       id: `task:${task.id}`, kind: 'TASK', title: task.title, href: '/tasks', topicId: null,
       defaultMinutes: task.minutes, hint: 'Разова справа, додана сьогодні.', group: 'tasks',
     })];
+  });
+}
+
+const LIVE_CODING_COUNT = 3;
+const LIVE_CODING_TITLE = 'Live code next problem';
+const LIVE_CODING_MINUTES = 40;
+
+/** Кнопка "+ 3 live coding": три разові справи на початок чернетки, без опису. */
+export async function addLiveCodingTasks(): Promise<PlanActionResult> {
+  return editDraft(async (items) => {
+    const added: PlanItem[] = [];
+    for (let index = 0; index < LIVE_CODING_COUNT; index += 1) {
+      const task = await db.task.create({ data: { title: LIVE_CODING_TITLE, minutes: LIVE_CODING_MINUTES, repeat: 'ONCE' } });
+      added.push(toPlanItem({
+        id: `task:${task.id}`, kind: 'TASK', title: task.title, href: '/tasks', topicId: null,
+        defaultMinutes: task.minutes, group: 'tasks',
+      }));
+    }
+    return [...added, ...items];
   });
 }
 
@@ -666,6 +719,20 @@ export async function addCard(input: NewCardInput): Promise<boolean> {
   const id = await createCard(input);
   if (id !== null) refresh();
   return id !== null;
+}
+
+/** Вибір категорії на картці. false = категорію не змінено (картка з репо або її вже нема). */
+export async function chooseCardCategory(id: number, topicId: number | null): Promise<boolean> {
+  const changed = await setCardCategory(id, topicId);
+  if (changed) refresh();
+  return changed;
+}
+
+/** "+ Add new" у виборі категорії: нова тема з цією назвою. null = порожня назва. */
+export async function addCategory(name: string): Promise<CategoryChoice | null> {
+  const category = await createCategory(name);
+  if (category) refresh();
+  return category;
 }
 
 /** All cards → Edit. Картка з репо після цього більше не оновлюється з questions.md. */

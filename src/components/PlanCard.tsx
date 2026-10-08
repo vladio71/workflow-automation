@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, type DragEvent } from 'react';
 import {
-  addPlanItem, addPlanTask, generatePlan, movePlanItem, removePlanItem, reviewToday, setPlanItemDone, setPlanItemMinutes, skipPlanItem,
-  startDay, type PlanActionResult,
+  addLiveCodingTasks, addPlanItem, addPlanTask, generatePlan, movePlanItem, removePlanItem, reorderPlanItem, reviewToday, setPlanItemDone,
+  setPlanItemMinutes, skipPlanItem, startDay, type PlanActionResult,
 } from '@/app/actions';
 import { Chest } from '@/components/Chest';
 import { openTaskSession } from '@/components/TowerCard';
@@ -66,14 +66,21 @@ const KIND_ICON: Record<PlanItemKind, string> = {
   TASK: '📌',
 };
 
+/** Куди впаде перетягнутий пункт чернетки: над пунктом id чи під ним. */
+interface DropTarget {
+  id: string;
+  below: boolean;
+}
+
 const ROW_STYLE = { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } as const;
 const LABEL_STYLE = { fontSize: 13, width: 48 } as const;
 
 function ItemLink({ item, children, className }: { item: PlanItemWithStatus; children: React.ReactNode; className?: string }) {
   if (item.href.startsWith('http')) {
-    return <a href={item.href} target="_blank" rel="noreferrer" className={className}>{children} ↗</a>;
+    return <a href={item.href} target="_blank" rel="noreferrer" className={className} draggable={false}>{children} ↗</a>;
   }
-  return <Link href={item.href} className={className}>{children}</Link>;
+  // draggable={false}: у чернетці тягнеться весь рядок, а не посилання з нього
+  return <Link href={item.href} className={className} draggable={false}>{children}</Link>;
 }
 
 export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: PlanCardProps) {
@@ -92,6 +99,14 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
   const [editing, startEditing] = useTransition();
   const [reviewing, startReviewing] = useTransition();
   const [changing, startChange] = useTransition();
+
+  /** перетягування в чернетці: що тягнемо, куди цілимось, і порядок, показаний до відповіді сервера */
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<DropTarget | null>(null);
+  const [draggedOrder, setDraggedOrder] = useState<string[] | null>(null);
+  const serverItems = plan?.items;
+  // сервер віддав новий план: показуємо його порядок
+  useEffect(() => setDraggedOrder(null), [serverItems]);
 
   const isDraft = plan !== null && !plan.started;
   const isStarted = plan !== null && plan.started;
@@ -141,7 +156,39 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
     });
   }
 
-  const items = plan?.items ?? [];
+  const planItems = plan?.items ?? [];
+  const items = draggedOrder
+    ? draggedOrder.flatMap((id) => planItems.filter((item) => item.id === id))
+    : planItems;
+
+  function dragOver(event: DragEvent<HTMLDivElement>, itemId: string) {
+    if (dragId === null) return;
+    event.preventDefault();
+    const box = event.currentTarget.getBoundingClientRect();
+    setDrop({ id: itemId, below: event.clientY > box.top + box.height / 2 });
+  }
+
+  function dropItem() {
+    const target = drop;
+    const moving = dragId;
+    setDragId(null);
+    setDrop(null);
+    if (target === null || moving === null || target.id === moving) return;
+    const order = items.map((item) => item.id).filter((id) => id !== moving);
+    const targetIndex = order.indexOf(target.id);
+    if (targetIndex === -1) return;
+    const toIndex = target.below ? targetIndex + 1 : targetIndex;
+    order.splice(toIndex, 0, moving);
+    setDraggedOrder(order);
+    setNote(null);
+    startEditing(async () => {
+      const result = await reorderPlanItem(moving, toIndex);
+      if (!result.ok) {
+        setDraggedOrder(null);
+        setNote(result.error);
+      }
+    });
+  }
   const done = items.filter((item) => item.done).length;
   const minutes = items.reduce((sum, item) => sum + item.minutes, 0);
   // карта: поточний вузол = перший невиконаний; все після нього закрите, поки його не пройдеш
@@ -238,9 +285,31 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
 
       {isDraft && plan && (
         <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+            <button className="btn sm" data-testid="add-live-coding" disabled={editing} onClick={() => edit(() => addLiveCodingTasks())}>
+              + 3 live coding
+            </button>
+            <span className="faint" style={{ fontSize: 13 }}>Пункти можна перетягувати.</span>
+          </div>
           <div style={{ marginTop: 6 }}>
-            {items.map((item, index) => (
-              <div key={item.id} data-item={item.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+            {items.map((item, index) => {
+              const line = drop !== null && drop.id === item.id && dragId !== item.id ? (drop.below ? 'drop-below' : 'drop-above') : '';
+              return (
+              <div
+                key={item.id}
+                data-item={item.id}
+                className={`plan-row ${dragId === item.id ? 'dragging' : ''} ${line}`}
+                draggable={!editing}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', item.id);
+                  setDragId(item.id);
+                }}
+                onDragEnd={() => { setDragId(null); setDrop(null); }}
+                onDragOver={(event) => dragOver(event, item.id)}
+                onDrop={dropItem}
+              >
+                <span className="grip" title="Перетягни, щоб переставити">⋮⋮</span>
                 <span className="faint mono" style={{ width: 18, textAlign: 'right', fontSize: 13, marginTop: 1 }}>{index + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
@@ -265,7 +334,8 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
                     onClick={() => edit(() => removePlanItem(item.id))}>✕</button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>

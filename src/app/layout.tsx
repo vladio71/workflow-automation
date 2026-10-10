@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [dueCount, inboxCount, streak, cards, dueLevels, openTasks] = await Promise.all([
     getDueCount(),
-    db.inboxItem.count(),
+    db.parkingItem.count({ where: { doneAt: null } }),
     getStreak(),
     getCardCounts(),
     getDueLevelCount(),
@@ -33,7 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
             <NavLink href="/" icon="☀️" label="Today" count={dueCount} />
             <NavLink href="/cards" icon="🃏" label="Cards" count={cards.due + cards.fresh} />
-            <NavLink href="/inbox" icon="📥" label="Inbox" count={inboxCount} />
+            <NavLink href="/parking" icon="🅿️" label="Parking" count={inboxCount} />
             <NavLink href="/tasks" icon="📌" label="Tasks" count={openTasks} />
             <div className="sidebar-section">Material</div>
             <NavLink href="/map" icon="🗺️" label="Map" />

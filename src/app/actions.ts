@@ -25,6 +25,7 @@ import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels'
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
 import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
+import { addSpokenAnswer, markCellChecked, saveCellDerived, saveCellSummary, saveDrillAttempt, setDrillChecked } from '@/lib/progress';
 import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -136,29 +137,81 @@ export async function saveDailyOrder(ids: number[]): Promise<void> {
   await reorderDailyItems(ids);
 }
 
-// ================================================================== inbox
+// ================================================================== парковка
 
-export async function addInbox(formData: FormData): Promise<void> {
+export async function addParking(formData: FormData): Promise<void> {
   const text = String(formData.get('text') ?? '').trim();
   if (!text) return;
-  await db.inboxItem.create({ data: { text } });
+  await db.parkingItem.create({ data: { text } });
   refresh();
 }
 
-export async function deleteInbox(id: number): Promise<void> {
-  await db.inboxItem.delete({ where: { id } });
+export async function deleteParking(id: number): Promise<void> {
+  await db.parkingItem.delete({ where: { id } });
   refresh();
 }
 
-export async function inboxToTopic(id: number, track: Track): Promise<void> {
-  const item = await db.inboxItem.delete({ where: { id } });
+/** Взяти питання на експеримент цього тижня. Одне за раз: попереднє взяте повертається в список. */
+export async function pickParking(id: number): Promise<void> {
+  await db.$transaction([
+    db.parkingItem.updateMany({ where: { doneAt: null, pickedAt: { not: null } }, data: { pickedAt: null } }),
+    db.parkingItem.update({ where: { id }, data: { pickedAt: new Date() } }),
+  ]);
+  refresh();
+}
+
+export async function unpickParking(id: number): Promise<void> {
+  await db.parkingItem.update({ where: { id }, data: { pickedAt: null } });
+  refresh();
+}
+
+export async function finishParking(id: number): Promise<void> {
+  await db.parkingItem.update({ where: { id }, data: { doneAt: new Date() } });
+  refresh();
+}
+
+export async function parkingToTopic(id: number, track: Track): Promise<void> {
+  const item = await db.parkingItem.delete({ where: { id } });
   await db.topic.create({ data: { name: item.text.slice(0, 200), track, notes: item.text.length > 200 ? item.text : '' } });
   refresh();
 }
 
-export async function inboxToQuestion(id: number): Promise<void> {
-  const item = await db.inboxItem.delete({ where: { id } });
+export async function parkingToQuestion(id: number): Promise<void> {
+  const item = await db.parkingItem.delete({ where: { id } });
   await db.question.create({ data: { question: item.text } });
+  refresh();
+}
+
+// ================================================================== матеріал: клітинки, дрили, вголос
+
+export async function saveCellDerivedNow(cellId: string, text: string): Promise<void> {
+  await saveCellDerived(cellId, text, new Date());
+  refresh();
+}
+
+export async function markCellCheckedNow(cellId: string): Promise<void> {
+  await markCellChecked(cellId, new Date());
+  refresh();
+}
+
+export async function saveCellSummaryNow(cellId: string, text: string): Promise<void> {
+  await saveCellSummary(cellId, text, new Date());
+  refresh();
+}
+
+export async function saveDrillAttemptNow(drillId: string, answer: string): Promise<{ attemptId: number }> {
+  const attempt = await saveDrillAttempt(drillId, answer);
+  refresh();
+  return { attemptId: attempt.id };
+}
+
+export async function setDrillCheckedNow(attemptId: number, checked: number[]): Promise<void> {
+  await setDrillChecked(attemptId, checked);
+  refresh();
+}
+
+export async function addSpokenAnswerNow(subject: string, stuck: string): Promise<void> {
+  await addSpokenAnswer(subject, stuck, new Date());
   refresh();
 }
 

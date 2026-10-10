@@ -1,7 +1,11 @@
 import { MatrixGrid } from '@/components/MatrixGrid';
 import { MAP } from '@/lib/content';
+import { getAllCellStatuses } from '@/lib/progress';
 
-export default function MapPage() {
+export default async function MapPage() {
+  const statuses = await getAllCellStatuses();
+  const marks = Object.fromEntries([...statuses.values()].filter((status) => status.steps > 0).map((status) => [status.cellId, { steps: status.steps }]));
+  const done = [...statuses.values()].filter((status) => status.done).length;
   return (
     <div className="page wide">
       <h1 className="page-title">Карта навантажень</h1>
@@ -14,7 +18,8 @@ export default function MapPage() {
         <span><span className="chip new">помаранчеве</span> з&apos;явилось або змінилось на цій групі</span>
         <span>Блоки, які не змінились (CDN, Stripe), на схемі можуть бути не намальовані.</span>
       </div>
-      <MatrixGrid />
+      <MatrixGrid marks={marks} />
+      <p className="faint" style={{ fontSize: 13, marginTop: 8 }}>Закрито {done} з {MAP.cells.length}. Клітинка закрита, коли є всі три кроки: вивів сам, звірив, своїми словами.</p>
       <h2 className="block-title">Групи навантаження</h2>
       <p className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
         RPS виведено так: DAU × ~50 запитів на юзера за день ÷ 86 400 × 3 (пік). 50k DAU × 50 ÷ 86 400 ≈ 29 RPS, × 3 ≈ 90, тобто ~100.

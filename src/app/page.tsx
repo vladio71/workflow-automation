@@ -204,7 +204,7 @@ export default async function TodayPage() {
         <div className="callout">
           <span className="emoji">🧹</span>
           <div>
-            <b>Sunday review, 20 min.</b> Clear the <Link href="/inbox" style={{ textDecoration: 'underline' }}>Inbox</Link>, recolor Topics, write the cycle retro if it ends, pick next week's primer section.
+            <b>Sunday review, 20 min.</b> Pick one question from <Link href="/parking" style={{ textDecoration: 'underline' }}>Parking</Link> for this week's experiment, recolor Topics, write the cycle retro if it ends, pick next week's primer section.
           </div>
         </div>
       )}

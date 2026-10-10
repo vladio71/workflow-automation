@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CellDiagram } from '@/components/CellDiagram';
 import { PatternPill } from '@/components/PatternPill';
-import { Reveal } from '@/components/Reveal';
+import { CellSteps } from '@/components/CellSteps';
 import { MAP, cellNeighbours, getCell, groupOf, newNodeIds, previousCell, productOf, type Cell } from '@/lib/content';
+import { getCellProgress } from '@/lib/progress';
 
 interface CellPageProps {
   params: Promise<{ cell: string }>;
@@ -27,6 +28,7 @@ export default async function CellPage({ params }: CellPageProps) {
   const previous = previousCell(cell);
   const around = cellNeighbours(cell);
   const fresh = [...newNodeIds(cell)];
+  const progress = await getCellProgress(cell.id);
 
   return (
     <div className="page wide">
@@ -67,8 +69,16 @@ export default async function CellPage({ params }: CellPageProps) {
         </div>
 
         <div>
-          <h3 className="block-title">Чому саме так</h3>
-          <Reveal label="Показати пояснення" hint="Спершу виведи рішення сам: пройди по схемі з патернами мислення, запиши, потім звір.">
+          <CellSteps
+            cellId={cell.id}
+            progress={{
+              derived: progress?.derived ?? '',
+              derivedAt: progress?.derivedAt?.toISOString() ?? null,
+              checkedAt: progress?.checkedAt?.toISOString() ?? null,
+              summary: progress?.summary ?? '',
+              summarizedAt: progress?.summarizedAt?.toISOString() ?? null,
+            }}
+          >
             <ul className="why">
               {cell.why.map((item, index) => (
                 <li key={index}>
@@ -82,7 +92,7 @@ export default async function CellPage({ params }: CellPageProps) {
             {cell.refs.length > 0 && (
               <div className="refs">Твої діаграми і книга: {cell.refs.map((ref) => <span key={ref} className="ref">{ref}</span>)}</div>
             )}
-          </Reveal>
+          </CellSteps>
         </div>
       </div>
     </div>

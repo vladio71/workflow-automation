@@ -1,16 +1,16 @@
 'use client';
 
 import { useRef } from 'react';
-import { addInbox } from '@/app/actions';
+import { addParking } from '@/app/actions';
 
-/** Швидкий запис в Inbox: Enter і забув. Розбирати в неділю. */
-export function QuickCapture({ placeholder = 'Capture an idea, link or "don\'t get X"... (Enter)' }: { placeholder?: string }) {
+/** Швидкий запис на парковку: питання з кролячої нори одним рядком, Enter і назад до клітинки. */
+export function QuickCapture({ placeholder = 'Питання на парковку: «а як Kafka тримає порядок?» (Enter)' }: { placeholder?: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   return (
     <form
       ref={formRef}
       action={async (formData) => {
-        await addInbox(formData);
+        await addParking(formData);
         formRef.current?.reset();
       }}
     >

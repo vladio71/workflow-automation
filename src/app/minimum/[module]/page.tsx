@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Reveal } from '@/components/Reveal';
+import { DrillForm } from '@/components/DrillForm';
 import { MINIMUM, getModule, type Module } from '@/lib/content';
+import { db } from '@/lib/db';
 
 interface ModulePageProps {
   params: Promise<{ module: string }>;
@@ -80,6 +81,7 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const { module: moduleId } = await params;
   const module = getModule(moduleId);
   if (!module) notFound();
+  const attempts = await db.drillAttempt.findMany({ where: { drillId: { in: module.drills.map((drill) => drill.id) } }, orderBy: { createdAt: 'desc' } });
 
   return (
     <div className="page wide">
@@ -140,18 +142,22 @@ export default async function ModulePage({ params }: ModulePageProps) {
       </div>
 
       <h2 className="block-title">Дрили</h2>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 12 }}>Спершу відповідай сам, потім відкривай еталон і проходь по чеклісту.</p>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 12 }}>Спершу пишеш свою відповідь, потім відкриваєш еталон і відмічаєш, що з чекліста у тебе є. Повтор через час = нова спроба з нуля.</p>
       <div className="drills">
         {module.drills.map((drill, index) => (
           <div key={drill.id} className="drill" id={drill.id}>
             <span className="mono faint">{module.short} · дрил {index + 1}</span>
             <p className="drill-q">{drill.q}</p>
-            <Reveal label="Показати еталон">
-              <div className="ref-cols">
-                <div><span className="lbl">ЕТАЛОН</span><ul>{drill.ref.map((line) => <li key={line}>{line}</li>)}</ul></div>
-                <div><span className="lbl">ЧИ Є ЦЕ У ТВОЇЙ ВІДПОВІДІ</span><ul>{drill.check.map((line) => <li key={line}>{line}</li>)}</ul></div>
-              </div>
-            </Reveal>
+            <DrillForm
+              drillId={drill.id}
+              reference={drill.ref}
+              checklist={drill.check}
+              attemptCount={attempts.filter((attempt) => attempt.drillId === drill.id).length}
+              latest={(() => {
+                const latest = attempts.find((attempt) => attempt.drillId === drill.id);
+                return latest ? { id: latest.id, answer: latest.answer, checked: latest.checked, createdAt: latest.createdAt.toISOString() } : null;
+              })()}
+            />
           </div>
         ))}
       </div>

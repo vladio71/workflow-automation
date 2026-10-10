@@ -168,7 +168,7 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
     getDueTopics(now),
     getActiveCycle(),
     getNextSystemDesignTopic(),
-    db.inboxItem.count(),
+    db.parkingItem.count({ where: { doneAt: null } }),
     db.mockSession.findFirst({ orderBy: { startedAt: 'desc' } }),
     db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
     getStudyPlans(),
@@ -308,7 +308,7 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
   }
 
   if (inboxCount >= 5 || (inboxCount > 0 && now.getDay() === 0)) {
-    candidates.push({ id: 'inbox', kind: 'INBOX', title: `Clear the Inbox (${inboxCount})`, href: '/inbox', topicId: null, defaultMinutes: 10 });
+    candidates.push({ id: 'inbox', kind: 'INBOX', title: `Parking: pick this week's experiment (${inboxCount})`, href: '/parking', topicId: null, defaultMinutes: 10 });
   }
 
   return candidates;
@@ -358,7 +358,7 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
     db.recallLog.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.question.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.mockSession.count({ where: { startedAt: { gte: from, lte: to } } }),
-    db.inboxItem.count(),
+    db.parkingItem.count({ where: { doneAt: null } }),
     db.planStep.findMany({ where: { id: { in: planStepIds } } }),
     db.levelAttempt.findMany({ where: { passed: true, createdAt: { gte: from, lte: to } }, select: { levelKey: true } }),
     db.task.findMany({ where: { id: { in: taskIds } } }),

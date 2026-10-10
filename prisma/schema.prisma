@@ -208,10 +208,55 @@ model DailyCheck {
   @@index([day])
 }
 
-model InboxItem {
-  id        Int      @id @default(autoincrement())
+/// Парковка: питання з кролячих нір одним рядком. Раз на тиждень одне береться на маленький експеримент.
+model ParkingItem {
+  id        Int       @id @default(autoincrement())
   text      String
+  /// взято на експеримент цього тижня
+  pickedAt  DateTime?
+  /// експеримент зроблено (або питання закрите)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+/// Прогрес по клітинці карти (src/content/map.json). Три кроки: вивів сам → звірив → своїми словами.
+/// Клітинка закрита, коли всі три є. Один рядок на клітинку, ключ = її id ("A3").
+model CellProgress {
+  cellId       String    @id
+  /// моя версія системи до того, як відкрив «Чому саме так»
+  derived      String    @default("")
+  derivedAt    DateTime?
+  /// відкрив пояснення і звірив
+  checkedAt    DateTime?
+  /// підсумок своїми словами після звірки
+  summary      String    @default("")
+  summarizedAt DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Спроба дрилу з «Сеньйорського мінімуму»: моя відповідь і самооцінка по чеклісту після еталону.
+model DrillAttempt {
+  id        Int      @id @default(autoincrement())
+  /// id дрилу з src/content/minimum.json ("mon-2")
+  drillId   String
+  answer    String
+  /// індекси пунктів чекліста, які є у відповіді
+  checked   Int[]    @default([])
   createdAt DateTime @default(now())
+
+  @@index([drillId, createdAt])
+}
+
+/// Відповідь вголос англійською по вже пройденій клітинці або дрилу. Без таймера: одне поле, що не вийшло сказати.
+model SpokenAnswer {
+  id        Int      @id @default(autoincrement())
+  day       DateTime @db.Date
+  /// "cell:A3" або "drill:mon-2"
+  subject   String
+  stuck     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([day])
 }
 
 model MockSession {

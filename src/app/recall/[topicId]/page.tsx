@@ -24,7 +24,6 @@ export default async function RecallPage({ params, searchParams }: RecallPagePro
       <div style={{ marginBottom: 14 }}>
         <Link href={`/topics/${topic.id}`} className="faint" style={{ fontSize: 14 }}>← {topic.name}</Link>
       </div>
-      <div className="page-icon">🧠</div>
       <h1 className="page-title">Recall</h1>
       <p className="page-sub">Blank page, no peeking. Write everything you remember, then check. The struggle is the point.</p>
       <RecallSession

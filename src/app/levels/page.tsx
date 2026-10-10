@@ -36,7 +36,6 @@ export default async function LevelsPage() {
 
   return (
     <div className="page">
-      <div className="page-icon">⚔️</div>
       <h1 className="page-title">Levels</h1>
       <p className="page-sub">
         Exercises from your live-code clone. Paste your code, the app runs the exercise tests: green = level cleared. Redo from scratch
@@ -45,7 +44,6 @@ export default async function LevelsPage() {
 
       {scan.error ? (
         <div className="callout">
-          <span className="emoji">⚠️</span>
           <div>
             <div>{scan.error}</div>
             <div className="muted" style={{ fontSize: 14, marginTop: 4 }}>

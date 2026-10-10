@@ -40,7 +40,6 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
 
   return (
     <div className="page">
-      <div className="page-icon">🃏</div>
       <h1 className="page-title">Cards</h1>
       <p className="page-sub">
         <b>Review</b>: what is due today (plus up to {NEW_PER_DAY} new cards a day). You grade a card and the grade sets when it comes back.{' '}

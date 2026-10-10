@@ -22,10 +22,9 @@ export default async function MockPage() {
 
   return (
     <div className="page">
-      <div className="page-icon">🎙️</div>
       <h1 className="page-title">Mock interview</h1>
       <p className="page-sub">System design, 45 minutes, out loud or typed. Gemini plays the interviewer: one question at a time, pushes on trade-offs. Type END to get feedback.</p>
-      {!enabled && <div className="callout"><span className="emoji">🔑</span><div>Set <span className="mono">GEMINI_API_KEY</span> in <span className="mono">.env</span> to use mock interviews.</div></div>}
+      {!enabled && <div className="callout"><div>Set <span className="mono">GEMINI_API_KEY</span> in <span className="mono">.env</span> to use mock interviews.</div></div>}
 
       <form action={startMock} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <b>New mock</b>

@@ -198,7 +198,6 @@ export function LevelPlay(props: LevelPlayProps) {
 
       {passed && (
         <div className="callout" style={{ marginTop: 14 }}>
-          <span className="emoji">🏁</span>
           <div style={{ fontSize: 14 }}>
             Compare with the reference and write down 1-2 things it does better. Same exercise from scratch in 2 days.
             {props.nextHref && <> <Link href={props.nextHref} style={{ textDecoration: 'underline' }}>Next level →</Link></>}

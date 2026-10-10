@@ -26,10 +26,10 @@ interface Tally {
   good: number;
 }
 
-const GRADES: { grade: CardGrade; key: string; label: string; tag: string; hint: string }[] = [
-  { grade: 'FORGOT', key: '1', label: 'Forgot', tag: 'red', hint: 'again tomorrow' },
-  { grade: 'HARD', key: '2', label: 'Hard', tag: 'orange', hint: 'same interval' },
-  { grade: 'GOOD', key: '3', label: 'Remembered', tag: 'green', hint: 'next interval' },
+const GRADES: { grade: CardGrade; key: string; label: string; tone: string; hint: string }[] = [
+  { grade: 'FORGOT', key: '1', label: 'Забув', tone: 'forgot', hint: 'знову завтра' },
+  { grade: 'HARD', key: '2', label: 'Важко', tone: 'hard', hint: 'той самий інтервал' },
+  { grade: 'GOOD', key: '3', label: 'Згадав', tone: 'good', hint: 'наступний інтервал' },
 ];
 
 /** Сесія повторення: Space = показати відповідь, 1/2/3 = оцінка. "Забув" повертає картку в кінець сесії. */
@@ -97,8 +97,7 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
   if (cards.length === 0) {
     return (
       <div className="callout">
-        <span className="emoji">✅</span>
-        <div>Nothing due right now. Browse everything in <Link href="/cards?tab=all" style={{ textDecoration: 'underline' }}>All cards</Link>.</div>
+        <div>На сьогодні порожньо. Усі картки в <Link href="/cards?tab=all" style={{ textDecoration: 'underline' }}>All cards</Link>.</div>
       </div>
     );
   }
@@ -106,11 +105,10 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
   if (finished) {
     return (
       <div className="callout">
-        <span className="emoji">🎉</span>
         <div>
-          <b>Done for today.</b> Remembered {tally.good} · hard {tally.hard} · forgot {tally.forgot}.
+          <b>На сьогодні все.</b> Згадав {tally.good} · важко {tally.hard} · забув {tally.forgot}.
           <div className="muted" style={{ fontSize: 14, marginTop: 4 }}>
-            Forgotten ones come back tomorrow. Want more? Go through anything in{' '}
+            Забуті повернуться завтра. Хочеш ще: будь-що з{' '}
             <Link href="/cards?tab=all" style={{ textDecoration: 'underline' }}>All cards</Link>.
           </div>
         </div>
@@ -121,11 +119,11 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
   const done = Math.min(position, queue.length);
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }} className="muted">
-        <span>{entry.card.topicName}{entry.card.isNew && !entry.relearn ? ' · new' : ''}{entry.relearn ? ' · once more' : ''}</span>
-        <span>{done + 1} / {queue.length}</span>
+      <div className="review-meta muted">
+        <span>{entry.card.topicName}{entry.card.isNew && !entry.relearn ? ' · нова' : ''}{entry.relearn ? ' · ще раз' : ''}</span>
+        <span className="mono">{done + 1} / {queue.length}</span>
       </div>
-      <div className="progress" style={{ marginBottom: 12 }}>
+      <div className="progress review-progress">
         <div style={{ width: `${(done / queue.length) * 100}%` }} />
       </div>
 
@@ -133,27 +131,27 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
         <div className="q">{entry.card.question}</div>
         {revealed && (
           <div className="a">
-            {entry.card.answer ? <Markdown>{entry.card.answer}</Markdown> : <p className="faint">No answer yet for this card.</p>}
+            {entry.card.answer ? <Markdown>{entry.card.answer}</Markdown> : <p className="faint">У цієї картки ще нема відповіді.</p>}
           </div>
         )}
       </div>
 
       {!revealed ? (
         <div className="grade-row">
-          <button className="btn primary" onClick={() => setRevealed(true)}>Show answer <span className="kbd">Space</span></button>
-          <span className="faint" style={{ fontSize: 13, alignSelf: 'center' }}>Answer in your head first (or out loud).</span>
+          <button className="btn primary" onClick={() => setRevealed(true)}>Показати відповідь <span className="kbd">Space</span></button>
+          <span className="faint" style={{ fontSize: 13, alignSelf: 'center' }}>Спершу відповідай у голові або вголос.</span>
         </div>
       ) : entry.relearn ? (
         <div className="grade-row">
-          <button className="btn primary" onClick={() => grade('GOOD')}>Got it <span className="kbd">Space</span></button>
-          <span className="faint" style={{ fontSize: 13, alignSelf: 'center' }}>Already scheduled for tomorrow.</span>
+          <button className="btn primary" onClick={() => grade('GOOD')}>Зрозуміло <span className="kbd">Space</span></button>
+          <span className="faint" style={{ fontSize: 13, alignSelf: 'center' }}>Уже стоїть на завтра.</span>
         </div>
       ) : (
         <div className="grade-row">
           {GRADES.map((option) => (
-            <button key={option.grade} className="btn" onClick={() => grade(option.grade)}>
+            <button key={option.grade} className={`btn grade ${option.tone}`} onClick={() => grade(option.grade)}>
               <span className="kbd">{option.key}</span>
-              <span className={`tag ${option.tag}`}>{option.label}</span>
+              <span className="grade-label">{option.label}</span>
               <span className="faint" style={{ fontSize: 12 }}>{option.hint}</span>
             </button>
           ))}

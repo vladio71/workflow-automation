@@ -25,7 +25,6 @@ export default async function SourcesPage() {
 
   return (
     <div className="page">
-      <div className="page-icon">🔗</div>
       <h1 className="page-title">Sources</h1>
       <p className="page-sub">
         Repos with a <code>learn/</code> folder: <code>learn/topic.md</code> makes one topic for the repo,

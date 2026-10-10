@@ -44,7 +44,7 @@ interface TopicOption {
 /** фільтр "усі категорії"; окреме значення, бо null уже означає "без категорії" */
 const ALL = 'all';
 
-const ROW_STYLE: CSSProperties = { padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 };
+const ROW_STYLE: CSSProperties = { padding: '10px 8px', borderBottom: '1px solid var(--border)' };
 const DUE_STYLE: CSSProperties = { width: 78, textAlign: 'right', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 };
 
 function topicKey(topicId: number | null): string {
@@ -138,8 +138,8 @@ export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
         </label>
         <span style={{ flex: 1 }} />
         <Link className="btn" data-testid="new-card-button" href={newCardHref}>+ New card</Link>
-        <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(filtered)}>▶ Go through {filtered.length}</button>
-        <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(shuffle(filtered))}>🔀 Shuffled</button>
+        <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(filtered)}>Go through {filtered.length}</button>
+        <button className="btn" disabled={filtered.length === 0} onClick={() => setPractice(shuffle(filtered))}>Shuffled</button>
       </div>
 
       {filtered.length === 0 && <p className="faint">No cards match.</p>}
@@ -167,7 +167,7 @@ export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
                     onChoose={(topicId) => startTransition(async () => { await chooseCardCategory(card.id, topicId); })}
                   />
                 )}
-                <span className={card.dueLabel === 'due' ? '' : 'faint'} style={{ ...DUE_STYLE, color: card.dueLabel === 'due' ? '#eb5757' : undefined }}>
+                <span className={`mono ${card.dueLabel === 'due' ? 'cat-due' : 'faint'}`} style={DUE_STYLE}>
                   {card.dueLabel}
                 </span>
                 <button type="button" className="btn sm ghost" title="Delete" aria-label="Delete card" data-testid={`card-delete-${card.id}`}
@@ -235,7 +235,6 @@ function CardPractice({ cards, onExit }: { cards: BrowseCard[]; onExit: () => vo
   if (!card) {
     return (
       <div className="callout">
-        <span className="emoji">✅</span>
         <div>
           <b>Went through {cards.length}.</b> {forgotten > 0 ? `${forgotten} marked as forgotten, they are due tomorrow.` : 'Nothing forgotten.'}
           <div style={{ marginTop: 8 }}><button className="btn sm" onClick={onExit}>← Back to all cards</button></div>
@@ -246,11 +245,11 @@ function CardPractice({ cards, onExit }: { cards: BrowseCard[]; onExit: () => vo
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }} className="muted">
+      <div className="review-meta muted">
         <span>{card.topicName} · free run, schedule unchanged</span>
-        <span>{position + 1} / {cards.length} · <button className="btn sm ghost" onClick={onExit}>Exit <span className="kbd">Esc</span></button></span>
+        <span className="mono">{position + 1} / {cards.length} · <button className="btn sm ghost" onClick={onExit}>Exit <span className="kbd">Esc</span></button></span>
       </div>
-      <div className="progress" style={{ marginBottom: 12 }}>
+      <div className="progress review-progress">
         <div style={{ width: `${(position / cards.length) * 100}%` }} />
       </div>
       <div className="flashcard">
@@ -266,7 +265,7 @@ function CardPractice({ cards, onExit }: { cards: BrowseCard[]; onExit: () => vo
       ) : (
         <div className="grade-row">
           <button className="btn primary" onClick={() => next(false)}>Next <span className="kbd">→</span></button>
-          <button className="btn" onClick={() => next(true)}><span className="tag red">Forgot</span> <span className="faint" style={{ fontSize: 12 }}>due tomorrow</span> <span className="kbd">F</span></button>
+          <button className="btn grade forgot" onClick={() => next(true)}><span className="kbd">F</span> <span className="grade-label">Forgot</span> <span className="faint" style={{ fontSize: 12 }}>due tomorrow</span></button>
         </div>
       )}
     </div>

@@ -22,7 +22,6 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="page wide">
-      <div className="page-icon">❓</div>
       <h1 className="page-title">Questions</h1>
       <p className="page-sub">Questions, not notes. Q = explain in words (studied on the Cards page), Task = write code or design by hand (Recall and the plan). Cards marked with a repo are edited or deleted on Cards → All cards.</p>
 
@@ -30,7 +29,7 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
         <Link className={`db-tab ${!onlyTasks ? 'active' : ''}`} href="/questions">All · {totalCount}</Link>
         <Link className={`db-tab ${onlyTasks ? 'active' : ''}`} href="/questions?filter=tasks">Tasks · {taskCount}</Link>
         <span style={{ flex: 1 }} />
-        <Link className="btn sm" href="/cards" style={{ marginBottom: 4 }}>🃏 Study cards</Link>
+        <Link className="btn sm" href="/cards" style={{ marginBottom: 4 }}>Study cards</Link>
       </div>
 
       <table className="db">

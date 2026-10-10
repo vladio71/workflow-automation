@@ -187,7 +187,6 @@ export function LiveCodeCoach() {
   return (
     <>
       <button type="button" className="nav-link nav-button" onClick={openFromMenu} data-testid="live-code-menu">
-        <span style={{ width: 20, textAlign: 'center' }}>📏</span>
         <span>Live code rules</span>
         {session && pending && <span className="count alert" title={session.label}>перевір</span>}
         {session && !pending && <span className="count" title={`${session.label}: нагадування увімкнене`}>●</span>}

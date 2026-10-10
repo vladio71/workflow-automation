@@ -96,7 +96,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
       <div style={{ display: 'flex', gap: 8 }}>
         <Link href={`/recall/${topic.id}`} className="btn primary">▶ Start recall</Link>
         {topic.questions.some((question) => question.kind === 'CONCEPT') && (
-          <Link href={`/cards/category/${topic.id}`} className="btn">🃏 Cards of this topic</Link>
+          <Link href={`/cards/category/${topic.id}`} className="btn">Cards of this topic</Link>
         )}
         <form action={deleteTopic.bind(null, topic.id)}><button className="btn ghost">Delete</button></form>
       </div>
@@ -160,7 +160,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
           )}
           {!isTask && (
             <div className="faint" style={{ marginTop: 6, fontSize: 12 }}>
-              🃏 {question.cardDueAt === null
+              {question.cardDueAt === null
                 ? 'new card, comes up on Cards soon'
                 : `next card review ${question.cardDueAt <= now ? 'today' : relativeDay(question.cardDueAt, now)}`}
               {question.cardLapses > 0 && ` · forgotten ${question.cardLapses}×`}

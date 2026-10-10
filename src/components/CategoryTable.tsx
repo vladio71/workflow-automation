@@ -13,37 +13,27 @@ interface CategoryTableProps {
 /** Категорії карток таблицею: скільки карток, скільки чекає сьогодні, коли наступний термін. */
 export function CategoryTable({ categories, newLeft, now }: CategoryTableProps) {
   return (
-    <table className="db" data-testid="category-table">
-      <thead>
-        <tr>
-          <th><span className="ico">Aa</span>Category</th>
-          <th><span className="ico">#</span>Cards</th>
-          <th><span className="ico">#</span>Due</th>
-          <th><span className="ico">#</span>New</th>
-          <th><span className="ico">🗓</span>Next due</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {categories.map((category) => {
-          const waiting = category.due + Math.min(category.fresh, newLeft);
-          const overdue = category.due > 0;
-          return (
-            <tr key={categoryParam(category.id)} data-testid={`category-row-${categoryParam(category.id)}`}>
-              <td className="title-cell"><Link href={categoryHref(category.id)}>{category.name}</Link></td>
-              <td className="muted" style={{ width: 70 }}>{category.total}</td>
-              <td style={{ width: 70, color: overdue ? '#eb5757' : undefined }} className={overdue ? '' : 'faint'}>{category.due || ''}</td>
-              <td className="muted" style={{ width: 70 }}>{category.fresh || ''}</td>
-              <td style={{ width: 110, color: overdue ? '#eb5757' : undefined }} className={overdue ? '' : 'muted'}>
-                {relativeDay(category.nextDueAt, now)}
-              </td>
-              <td style={{ width: 110 }}>
-                {waiting > 0 && <Link className="btn sm" href={categoryReviewHref(category.id)}>Recall {waiting} →</Link>}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="cat-list" data-testid="category-table">
+      {categories.map((category) => {
+        const waiting = category.due + Math.min(category.fresh, newLeft);
+        const overdue = category.due > 0;
+        return (
+          <div key={categoryParam(category.id)} className={`cat-row${overdue ? ' due' : ''}`} data-testid={`category-row-${categoryParam(category.id)}`}>
+            <Link href={categoryHref(category.id)} className="cat-name">{category.name}</Link>
+            <span className="cat-meta mono">
+              <span title="усього карток">{category.total}</span>
+              {category.due > 0 && <span className="cat-due" title="термін настав">{category.due} due</span>}
+              {category.fresh > 0 && <span className="muted" title="нових">{category.fresh} new</span>}
+              <span className={overdue ? 'cat-due' : 'faint'}>{relativeDay(category.nextDueAt, now)}</span>
+            </span>
+            {waiting > 0 ? (
+              <Link className="btn sm" href={categoryReviewHref(category.id)}>Recall {waiting}</Link>
+            ) : (
+              <span className="faint" style={{ fontSize: 12 }}>все повторено</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

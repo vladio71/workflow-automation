@@ -68,7 +68,6 @@ export default async function TasksPage() {
 
   return (
     <div className="page">
-      <div className="page-icon">📌</div>
       <h1 className="page-title">Tasks</h1>
       <p className="page-sub">
         Справи поза навчанням. Повторювані (щодня, по буднях) план бере сам. Разові пропонує, поки не зробиш,

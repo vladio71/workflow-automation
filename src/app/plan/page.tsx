@@ -43,7 +43,6 @@ export default async function PlanPage() {
 
   return (
     <div className="page">
-      <div className="page-icon">🧭</div>
       <h1 className="page-title">Study plan</h1>
       <p className="page-sub">
         Steps come from <code>learn/plan.md</code> in the repo and go strictly in order. Each day the plan on Today takes the next
@@ -63,7 +62,6 @@ export default async function PlanPage() {
         return (
           <div key={plan.source.id} style={{ marginBottom: 28 }}>
             <div className="callout">
-              <span className="emoji">🧭</span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <b>{plan.source.planName}</b>

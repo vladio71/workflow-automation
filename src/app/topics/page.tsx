@@ -53,7 +53,6 @@ export default async function TopicsPage({ searchParams }: TopicsPageProps) {
 
   return (
     <div className="page wide">
-      <div className="page-icon">🗂️</div>
       <h1 className="page-title">Topics</h1>
       <p className="page-sub">Retrospective timetable. Change Last recall only after recalling from memory, not after re-reading.</p>
 

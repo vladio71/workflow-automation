@@ -46,7 +46,6 @@ export default async function LevelPage({ params }: LevelPageProps) {
         <Link href="/levels" className="faint" style={{ fontSize: 14 }}>← Levels · {level.groupTitle}</Link>
         {next && <Link href={`/levels/${next.key}`} className="faint" style={{ fontSize: 14 }}>{next.title} →</Link>}
       </div>
-      <div className="page-icon">{FRAME_ICON[progress.frame] || '⚔️'}</div>
       <h1 className="page-title">{level.title}</h1>
       <p className="page-sub">
         ~{level.minutes} min · {level.difficulty}

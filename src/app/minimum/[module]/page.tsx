@@ -15,7 +15,7 @@ export function generateStaticParams(): { module: string }[] {
 function ModuleModel({ module }: { module: Module }) {
   if (module.flow.length > 0) {
     return (
-      <div className="flow">
+      <div className="model-flow">
         {module.flow.map((step) => (
           <div key={step.title} className="flow-step">
             <b>{step.title}</b>

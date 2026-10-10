@@ -37,14 +37,13 @@ export default async function StatsPage() {
 
   return (
     <div className="page wide">
-      <div className="page-icon">📈</div>
       <h1 className="page-title">Stats</h1>
       <p className="page-sub">Where the time went. Recall and mock sessions are logged automatically, the rest you log below.</p>
 
       <div className="kpis">
         <div className="kpi">
           <div className="label">Current streak</div>
-          <div className="value">🔥 {stats.streak.current}</div>
+          <div className="value">{stats.streak.current}</div>
           <div className="hint">{stats.streak.activeToday ? 'today counted' : 'do something today to keep it'}</div>
         </div>
         <div className="kpi"><div className="label">Best streak</div><div className="value">{stats.streak.best}</div><div className="hint">days in a row</div></div>

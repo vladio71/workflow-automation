@@ -124,7 +124,6 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
       </div>
 
       <div className="callout">
-        <span className="emoji">{isTask ? '🛠️' : '❓'}</span>
         <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{prompt}</div>
       </div>
       {isTask && (
@@ -158,7 +157,7 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
       </div>
       {!isTask && <AiStatus jobId={jobId} active={grading} />}
       {!geminiEnabled && !isTask && <p className="faint" style={{ fontSize: 13 }}>Set GEMINI_API_KEY in .env to get AI feedback. Without it, compare with the reference yourself.</p>}
-      {error && <div className="callout" style={{ color: '#eb5757' }}><span className="emoji">⚠️</span><div>{error}</div></div>}
+      {error && <div className="callout" style={{ color: '#eb5757' }}><div>{error}</div></div>}
 
       {grade && (
         <div className="card" style={{ margin: '12px 0' }}>

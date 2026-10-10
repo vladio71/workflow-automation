@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
-import '@fontsource-variable/inter';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource-variable/unbounded';
 import './globals.css';
 import { NavLink } from '@/components/NavLink';
 import { LiveCodeCoach } from '@/components/LiveCodeCoach';
@@ -23,36 +28,36 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   ]);
 
   return (
-    <html lang="en">
+    <html lang="uk">
       <body>
         <div className="app">
           <aside className="sidebar">
             <div className="sidebar-title">
-              <span style={{ fontSize: 18 }}>🧠</span> Learn it. Keep it.
-              <span className="faint" style={{ marginLeft: 'auto', fontWeight: 500 }} title="Streak: days in a row">🔥 {streak.current}</span>
+              Learn it. Keep it.
+              <span className="faint mono" style={{ marginLeft: 'auto', fontWeight: 400 }} title="Днів поспіль">{streak.current} дн.</span>
             </div>
-            <NavLink href="/" icon="☀️" label="Today" count={dueCount} />
-            <NavLink href="/cards" icon="🃏" label="Cards" count={cards.due + cards.fresh} />
-            <NavLink href="/parking" icon="🅿️" label="Parking" count={inboxCount} />
-            <NavLink href="/tasks" icon="📌" label="Tasks" count={openTasks} />
+            <NavLink href="/" label="Today" count={dueCount} />
+            <NavLink href="/cards" label="Cards" count={cards.due + cards.fresh} />
+            <NavLink href="/parking" label="Parking" count={inboxCount} />
+            <NavLink href="/tasks" label="Tasks" count={openTasks} />
             <div className="sidebar-section">Material</div>
-            <NavLink href="/map" icon="🗺️" label="Map" />
-            <NavLink href="/patterns" icon="🧩" label="Patterns" />
-            <NavLink href="/minimum" icon="🧱" label="Minimum" />
-            <NavLink href="/reference" icon="📐" label="Reference" />
+            <NavLink href="/map" label="Map" />
+            <NavLink href="/patterns" label="Patterns" />
+            <NavLink href="/minimum" label="Minimum" />
+            <NavLink href="/reference" label="Reference" />
             <div className="sidebar-section">Knowledge</div>
-            <NavLink href="/topics" icon="🗂️" label="Topics" />
-            <NavLink href="/questions" icon="❓" label="Questions" />
-            <NavLink href="/plan" icon="🧭" label="Plan" />
-            <NavLink href="/cycles" icon="🔁" label="Cycles" />
-            <NavLink href="/stats" icon="📈" label="Stats" />
-            <NavLink href="/sources" icon="🔗" label="Sources" />
+            <NavLink href="/topics" label="Topics" />
+            <NavLink href="/questions" label="Questions" />
+            <NavLink href="/plan" label="Plan" />
+            <NavLink href="/cycles" label="Cycles" />
+            <NavLink href="/stats" label="Stats" />
+            <NavLink href="/sources" label="Sources" />
             <div className="sidebar-section">Practice</div>
-            <NavLink href="/levels" icon="⚔️" label="Levels" count={dueLevels} />
+            <NavLink href="/levels" label="Levels" count={dueLevels} />
             <LiveCodeCoach />
-            <NavLink href="/mock" icon="🎙️" label="Mock interview" />
+            <NavLink href="/mock" label="Mock interview" />
             <div className="sidebar-section">System</div>
-            <NavLink href="/guide" icon="📖" label="Guide" />
+            <NavLink href="/guide" label="Guide" />
           </aside>
           <main className="main">{children}</main>
         </div>

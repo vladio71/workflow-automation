@@ -1,0 +1,1722 @@
+{
+ "numbers": [
+  {
+   "area": "Мережа",
+   "op": "Той самий AZ, туди-назад",
+   "value": "0,05–0,3 мс",
+   "source": "AWS: «typically sub-millisecond»",
+   "estimate": false
+  },
+  {
+   "area": "Мережа",
+   "op": "Між AZ одного регіону",
+   "value": "0,2–2 мс",
+   "source": "AWS: «single-digit millisecond»",
+   "estimate": false
+  },
+  {
+   "area": "Мережа",
+   "op": "us-east-1 ↔ eu-central-1",
+   "value": "~90 мс",
+   "source": "вторинне джерело, оцінка",
+   "estimate": true
+  },
+  {
+   "area": "Мережа",
+   "op": "Юзер → регіон через інтернет",
+   "value": "20–100 мс",
+   "source": "оцінка, залежить від відстані",
+   "estimate": true
+  },
+  {
+   "area": "Мережа",
+   "op": "CloudFront, віддача з кешу",
+   "value": "10–50 мс",
+   "source": "оцінка, офіційної цифри нема",
+   "estimate": true
+  },
+  {
+   "area": "Кеш",
+   "op": "Redis / ElastiCache GET",
+   "value": "0,2–1 мс з клієнта",
+   "source": "AWS: «microsecond latency» на сервері",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "Postgres, простий запит по індексу",
+   "value": "0,5–2 мс",
+   "source": "виконання ~0,02 мс, решта мережа",
+   "estimate": true
+  },
+  {
+   "area": "Бази",
+   "op": "DynamoDB GetItem",
+   "value": "1–3 мс сервер, 3–10 мс з клієнта",
+   "source": "AWS: «single-digit millisecond»",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "DAX (кеш DynamoDB)",
+   "value": "сотні мкс",
+   "source": "тільки eventually consistent читання",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "OpenSearch: term / range",
+   "value": "1–20 мс",
+   "source": "бенчмарк Trail of Bits",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "OpenSearch: повнотекстовий",
+   "value": "10–50 мс",
+   "source": "бенчмарк Trail of Bits",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "OpenSearch: агрегації",
+   "value": "50–150+ мс",
+   "source": "бенчмарк Trail of Bits",
+   "estimate": false
+  },
+  {
+   "area": "Бази",
+   "op": "S3 GET малого об'єкта",
+   "value": "десятки – 200 мс",
+   "source": "AWS дає і «tens of ms», і «100–200 ms» на різних сторінках",
+   "estimate": false
+  },
+  {
+   "area": "Обчислення",
+   "op": "API Gateway HTTP API, додає",
+   "value": "5–10 мс",
+   "source": "AWS: p99 < 10 мс",
+   "estimate": false
+  },
+  {
+   "area": "Обчислення",
+   "op": "API Gateway REST API, додає",
+   "value": "10–20+ мс",
+   "source": "замір cloudonaut",
+   "estimate": false
+  },
+  {
+   "area": "Обчислення",
+   "op": "Lambda тепла, накладні",
+   "value": "1–10 мс",
+   "source": "на 128 МБ до 10–40 мс",
+   "estimate": true
+  },
+  {
+   "area": "Обчислення",
+   "op": "Lambda холодний старт Node",
+   "value": "~100 мс – 1+ с",
+   "source": "AWS: < 1% викликів",
+   "estimate": false
+  },
+  {
+   "area": "Черги",
+   "op": "SQS SendMessage",
+   "value": "10–70 мс",
+   "source": "AWS: «tens or low hundreds of ms»",
+   "estimate": false
+  },
+  {
+   "area": "Черги",
+   "op": "SQS від відправки до отримання",
+   "value": "~100 мс+",
+   "source": "замір SoftwareMill",
+   "estimate": false
+  },
+  {
+   "area": "LLM",
+   "op": "Перший токен, звичайна модель",
+   "value": "0,3–1,5 с",
+   "source": "Artificial Analysis",
+   "estimate": false
+  },
+  {
+   "area": "LLM",
+   "op": "Вся відповідь, кілька сотень токенів",
+   "value": "2–10 с",
+   "source": "Artificial Analysis",
+   "estimate": false
+  },
+  {
+   "area": "LLM",
+   "op": "Reasoning-модель",
+   "value": "10–60+ с",
+   "source": "Artificial Analysis",
+   "estimate": false
+  }
+ ],
+ "limits": [
+  {
+   "service": "Lambda",
+   "what": "Таймаут 15 хв. Пам'ять 128 МБ – 10 ГБ. Запит і відповідь до 6 МБ (стрімінг до 200 МБ). Async-виклик до 1 МБ.",
+   "scaling": "Квота на регіон за замовчуванням 1 000 одночасних, піднімається до десятків тисяч. Кожна функція додає до 1 000 інстансів за 10 с.",
+   "note": "SnapStart для Node.js не підтримується. Provisioned concurrency тримає інстанси теплими за гроші."
+  },
+  {
+   "service": "API Gateway",
+   "what": "REST API: інтеграція до 29 с, з червня 2024 для Regional і Private можна підняти через Service Quotas. HTTP API: 30 с, не піднімається.",
+   "scaling": "10 000 RPS на акаунт у регіоні, burst 5 000. Спільний ліміт для REST, HTTP і WebSocket API.",
+   "note": "HTTP API дешевший і швидший. REST має WAF, API keys, кеш, валідацію запитів."
+  },
+  {
+   "service": "API Gateway WebSocket",
+   "what": "З'єднання живе максимум 2 год, рветься після 10 хв без активності. Повідомлення до 128 КБ.",
+   "scaling": "",
+   "note": "Ліміти не піднімаються. Для довгих з'єднань краще свій gateway на контейнерах."
+  },
+  {
+   "service": "SQS",
+   "what": "Повідомлення до 1 МіБ (до серпня 2025 було 256 КіБ). Visibility timeout до 12 год. Зберігання до 14 днів.",
+   "scaling": "Standard: майже без ліміту, доставка щонайменше раз, порядок не гарантовано. FIFO: 300 TPS, з батчами 3 000, у high throughput режимі десятки тисяч.",
+   "note": "Lambda-тригер: батч до 10 000 (standard), maxConcurrency від 2 до 1 000."
+  },
+  {
+   "service": "Step Functions",
+   "what": "Standard: до 1 року, exactly-once, оплата за переходи. Express: до 5 хв, at-least-once, оплата за кількість і час.",
+   "scaling": "Standard: максимум 25 000 подій в історії виконання.",
+   "note": "Вхід і вихід кроку до 256 КіБ: великі дані зберігай в S3, передавай посилання."
+  },
+  {
+   "service": "ECS Fargate",
+   "what": "Контейнери без власних EC2. Задача до 32 vCPU / 244 ГБ (з червня 2026).",
+   "scaling": "Кількість задач сама не змінюється. Це робить ECS Service Auto Scaling: target tracking по CPU, пам'яті, запитах на ціль ALB, або по backlog черги на задачу.",
+   "note": "Fargate Spot дешевший, попередження за 2 хв до зупинки."
+  },
+  {
+   "service": "EKS",
+   "what": "AWS веде control plane Kubernetes. Вузли (EC2) і data plane на тобі.",
+   "scaling": "Karpenter додає вузли під поди, які не вмістились, і прибирає зайві.",
+   "note": "EKS Auto Mode: AWS веде і вузли, за окрему плату."
+  },
+  {
+   "service": "RDS Proxy",
+   "what": "Ділить і перевикористовує з'єднання, тримає з'єднання застосунку під час failover.",
+   "scaling": "",
+   "note": "Pinning: SET, PREPARE, тимчасові таблиці, session advisory locks прив'язують з'єднання до клієнта, і пул перестає ділитись."
+  },
+  {
+   "service": "RDS / Aurora Postgres",
+   "what": "RDS: до 15 read replicas, асинхронно. Aurora: до 15 реплік, лаг зазвичай < 100 мс, сховище росте само до 256 ТіБ.",
+   "scaling": "Записи і в RDS, і в Aurora йдуть через один writer.",
+   "note": "Aurora Serverless v2: від 0 до 256 ACU. Aurora Limitless: шардинг Postgres по ключу, GA з жовтня 2024."
+  },
+  {
+   "service": "ElastiCache",
+   "what": "Valkey, Redis OSS, Memcached. Без cluster mode: 1 шард, до 5 реплік.",
+   "scaling": "Cluster mode: до 500 шардів, дані розкладені по шардах.",
+   "note": "Serverless: масштабується сам, без вузлів."
+  },
+  {
+   "service": "DynamoDB",
+   "what": "Елемент до 400 КБ. Партиції ділить сам.",
+   "scaling": "Одна партиція: 3 000 читань і 1 000 записів на секунду. On-demand таблиця за замовчуванням до 40 000 одиниць.",
+   "note": "Головна пастка: гарячий ключ. Ключі проєктуєш під запити наперед."
+  },
+  {
+   "service": "S3",
+   "what": "Об'єкт до 50 ТБ (з грудня 2025). Строга консистентність read-after-write.",
+   "scaling": "3 500 записів і 5 500 читань на секунду на префікс, префіксів скільки завгодно.",
+   "note": "Під час розгону можливі 503 Slow Down."
+  },
+  {
+   "service": "CloudFront",
+   "what": "CDN для статики і динаміки.",
+   "scaling": "CloudFront Functions: прості правки запиту за < 1 мс. Lambda@Edge: повноцінний код з мережею.",
+   "note": ""
+  },
+  {
+   "service": "EventBridge",
+   "what": "Scheduler: розклади з часовими поясами, one-time, ретраї. Event bus: події між сервісами.",
+   "scaling": "PutEvents у великих регіонах 10 000 TPS, у менших від 400.",
+   "note": "Подія до 1 МБ."
+  },
+  {
+   "service": "ALB / NLB",
+   "what": "ALB: L7, маршрути по шляху і хосту, підтримує WebSocket.",
+   "scaling": "NLB: L4, мільйони запитів на секунду, статичний IP.",
+   "note": ""
+  },
+  {
+   "service": "Kinesis / MSK",
+   "what": "Kinesis: потік AWS з шардами. MSK: керована Kafka.",
+   "scaling": "Шард Kinesis: запис 1 МБ/с або 1 000 записів/с, читання 2 МБ/с.",
+   "note": "Зберігання від 24 год до 365 днів."
+  }
+ ],
+ "dbscale": [
+  {
+   "db": "Postgres (RDS)",
+   "reads": "Репліки. Додаєш руками, розводити запити між primary і реплікою мусить застосунок.",
+   "writes": "Тільки вертикально: один primary. Далі шардинг поза ядром (Citus, свій код, Aurora Limitless).",
+   "storage": "RDS: автоскейл сховища за прапорцем, тільки вгору.",
+   "trap": "Вичерпані з'єднання: кожне з'єднання = процес. У чистому Postgres max_connections = 100, на RDS залежить від пам'яті інстансу. Читання з репліки одразу після запису."
+  },
+  {
+   "db": "Aurora Postgres",
+   "reads": "До 15 реплік на спільному сховищі, лаг < 100 мс.",
+   "writes": "Один writer. Serverless v2 скейлить його сам у межах min/max. Горизонтально тільки Limitless.",
+   "storage": "Автоматично, до 256 ТіБ.",
+   "trap": "Думати, що Aurora скейлить записи."
+  },
+  {
+   "db": "Citus",
+   "reads": "Горизонтально по воркерах, маршрутизація автоматична.",
+   "writes": "Горизонтально. Ключ розподілу обираєш ти.",
+   "storage": "Додаєш вузол руками, перебалансування руками, але онлайн.",
+   "trap": "Поганий ключ (мало значень, перекіс, timestamp). JOIN-и між неспорідненими таблицями."
+  },
+  {
+   "db": "MongoDB",
+   "reads": "Secondaries, але за замовчуванням читання з primary. З secondary можна отримати старі дані.",
+   "writes": "Шардинг вбудований. Балансувальник переносить дані сам, ключ шарда обираєш ти.",
+   "storage": "Додаєш шарди руками, дані переїжджають самі.",
+   "trap": "Монотонний ключ (timestamp, ObjectId) = всі вставки в один шард. Запити без ключа йдуть на всі шарди."
+  },
+  {
+   "db": "DynamoDB",
+   "reads": "Автоматично.",
+   "writes": "Автоматично.",
+   "storage": "Автоматично.",
+   "trap": "Гарячий ключ: одна партиція тримає 3 000 читань і 1 000 записів на секунду. Ключі проєктуєш під запити."
+  },
+  {
+   "db": "Redis",
+   "reads": "Репліки, асинхронно. Розводити читання руками.",
+   "writes": "Redis Cluster: 16 384 слоти. Додати вузол і перерозкласти слоти руками, онлайн. ElastiCache Serverless сам.",
+   "storage": "Обмежено пам'яттю.",
+   "trap": "CROSSSLOT: команда з ключами з різних слотів. Hash tags {…} тримають ключі разом, але перекошують вузли."
+  },
+  {
+   "db": "Neo4j",
+   "reads": "Secondaries, до 20, асинхронно.",
+   "writes": "Один writer на базу. Більше primaries = надійність, не швидкість записів.",
+   "storage": "Обмежено одним сервером. Шардинг через composite databases руками.",
+   "trap": "Чекати, що більше primaries пришвидшить запис."
+  },
+  {
+   "db": "OpenSearch",
+   "reads": "Репліки, змінюються будь-коли.",
+   "writes": "Залежить від кількості primary shards, яку задаєш при створенні індексу. Змінити: split або reindex.",
+   "storage": "Додаєш вузли, шарди перерозкладаються самі.",
+   "trap": "Неправильна кількість шардів на старті. Забагато дрібних шардів. Норма: 10–50 ГБ на шард."
+  },
+  {
+   "db": "ClickHouse",
+   "reads": "Репліки (ReplicatedMergeTree + Keeper).",
+   "writes": "Шарди + Distributed-таблиця, конфіг руками. Старі дані на новий шард не переїжджають. У Cloud вертикальний автоскейл.",
+   "storage": "Self-managed руками, Cloud автоматично.",
+   "trap": "Багато дрібних вставок: «too many parts». Вставляй батчами від 1k рядків, краще 10k–100k."
+  },
+  {
+   "db": "S3",
+   "reads": "Автоматично.",
+   "writes": "Автоматично, 3 500 записів / 5 500 читань на секунду на префікс.",
+   "storage": "Автоматично.",
+   "trap": "Весь трафік в один префікс."
+  },
+  {
+   "db": "pgvector",
+   "reads": "Як Postgres: репліки.",
+   "writes": "Як Postgres: один primary.",
+   "storage": "Як Postgres.",
+   "trap": "Індекс HNSW не влазить у пам'ять: запити сповільнюються. Індекс vector до 2 000 вимірів, halfvec до 4 000."
+  }
+ ],
+ "refs": [
+  {
+   "key": "C",
+   "text": "діаграма «Де запускати Node»"
+  },
+  {
+   "key": "D",
+   "text": "діаграма «База і стан»"
+  },
+  {
+   "key": "W",
+   "text": "діаграма «Запис»"
+  },
+  {
+   "key": "R",
+   "text": "діаграма «Читання»"
+  },
+  {
+   "key": "п.",
+   "text": "діаграма «Моноліт vs мікросервіси»"
+  },
+  {
+   "key": "Xu",
+   "text": "System Design Interview, Alex Xu"
+  }
+ ],
+ "sources": [
+  {
+   "title": "System Design Interview, Alex Xu: розд. 1–3, 12",
+   "url": "файл, який ти скинув"
+  },
+  {
+   "title": "Lambda quotas",
+   "url": "https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html"
+  },
+  {
+   "title": "Lambda scaling",
+   "url": "https://docs.aws.amazon.com/lambda/latest/dg/scaling-behavior.html"
+  },
+  {
+   "title": "Lambda cold starts",
+   "url": "https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html"
+  },
+  {
+   "title": "API Gateway quotas",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html"
+  },
+  {
+   "title": "API Gateway: таймаут понад 29 с (2024)",
+   "url": "https://aws.amazon.com/about-aws/whats-new/2024/06/amazon-api-gateway-integration-timeout-limit-29-seconds/"
+  },
+  {
+   "title": "HTTP API vs REST API",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html"
+  },
+  {
+   "title": "API Gateway WebSocket limits",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-execution-service-websocket-limits-table.html"
+  },
+  {
+   "title": "SQS message quotas",
+   "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html"
+  },
+  {
+   "title": "SQS + Lambda scaling",
+   "url": "https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-scaling.html"
+  },
+  {
+   "title": "Step Functions: Standard vs Express",
+   "url": "https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html"
+  },
+  {
+   "title": "ECS Service Auto Scaling",
+   "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html"
+  },
+  {
+   "title": "Fargate",
+   "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html"
+  },
+  {
+   "title": "EKS Auto Mode",
+   "url": "https://docs.aws.amazon.com/eks/latest/userguide/automode.html"
+  },
+  {
+   "title": "RDS Proxy pinning",
+   "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-pinning.html"
+  },
+  {
+   "title": "Aurora replication",
+   "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Replication.html"
+  },
+  {
+   "title": "Aurora Limitless",
+   "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/limitless-architecture.html"
+  },
+  {
+   "title": "ElastiCache cluster mode",
+   "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Replication.Redis-RedisCluster.html"
+  },
+  {
+   "title": "DynamoDB partitions",
+   "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+  },
+  {
+   "title": "DynamoDB DAX",
+   "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.html"
+  },
+  {
+   "title": "S3 performance",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html"
+  },
+  {
+   "title": "OpenSearch sharding",
+   "url": "https://docs.aws.amazon.com/opensearch-service/latest/developerguide/bp-sharding.html"
+  },
+  {
+   "title": "Postgres partitioning",
+   "url": "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+  },
+  {
+   "title": "Postgres replication",
+   "url": "https://www.postgresql.org/docs/current/warm-standby.html"
+  },
+  {
+   "title": "Citus cluster management",
+   "url": "https://docs.citusdata.com/en/stable/admin_guide/cluster_management.html"
+  },
+  {
+   "title": "MongoDB shard key",
+   "url": "https://www.mongodb.com/docs/manual/core/sharding-choose-a-shard-key/"
+  },
+  {
+   "title": "Redis Cluster spec",
+   "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+  },
+  {
+   "title": "Neo4j clustering",
+   "url": "https://neo4j.com/docs/operations-manual/current/clustering/introduction/"
+  },
+  {
+   "title": "ClickHouse bulk inserts",
+   "url": "https://clickhouse.com/docs/concepts/features/operations/insert/bulkinserts.md"
+  },
+  {
+   "title": "pgvector",
+   "url": "https://github.com/pgvector/pgvector"
+  },
+  {
+   "title": "Same/cross-AZ latency",
+   "url": "https://aws.amazon.com/blogs/architecture/improving-performance-and-reducing-cost-using-availability-zone-affinity/"
+  },
+  {
+   "title": "HTTP API latency (cloudonaut)",
+   "url": "https://cloudonaut.io/review-api-gateway-http-apis"
+  },
+  {
+   "title": "OpenSearch benchmark (Trail of Bits)",
+   "url": "https://blog.trailofbits.com/2025/03/06/benchmarking-opensearch-and-elasticsearch/"
+  },
+  {
+   "title": "LLM latency (Artificial Analysis)",
+   "url": "https://artificialanalysis.ai/"
+  },
+  {
+   "title": "Notion: шардинг Postgres",
+   "url": "https://www.notion.com/blog/sharding-postgres-at-notion"
+  },
+  {
+   "title": "Figma: шардинг Postgres",
+   "url": "https://www.figma.com/blog/how-figmas-databases-team-lived-to-tell-the-scale/"
+  },
+  {
+   "title": "Discord: MongoDB → Cassandra",
+   "url": "https://discord.com/blog/how-discord-stores-billions-of-messages"
+  },
+  {
+   "title": "Discord: Cassandra → ScyllaDB",
+   "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+  },
+  {
+   "title": "Socket.io: кілька вузлів і sticky sessions",
+   "url": "https://socket.io/docs/v4/using-multiple-nodes/"
+  },
+  {
+   "title": "Socket.io + PM2",
+   "url": "https://socket.io/docs/v4/pm2/"
+  },
+  {
+   "title": "DynamoDB write sharding",
+   "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-sharding.html"
+  },
+  {
+   "title": "HTTP API quotas",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html"
+  },
+  {
+   "title": "RDS limits (max_connections)",
+   "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html"
+  }
+ ],
+ "latency": [
+  {
+   "label": "Redis GET (з клієнта)",
+   "min": 0.2,
+   "max": 1,
+   "note": "AWS: microsecond на сервері",
+   "estimate": false
+  },
+  {
+   "label": "Той самий AZ, туди-назад",
+   "min": 0.05,
+   "max": 0.3,
+   "note": "AWS",
+   "estimate": false
+  },
+  {
+   "label": "Між AZ одного регіону",
+   "min": 0.2,
+   "max": 2,
+   "note": "AWS: single-digit ms",
+   "estimate": false
+  },
+  {
+   "label": "Postgres, запит по індексу",
+   "min": 0.5,
+   "max": 2,
+   "note": "здебільшого мережа",
+   "estimate": true
+  },
+  {
+   "label": "DynamoDB GetItem (з клієнта)",
+   "min": 3,
+   "max": 10,
+   "note": "AWS: single-digit ms",
+   "estimate": false
+  },
+  {
+   "label": "Lambda тепла, накладні",
+   "min": 1,
+   "max": 10,
+   "note": "",
+   "estimate": true
+  },
+  {
+   "label": "API Gateway HTTP API, додає",
+   "min": 5,
+   "max": 10,
+   "note": "AWS: p99 < 10 мс",
+   "estimate": false
+  },
+  {
+   "label": "OpenSearch, повнотекстовий",
+   "min": 10,
+   "max": 50,
+   "note": "Trail of Bits",
+   "estimate": false
+  },
+  {
+   "label": "CloudFront з кешу",
+   "min": 10,
+   "max": 50,
+   "note": "",
+   "estimate": true
+  },
+  {
+   "label": "SQS SendMessage",
+   "min": 10,
+   "max": 70,
+   "note": "AWS FAQ",
+   "estimate": false
+  },
+  {
+   "label": "Юзер → регіон, інтернет",
+   "min": 20,
+   "max": 100,
+   "note": "",
+   "estimate": true
+  },
+  {
+   "label": "S3 GET малого об'єкта",
+   "min": 20,
+   "max": 200,
+   "note": "AWS: tens of ms … 100–200 ms",
+   "estimate": false
+  },
+  {
+   "label": "OpenSearch, агрегації",
+   "min": 50,
+   "max": 150,
+   "note": "Trail of Bits",
+   "estimate": false
+  },
+  {
+   "label": "us-east-1 ↔ eu-central-1",
+   "min": 85,
+   "max": 95,
+   "note": "",
+   "estimate": true
+  },
+  {
+   "label": "Lambda холодний старт Node",
+   "min": 100,
+   "max": 1000,
+   "note": "AWS: < 1% викликів",
+   "estimate": false
+  },
+  {
+   "label": "LLM: перший токен",
+   "min": 300,
+   "max": 1500,
+   "note": "Artificial Analysis",
+   "estimate": false
+  },
+  {
+   "label": "LLM: уся відповідь",
+   "min": 2000,
+   "max": 10000,
+   "note": "Artificial Analysis",
+   "estimate": false
+  },
+  {
+   "label": "Reasoning-модель",
+   "min": 10000,
+   "max": 60000,
+   "note": "Artificial Analysis",
+   "estimate": false
+  }
+ ],
+ "dbs": [
+  {
+   "name": "Postgres (RDS)",
+   "boxes": [
+    {
+     "label": "Primary\nпише + читає",
+     "kind": "w",
+     "col": 0,
+     "row": 0
+    },
+    {
+     "label": "Репліка\nчитає",
+     "kind": "r",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Репліка\nчитає",
+     "kind": "r",
+     "col": 2,
+     "row": 0
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": "async, лаг < 1 с"
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "додаєш репліки, код вирішує, куди читати"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "один primary: тільки більший інстанс"
+    },
+    {
+     "what": "Обсяг",
+     "who": "САМ",
+     "text": "RDS storage autoscaling, тільки вгору"
+    }
+   ],
+   "trap": "Кожне з'єднання = процес. Читання з репліки одразу після запису бачить старе."
+  },
+  {
+   "name": "Aurora Postgres",
+   "boxes": [
+    {
+     "label": "Writer",
+     "kind": "w",
+     "col": 0,
+     "row": 0
+    },
+    {
+     "label": "Репліка",
+     "kind": "r",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Репліка",
+     "kind": "r",
+     "col": 2,
+     "row": 0
+    },
+    {
+     "label": "Спільне сховище: росте само до 256 ТіБ",
+     "kind": "st",
+     "col": 0,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    },
+    {
+     "from": 1,
+     "to": 3,
+     "label": ""
+    },
+    {
+     "from": 2,
+     "to": 3,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "до 15 реплік, лаг < 100 мс"
+    },
+    {
+     "what": "Запис",
+     "who": "НАЛАШТУЄШ",
+     "text": "1 writer; Serverless v2 скейлить його в межах min/max"
+    },
+    {
+     "what": "Обсяг",
+     "who": "САМ",
+     "text": "до 256 ТіБ"
+    }
+   ],
+   "trap": "Aurora не скейлить записи горизонтально. Для цього Limitless (шардинг)."
+  },
+  {
+   "name": "Citus (шардинг Postgres)",
+   "boxes": [
+    {
+     "label": "Coordinator\nмаршрутизує",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Worker 1\nшарди 1–4",
+     "kind": "s",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Worker 2\nшарди 5–8",
+     "kind": "s",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Worker 3\nшарди 9–12",
+     "kind": "s",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": "по tenant_id"
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "САМ",
+     "text": "маршрут по ключу автоматично"
+    },
+    {
+     "what": "Запис",
+     "who": "САМ",
+     "text": "розподілено по воркерах"
+    },
+    {
+     "what": "Обсяг",
+     "who": "ТИ",
+     "text": "додаєш вузол і запускаєш rebalance (онлайн)"
+    }
+   ],
+   "trap": "Ключ розподілу з малою кількістю значень або timestamp. JOIN-и між таблицями з різними ключами."
+  },
+  {
+   "name": "MongoDB",
+   "boxes": [
+    {
+     "label": "mongos\nроутер",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Shard 1\nreplica set",
+     "kind": "s",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Shard 2\nreplica set",
+     "kind": "s",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Shard 3\nreplica set",
+     "kind": "s",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": "по shard key"
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "НАЛАШТУЄШ",
+     "text": "за замовчуванням з primary; з secondary можна старе"
+    },
+    {
+     "what": "Запис",
+     "who": "САМ",
+     "text": "балансувальник переносить дані між шардами"
+    },
+    {
+     "what": "Обсяг",
+     "who": "ТИ",
+     "text": "додаєш шарди; ключ шарда обираєш ти"
+    }
+   ],
+   "trap": "Монотонний ключ (timestamp, ObjectId): усі вставки в один шард. Запит без ключа йде на всі шарди."
+  },
+  {
+   "name": "DynamoDB",
+   "boxes": [
+    {
+     "label": "Таблиця",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Партиція\n≤3000 R / 1000 W",
+     "kind": "p",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Партиція",
+     "kind": "p",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Партиція",
+     "kind": "p",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": "hash(PK)"
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "САМ",
+     "text": "партиції додаються самі"
+    },
+    {
+     "what": "Запис",
+     "who": "САМ",
+     "text": "on-demand: до 2× попереднього піку одразу"
+    },
+    {
+     "what": "Обсяг",
+     "who": "САМ",
+     "text": "без ліміту"
+    }
+   ],
+   "trap": "Гарячий ключ: одна партиція тримає 3000 читань і 1000 записів/с. Ключ проєктуєш під запити."
+  },
+  {
+   "name": "Redis Cluster",
+   "boxes": [
+    {
+     "label": "Master A\nслоти 0–5460",
+     "kind": "w",
+     "col": 0,
+     "row": 0
+    },
+    {
+     "label": "Master B\n5461–10922",
+     "kind": "w",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Master C\n10923–16383",
+     "kind": "w",
+     "col": 2,
+     "row": 0
+    },
+    {
+     "label": "Репліка A",
+     "kind": "r",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Репліка B",
+     "kind": "r",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Репліка C",
+     "kind": "r",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    },
+    {
+     "from": 1,
+     "to": 4,
+     "label": ""
+    },
+    {
+     "from": 2,
+     "to": 5,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "репліки асинхронні, читати з них налаштовуєш"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "додаєш master і перекидаєш слоти (онлайн); ElastiCache Serverless сам"
+    },
+    {
+     "what": "Обсяг",
+     "who": "ТИ",
+     "text": "обмежено пам'яттю"
+    }
+   ],
+   "trap": "CROSSSLOT: команда з ключами з різних слотів. Hash tag {user1} тримає ключі разом."
+  },
+  {
+   "name": "Neo4j",
+   "boxes": [
+    {
+     "label": "Primary\nєдиний writer",
+     "kind": "w",
+     "col": 0,
+     "row": 0
+    },
+    {
+     "label": "Primary\nрезерв",
+     "kind": "r",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Primary\nрезерв",
+     "kind": "r",
+     "col": 2,
+     "row": 0
+    },
+    {
+     "label": "Secondary\nчитає",
+     "kind": "r",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Secondary\nчитає",
+     "kind": "r",
+     "col": 1,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 4,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "додаєш secondaries (до 20)"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "1 writer на базу: тільки вертикально"
+    },
+    {
+     "what": "Обсяг",
+     "who": "ТИ",
+     "text": "один сервер; більше через composite databases"
+    }
+   ],
+   "trap": "Більше primaries дає надійність, а не швидкість записів."
+  },
+  {
+   "name": "OpenSearch",
+   "boxes": [
+    {
+     "label": "Індекс\n5 primary shards",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Вузол 1\nP0 P1 R2",
+     "kind": "s",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Вузол 2\nP2 P3 R0",
+     "kind": "s",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Вузол 3\nP4 R1 R3",
+     "kind": "s",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "НАЛАШТУЄШ",
+     "text": "кількість реплік змінюєш будь-коли"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "кількість primary shards задаєш при створенні"
+    },
+    {
+     "what": "Обсяг",
+     "who": "САМ",
+     "text": "додав вузол, шарди переїхали самі"
+    }
+   ],
+   "trap": "Помилка в кількості шардів на старті. Норма 10–50 ГБ на шард, а не тисячі дрібних."
+  },
+  {
+   "name": "ClickHouse",
+   "boxes": [
+    {
+     "label": "Distributed\nтаблиця",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Shard 1\n+ репліка",
+     "kind": "s",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "Shard 2\n+ репліка",
+     "kind": "s",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "Shard 3\n+ репліка",
+     "kind": "s",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "репліки через Keeper"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "шарди в конфігу; старі дані самі не переїжджають"
+    },
+    {
+     "what": "Обсяг",
+     "who": "НАЛАШТУЄШ",
+     "text": "self-managed руками, Cloud сам"
+    }
+   ],
+   "trap": "Дрібні вставки: «too many parts». Вставляй батчами від 1k рядків."
+  },
+  {
+   "name": "S3",
+   "boxes": [
+    {
+     "label": "Бакет",
+     "kind": "x",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "префікс a/\n3500 W · 5500 R/с",
+     "kind": "p",
+     "col": 0,
+     "row": 1
+    },
+    {
+     "label": "префікс b/",
+     "kind": "p",
+     "col": 1,
+     "row": 1
+    },
+    {
+     "label": "префікс c/",
+     "kind": "p",
+     "col": 2,
+     "row": 1
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 3,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "САМ",
+     "text": ""
+    },
+    {
+     "what": "Запис",
+     "who": "САМ",
+     "text": "ліміт на префікс, префіксів скільки завгодно"
+    },
+    {
+     "what": "Обсяг",
+     "who": "САМ",
+     "text": "об'єкт до 50 ТБ"
+    }
+   ],
+   "trap": "Весь трафік в один префікс: 503 Slow Down."
+  },
+  {
+   "name": "pgvector",
+   "boxes": [
+    {
+     "label": "Postgres",
+     "kind": "w",
+     "col": 0,
+     "row": 0
+    },
+    {
+     "label": "Індекс HNSW\nмає влазити в RAM",
+     "kind": "st",
+     "col": 1,
+     "row": 0
+    },
+    {
+     "label": "Репліка",
+     "kind": "r",
+     "col": 2,
+     "row": 0
+    }
+   ],
+   "arrows": [
+    {
+     "from": 0,
+     "to": 1,
+     "label": ""
+    },
+    {
+     "from": 0,
+     "to": 2,
+     "label": ""
+    }
+   ],
+   "tags": [
+    {
+     "what": "Читання",
+     "who": "ТИ",
+     "text": "як Postgres: репліки"
+    },
+    {
+     "what": "Запис",
+     "who": "ТИ",
+     "text": "один primary"
+    },
+    {
+     "what": "Обсяг",
+     "who": "ТИ",
+     "text": "вектор = 4 × вимір + 8 байт"
+    }
+   ],
+   "trap": "50M × 1536 вимірів ≈ 300 ГБ: індекс не влазить у пам'ять, пошук сповільнюється."
+  }
+ ],
+ "aws": [
+  {
+   "name": "Lambda",
+   "what": "Функція запускається на подію, платиш за час виконання.",
+   "badges": [
+    {
+     "value": "15 хв",
+     "caption": "макс. таймаут"
+    },
+    {
+     "value": "10 ГБ",
+     "caption": "пам'ять"
+    },
+    {
+     "value": "6 МБ",
+     "caption": "запит/відповідь"
+    },
+    {
+     "value": "1000",
+     "caption": "одночасних у регіоні за замовч."
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": "+1000 інстансів за 10 с на функцію"
+   },
+   "note": "Платиш і за час очікування I/O."
+  },
+  {
+   "name": "API Gateway",
+   "what": "Керований HTTP-вхід перед Lambda чи сервісами.",
+   "badges": [
+    {
+     "value": "30 с",
+     "caption": "HTTP API, фіксовано"
+    },
+    {
+     "value": "29 с",
+     "caption": "REST, можна підняти"
+    },
+    {
+     "value": "10k",
+     "caption": "RPS на акаунт"
+    },
+    {
+     "value": "5k",
+     "caption": "burst"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": "ліміт спільний на акаунт"
+   },
+   "note": "HTTP API дешевший; REST має WAF, кеш, API keys."
+  },
+  {
+   "name": "API GW WebSocket",
+   "what": "Керовані WebSocket-з'єднання.",
+   "badges": [
+    {
+     "value": "2 год",
+     "caption": "макс. з'єднання"
+    },
+    {
+     "value": "10 хв",
+     "caption": "без активності"
+    },
+    {
+     "value": "128 КБ",
+     "caption": "повідомлення"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": "Ліміти не піднімаються."
+  },
+  {
+   "name": "SQS",
+   "what": "Черга. Standard: щонайменше раз, без порядку.",
+   "badges": [
+    {
+     "value": "1 МіБ",
+     "caption": "повідомлення"
+    },
+    {
+     "value": "14 днів",
+     "caption": "зберігання"
+    },
+    {
+     "value": "12 год",
+     "caption": "visibility"
+    },
+    {
+     "value": "300/3000",
+     "caption": "FIFO TPS"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": "standard майже без ліміту"
+   },
+   "note": "Lambda-тригер: батч до 10 000, maxConcurrency 2–1000."
+  },
+  {
+   "name": "Step Functions",
+   "what": "Оркестратор кроків з ретраями.",
+   "badges": [
+    {
+     "value": "1 рік",
+     "caption": "Standard"
+    },
+    {
+     "value": "5 хв",
+     "caption": "Express"
+    },
+    {
+     "value": "25k",
+     "caption": "подій історії"
+    },
+    {
+     "value": "256 КіБ",
+     "caption": "дані кроку"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": "Standard exactly-once, Express at-least-once."
+  },
+  {
+   "name": "ECS Fargate",
+   "what": "Контейнери без своїх EC2.",
+   "badges": [
+    {
+     "value": "32 vCPU",
+     "caption": "макс. задача"
+    },
+    {
+     "value": "244 ГБ",
+     "caption": "пам'ять"
+    },
+    {
+     "value": "2 хв",
+     "caption": "попередження Spot"
+    }
+   ],
+   "scaler": {
+    "who": "НАЛАШТУЄШ",
+    "text": "кількість задач міняє ECS Service Auto Scaling за твоєю політикою"
+   },
+   "note": "Target tracking: CPU, пам'ять, запити ALB, backlog черги."
+  },
+  {
+   "name": "EKS",
+   "what": "Керований Kubernetes.",
+   "badges": [
+    {
+     "value": "control plane",
+     "caption": "веде AWS"
+    },
+    {
+     "value": "вузли",
+     "caption": "ведеш ти"
+    }
+   ],
+   "scaler": {
+    "who": "НАЛАШТУЄШ",
+    "text": "Karpenter або Auto Mode додають вузли"
+   },
+   "note": "Сенс, коли сервісів десятки і є platform-команда."
+  },
+  {
+   "name": "RDS Proxy",
+   "what": "Пулер з'єднань перед RDS/Aurora.",
+   "badges": [
+    {
+     "value": "сотні → десятки",
+     "caption": "з'єднань"
+    },
+    {
+     "value": "failover",
+     "caption": "тримає з'єднання"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": "Pinning: SET, PREPARE, temp tables прив'язують з'єднання."
+  },
+  {
+   "name": "Aurora",
+   "what": "Postgres/MySQL з розподіленим сховищем.",
+   "badges": [
+    {
+     "value": "15",
+     "caption": "реплік"
+    },
+    {
+     "value": "256 ТіБ",
+     "caption": "сховище"
+    },
+    {
+     "value": "< 100 мс",
+     "caption": "лаг реплік"
+    },
+    {
+     "value": "0–256",
+     "caption": "ACU Serverless v2"
+    }
+   ],
+   "scaler": {
+    "who": "НАЛАШТУЄШ",
+    "text": "1 writer; сховище САМ"
+   },
+   "note": "Limitless = шардинг Postgres."
+  },
+  {
+   "name": "ElastiCache",
+   "what": "Redis / Valkey / Memcached.",
+   "badges": [
+    {
+     "value": "500",
+     "caption": "шардів"
+    },
+    {
+     "value": "5",
+     "caption": "реплік на шард"
+    }
+   ],
+   "scaler": {
+    "who": "НАЛАШТУЄШ",
+    "text": "Serverless скейлиться сам"
+   },
+   "note": "Cluster mode = дані по шардах."
+  },
+  {
+   "name": "DynamoDB",
+   "what": "Ключ-значення без серверів.",
+   "badges": [
+    {
+     "value": "400 КБ",
+     "caption": "елемент"
+    },
+    {
+     "value": "3000/1000",
+     "caption": "R/W на партицію"
+    },
+    {
+     "value": "40k",
+     "caption": "одиниць на таблицю за замовч."
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": "партиції ділить сам"
+   },
+   "note": "Гарячий ключ: головна пастка."
+  },
+  {
+   "name": "S3",
+   "what": "Сховище файлів.",
+   "badges": [
+    {
+     "value": "50 ТБ",
+     "caption": "об'єкт"
+    },
+    {
+     "value": "3500/5500",
+     "caption": "W/R на префікс за с"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": "Строга консистентність read-after-write."
+  },
+  {
+   "name": "CloudFront",
+   "what": "CDN.",
+   "badges": [
+    {
+     "value": "< 1 мс",
+     "caption": "CloudFront Functions"
+    },
+    {
+     "value": "Lambda@Edge",
+     "caption": "повний код"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": ""
+  },
+  {
+   "name": "ALB / NLB",
+   "what": "Балансувальники.",
+   "badges": [
+    {
+     "value": "L7",
+     "caption": "ALB: шляхи, WebSocket"
+    },
+    {
+     "value": "L4",
+     "caption": "NLB: мільйони з'єднань"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": ""
+  },
+  {
+   "name": "EventBridge",
+   "what": "Шина подій і розклади.",
+   "badges": [
+    {
+     "value": "1 МБ",
+     "caption": "подія"
+    },
+    {
+     "value": "10k",
+     "caption": "PutEvents TPS у великих регіонах"
+    }
+   ],
+   "scaler": {
+    "who": "САМ",
+    "text": ""
+   },
+   "note": "Scheduler: часові пояси, one-time, ретраї."
+  },
+  {
+   "name": "Kinesis / MSK",
+   "what": "Потоки подій.",
+   "badges": [
+    {
+     "value": "1 МБ/с",
+     "caption": "запис на шард"
+    },
+    {
+     "value": "2 МБ/с",
+     "caption": "читання на шард"
+    },
+    {
+     "value": "365 днів",
+     "caption": "макс. зберігання"
+    }
+   ],
+   "scaler": {
+    "who": "НАЛАШТУЄШ",
+    "text": "шарди або on-demand"
+   },
+   "note": "MSK = керована Kafka."
+  }
+ ]
+}

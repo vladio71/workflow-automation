@@ -35,6 +35,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <NavLink href="/cards" icon="🃏" label="Cards" count={cards.due + cards.fresh} />
             <NavLink href="/inbox" icon="📥" label="Inbox" count={inboxCount} />
             <NavLink href="/tasks" icon="📌" label="Tasks" count={openTasks} />
+            <div className="sidebar-section">Material</div>
+            <NavLink href="/map" icon="🗺️" label="Map" />
+            <NavLink href="/patterns" icon="🧩" label="Patterns" />
+            <NavLink href="/minimum" icon="🧱" label="Minimum" />
+            <NavLink href="/reference" icon="📐" label="Reference" />
             <div className="sidebar-section">Knowledge</div>
             <NavLink href="/topics" icon="🗂️" label="Topics" />
             <NavLink href="/questions" icon="❓" label="Questions" />

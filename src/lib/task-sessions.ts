@@ -41,6 +41,15 @@ export interface TowerData {
   history: TowerDay[];
 }
 
+const MIN_TASK_MINUTES = 5;
+const MAX_TASK_MINUTES = 480;
+
+/** Хвилини справи: від 5 до 480, округлені. */
+export function clampMinutes(minutes: number): number {
+  if (!Number.isFinite(minutes)) return MIN_TASK_MINUTES;
+  return Math.min(MAX_TASK_MINUTES, Math.max(MIN_TASK_MINUTES, Math.round(minutes)));
+}
+
 export function clampTarget(target: number): number {
   if (!Number.isFinite(target)) return 0;
   return Math.min(MAX_TARGET, Math.max(0, Math.round(target)));

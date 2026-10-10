@@ -156,6 +156,8 @@ model Cycle {
   goal      String      @default("")
   status    CycleStatus @default(PLANNED)
   retro     String      @default("")
+  /// розділ матеріалу (src/lib/sections.ts): "map-1-3", "minimum", …; "" = вільний цикл зі своїми темами
+  section   String      @default("")
   topics    Topic[]
   createdAt DateTime    @default(now())
 }
@@ -185,29 +187,6 @@ model DailyLog {
   note       String   @default("")
 }
 
-/// Пункт щоденного списку на Today. Список один на всі дні, галочки окремі на кожен день (DailyCheck).
-model DailyItem {
-  id        Int          @id @default(autoincrement())
-  title     String
-  position  Int
-  /// '' = звичайний пункт. 'cardsDone' | 'recallDone' | 'outLoud' = галочка живе в DailyLog і ставиться сама
-  auto      String       @default("")
-  checks    DailyCheck[]
-  createdAt DateTime     @default(now())
-
-  @@index([position])
-}
-
-/// Галочка звичайного пункту Daily за один день.
-model DailyCheck {
-  itemId Int
-  item   DailyItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  day    DateTime  @db.Date
-
-  @@id([itemId, day])
-  @@index([day])
-}
-
 /// Парковка: питання з кролячих нір одним рядком. Раз на тиждень одне береться на маленький експеримент.
 model ParkingItem {
   id        Int       @id @default(autoincrement())
@@ -232,6 +211,16 @@ model CellProgress {
   summary      String    @default("")
   summarizedAt DateTime?
   updatedAt    DateTime  @updatedAt
+}
+
+/// Повтор закритої клітинки: намалював систему по пам'яті і пояснив текстом, без підглядання.
+model CellRedo {
+  id        Int      @id @default(autoincrement())
+  cellId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([cellId, createdAt])
 }
 
 /// Спроба дрилу з «Сеньйорського мінімуму»: моя відповідь і самооцінка по чеклісту після еталону.
@@ -276,28 +265,6 @@ model MockMessage {
   createdAt DateTime    @default(now())
 }
 
-/// План на день від AI. items = JSON масив PlanItem (src/lib/planner.ts).
-model DailyPlan {
-  day           DateTime  @id @db.Date
-  items         Json
-  /// коротке пояснення, чому саме такий план
-  summary       String    @default("")
-  /// вечірній огляд: що зроблено, що перенести
-  review        String    @default("")
-  /// null = чернетка: пункти можна прибирати, додавати, переставляти. Після "Start the day" план стає картою
-  startedAt     DateTime?
-  /// фокус дня (src/lib/day-focus.ts): '' без фокусу, 'levels' рівні live-code, 'plan:<Source.id>' навчальний план
-  focus         String    @default("")
-  /// побажання на день вільним текстом, іде в промпт
-  wish          String    @default("")
-  /// бюджет хвилин, з яким складали план
-  budget        Int       @default(0)
-  /// чому Gemini не склав план (ланцюжок спроб по моделях); '' = склав або ключа нема
-  aiError       String    @default("")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
 enum TaskRepeat {
   /// разова: пропонується в план, поки не зробиш
   ONCE
@@ -325,7 +292,7 @@ model TaskTick {
   id        Int      @id @default(autoincrement())
   taskId    Int
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  /// день, як у DailyPlan: башта починається заново щодня
+  /// календарний день: башта починається заново щодня
   day       DateTime @db.Date
   /// компанія або посилання, необов'язково
   note      String   @default("")

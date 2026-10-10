@@ -1,7 +1,7 @@
 import 'server-only';
 import { db } from './db';
 import { endOfDay, startOfDay } from './schedule';
-import type { Cycle, DailyLog, Topic } from '@/generated/prisma/client';
+import type { Cycle, Topic } from '@/generated/prisma/client';
 
 export interface CycleWithProgress extends Cycle {
   topicCount: number;
@@ -56,25 +56,8 @@ export async function getDueCount(): Promise<number> {
   return (await getDueTopics()).length;
 }
 
-export async function getTodayLog(now: Date = new Date()): Promise<DailyLog> {
-  const day = dayKey(now);
-  return (await db.dailyLog.findUnique({ where: { day } })) ?? {
-    day, cardsDone: false, recallDone: false, outLoud: false, note: '',
-  };
-}
-
 /** Ключ дня для колонки DATE: опівніч UTC тієї ж календарної дати, що й локальна. */
 export function dayKey(date: Date): Date {
   const local = startOfDay(date);
   return new Date(Date.UTC(local.getFullYear(), local.getMonth(), local.getDate()));
-}
-
-/** Наступний розділ праймера: перший не розпочатий, інакше найдавніше повторений. */
-export async function getNextSystemDesignTopic(): Promise<Topic | null> {
-  const notStarted = await db.topic.findFirst({
-    where: { track: 'SYSTEM_DESIGN', confidence: 'NOT_STARTED' },
-    orderBy: { id: 'asc' },
-  });
-  if (notStarted) return notStarted;
-  return db.topic.findFirst({ where: { track: 'SYSTEM_DESIGN' }, orderBy: { lastRecallAt: 'asc' } });
 }

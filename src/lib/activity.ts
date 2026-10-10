@@ -53,16 +53,27 @@ export interface Streak {
  * Поточний стрік не рветься, якщо сьогодні ще нічого не зроблено: рахуємо до вчора.
  */
 export async function getStreak(now: Date = new Date()): Promise<Streak> {
-  const [logDays, dailyDays, checkDays] = await Promise.all([
+  const [logDays, dailyDays, spokenDays, cells, redos, drills] = await Promise.all([
     db.activityLog.findMany({ distinct: ['day'], select: { day: true } }),
     db.dailyLog.findMany({
       where: { OR: [{ cardsDone: true }, { recallDone: true }, { outLoud: true }] },
       select: { day: true },
     }),
-    // галочки пунктів Daily, які додав сам
-    db.dailyCheck.findMany({ distinct: ['day'], select: { day: true } }),
+    db.spokenAnswer.findMany({ distinct: ['day'], select: { day: true } }),
+    // робота по матеріалу: кроки клітинок, повтори, спроби дрилів
+    db.cellProgress.findMany({ select: { derivedAt: true, checkedAt: true, summarizedAt: true } }),
+    db.cellRedo.findMany({ select: { createdAt: true } }),
+    db.drillAttempt.findMany({ select: { createdAt: true } }),
   ]);
-  const days = new Set<string>([...logDays, ...dailyDays, ...checkDays].map((row) => isoDay(row.day)));
+  const stamps: Date[] = [
+    ...redos.map((row) => row.createdAt),
+    ...drills.map((row) => row.createdAt),
+    ...cells.flatMap((row) => [row.derivedAt, row.checkedAt, row.summarizedAt].filter((value): value is Date => value !== null)),
+  ];
+  const days = new Set<string>([
+    ...[...logDays, ...dailyDays, ...spokenDays].map((row) => isoDay(row.day)),
+    ...stamps.map((stamp) => isoDay(dayKey(stamp))),
+  ]);
 
   const today = dayKey(now);
   const activeToday = days.has(isoDay(today));

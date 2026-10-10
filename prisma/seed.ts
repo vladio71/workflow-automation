@@ -23,7 +23,7 @@ async function main(): Promise<void> {
     db.spokenAnswer.deleteMany(),
     db.dailyLog.deleteMany(),
     db.activityLog.deleteMany(),
-    db.dailyPlan.deleteMany(),
+    db.cellRedo.deleteMany(),
     db.recallLog.deleteMany(),
     db.question.deleteMany(),
     db.topic.deleteMany(),

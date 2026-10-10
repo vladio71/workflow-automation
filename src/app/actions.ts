@@ -5,27 +5,20 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { dayKey, getDueTopics } from '@/lib/queries';
 import { endOfDay, schedule, startOfDay } from '@/lib/schedule';
-import {
-  checkModels, generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult, type ModelCheck,
-} from '@/lib/gemini';
-import { DEFAULT_BUDGET, buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
-import {
-  addToDraft, clampMinutes, enforceMandatory, keepDone, momentumOrder, moveInDraft, moveToIndex, removeFromDraft, setMinutesInDraft, toPlanItem,
-  type MoveDirection,
-} from '@/lib/plan-order';
-import { getStudyPlans, markAttemptDone } from '@/lib/study-plan';
+import { checkModels, gradeAnswer, isGeminiConfigured, type GradeInput, type GradeResult, type ModelCheck } from '@/lib/gemini';
+import { markAttemptDone } from '@/lib/study-plan';
 import {
   createCard, createCategory, deleteCard, getCardCounts, reviewCard, setCardCategory, updateCard,
   type CardTextInput, type CategoryChoice, type NewCardInput, type ReviewInput,
 } from '@/lib/cards';
-import { createDailyItem, deleteDailyItem, renameDailyItem, reorderDailyItems, setDailyItemChecked } from '@/lib/daily';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
-import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels';
-import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
+import { findLevel, getLevelDetails, levelsDir } from '@/lib/levels';
 import { runLevel } from '@/lib/level-runner';
-import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
+import { clampMinutes, clampTarget, todayTickCounts } from '@/lib/task-sessions';
 import { addSpokenAnswer, markCellChecked, saveCellDerived, saveCellSummary, saveDrillAttempt, setDrillChecked } from '@/lib/progress';
+import { saveCellRedo } from '@/lib/norm';
+import { getSection } from '@/lib/sections';
 import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -109,34 +102,6 @@ export async function deleteQuestion(id: number): Promise<void> {
   refresh();
 }
 
-// ================================================================== daily
-
-/** Галочка пункту Daily. refresh(): від неї залежать стрік і стан вузлів плану дня. */
-export async function checkDailyItem(id: number, checked: boolean): Promise<void> {
-  await setDailyItemChecked(id, checked);
-  refresh();
-}
-
-// Правки списку Daily без refresh(): список на клієнті вже показує зміну,
-// а перемальована сторінка збила б курсор у пункті, який саме пишеш.
-
-/** Новий пункт після afterId (null = у кінець). Повертає його id. */
-export async function addDailyItem(afterId: number | null, title: string): Promise<number> {
-  return createDailyItem(afterId, title);
-}
-
-export async function saveDailyItemTitle(id: number, title: string): Promise<void> {
-  await renameDailyItem(id, title);
-}
-
-export async function removeDailyItem(id: number): Promise<void> {
-  await deleteDailyItem(id);
-}
-
-export async function saveDailyOrder(ids: number[]): Promise<void> {
-  await reorderDailyItems(ids);
-}
-
 // ================================================================== парковка
 
 export async function addParking(formData: FormData): Promise<void> {
@@ -215,6 +180,11 @@ export async function addSpokenAnswerNow(subject: string, stuck: string): Promis
   refresh();
 }
 
+export async function saveCellRedoNow(cellId: string, text: string): Promise<void> {
+  await saveCellRedo(cellId, text);
+  refresh();
+}
+
 // ================================================================== cycles
 
 export type CycleTextField = 'name' | 'goal' | 'retro';
@@ -224,13 +194,17 @@ export async function updateCycleText(id: number, field: CycleTextField, value: 
   refresh();
 }
 
+/** Цикл = розділ матеріалу (назва і ціль беруться з розділу) або вільний цикл зі своєю назвою. */
 export async function createCycle(formData: FormData): Promise<void> {
-  const name = String(formData.get('name') ?? '').trim();
+  const sectionId = String(formData.get('section') ?? '');
+  const section = getSection(sectionId);
+  const name = section ? section.name : String(formData.get('name') ?? '').trim();
   if (!name) return;
+  const goal = section ? section.goal : String(formData.get('goal') ?? '').trim();
   const last = await db.cycle.findFirst({ orderBy: { number: 'desc' } });
   const hasActive = await db.cycle.count({ where: { status: 'ACTIVE' } });
   await db.cycle.create({
-    data: { name, number: (last?.number ?? 0) + 1, goal: String(formData.get('goal') ?? '').trim(), status: hasActive ? 'PLANNED' : 'ACTIVE' },
+    data: { name, number: (last?.number ?? 0) + 1, goal, section: section ? section.id : '', status: hasActive ? 'PLANNED' : 'ACTIVE' },
   });
   refresh();
 }
@@ -328,233 +302,6 @@ export async function startMock(formData: FormData): Promise<void> {
   redirect(`/mock/${session.id}`);
 }
 
-// ================================================================== AI plan for the day
-
-export type PlanActionResult = { ok: true; note?: string } | { ok: false; error: string };
-
-export interface PlanSetup {
-  budget: number;
-  /** фокус дня: '' (нема), 'levels' або 'plan:<sourceId>', див. day-focus.ts */
-  focus: string;
-  /** побажання на день вільним текстом */
-  wish: string;
-  /** статус запиту до Gemini наживо: /api/ai/status?job=<id> */
-  jobId?: string;
-}
-
-/** Фокус з клієнта перевіряємо: тільки існуючий навчальний план або рівні, якщо вони є. Назва йде в промпт. */
-async function resolveFocus(focus: string): Promise<{ key: string; name: string | null }> {
-  if (focus === LEVELS_FOCUS) {
-    const scan = await scanLevels();
-    return scan.levels.length > 0 ? { key: LEVELS_FOCUS, name: 'Live code (рівні)' } : { key: NO_FOCUS, name: null };
-  }
-  const studyPlans = await getStudyPlans();
-  const plan = studyPlans.find((studyPlan) => planFocus(studyPlan.source.id) === focus);
-  return plan ? { key: focus, name: plan.source.planName || plan.source.repo } : { key: NO_FOCUS, name: null };
-}
-
-const MAX_WISH_LENGTH = 300;
-
-/**
- * Скласти (або перескласти) план на сьогодні. Результат завжди чернетка: до "Start the day" її можна правити.
- * Перепланування після старту зберігає зроблені пункти. Без ключа або при помилці Gemini: план за правилами.
- */
-export async function generatePlan(setup: PlanSetup): Promise<PlanActionResult> {
-  const now = new Date();
-  const day = dayKey(now);
-  const minutesBudget = Math.min(720, Math.max(30, Math.round(setup.budget)));
-  const wish = setup.wish.trim().slice(0, MAX_WISH_LENGTH);
-  const focus = await resolveFocus(setup.focus);
-
-  const candidates = await buildCandidates(now, { focus: focus.key, budget: minutesBudget });
-  const yesterday = await db.dailyPlan.findUnique({ where: { day: dayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000)) } });
-  const yesterdayUndone = yesterday
-    ? (await withStatus(parsePlanItems(yesterday.items), new Date(now.getTime() - 24 * 60 * 60 * 1000)))
-        .filter((item) => !item.done)
-        .map((item) => item.title)
-    : [];
-
-  let items: PlanItem[];
-  let summary: string;
-  let note: string | undefined;
-  // чому Gemini не склав план: зберігаємо з планом, щоб червоний рядок не зник після перезавантаження
-  let aiError = '';
-
-  if (isGeminiConfigured()) {
-    try {
-      const result = await generateDayPlan({
-        weekday: now.toLocaleDateString('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' }),
-        minutesBudget,
-        focus: focus.name,
-        wish,
-        candidates: candidates.map(({ id, kind, title, defaultMinutes, mandatory, hint }) => ({
-          id,
-          kind,
-          title,
-          defaultMinutes,
-          mandatory: mandatory === true,
-          // для справ примітка каже, скільки днів разова справа вже відкладається
-          note: kind === 'TASK' ? hint ?? '' : '',
-        })),
-        yesterdayUndone,
-      }, setup.jobId);
-      const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-      // AI може вибирати тільки з кандидатів: невідомі id відкидаємо, дублікати теж
-      const seen = new Set<string>();
-      items = [];
-      for (const picked of result.items) {
-        const candidate = byId.get(picked.id);
-        if (!candidate || seen.has(picked.id)) continue;
-        seen.add(picked.id);
-        items.push({ ...candidate, minutes: picked.minutes, why: picked.why, manualDone: false });
-      }
-      summary = result.summary;
-      if (items.length === 0) throw new Error('Gemini вибрав пункти, яких нема серед кандидатів');
-      items = enforceMandatory(items, candidates, minutesBudget);
-    } catch (error) {
-      console.error(error);
-      ({ items, summary } = rulePlan(candidates, minutesBudget));
-      aiError = error instanceof Error ? error.message : 'невідома помилка';
-    }
-  } else {
-    ({ items, summary } = rulePlan(candidates, minutesBudget));
-  }
-
-  // план вийшов майже порожній: кажемо чому, а не лишаємо здогадуватись
-  const hasStudyPlan = candidates.some((candidate) => candidate.mandatory === true);
-  const hasCycle = candidates.some((candidate) => candidate.kind === 'CYCLE');
-  const hasLevels = candidates.some((candidate) => candidate.kind === 'LEVEL');
-  if (!hasStudyPlan && !hasCycle && !hasLevels) {
-    const why = 'Мало пунктів: немає кроків навчального плану (додай репо з learn/plan.md на Sources) і немає активного циклу (Cycles).';
-    note = note ? `${note} ${why}` : why;
-  }
-
-  // розминка першою, бос одразу після неї: це правило коду, AI його не переставить (у чернетці можна переставити руками)
-  items = momentumOrder(items);
-  // перепланування після старту: зроблене сьогодні лишається в плані
-  const current = await getTodayPlan(now);
-  if (current?.startedAt) items = keepDone(current.items, items);
-
-  await db.dailyPlan.upsert({
-    where: { day },
-    create: { day, items: toJson(items), summary, focus: focus.key, wish, budget: minutesBudget, startedAt: null, aiError },
-    update: { items: toJson(items), summary, review: '', focus: focus.key, wish, budget: minutesBudget, startedAt: null, aiError },
-  });
-  refresh();
-  return { ok: true, note };
-}
-
-function toJson(items: PlanItem[]): object[] {
-  return items.map((item) => ({ ...item }));
-}
-
-/** Правка чернетки. Після "Start the day" план не міняється: тільки галочки або перепланування. */
-async function editDraft(change: (items: PlanItem[]) => PlanItem[] | Promise<PlanItem[]>): Promise<PlanActionResult> {
-  const day = dayKey(new Date());
-  const plan = await db.dailyPlan.findUnique({ where: { day } });
-  if (!plan) return { ok: false, error: 'Спершу склади план на сьогодні' };
-  if (plan.startedAt) return { ok: false, error: 'День уже почато: план можна тільки перепланувати' };
-  const items = await change(parsePlanItems(plan.items));
-  await db.dailyPlan.update({ where: { day }, data: { items: toJson(items) } });
-  refresh();
-  return { ok: true };
-}
-
-export async function removePlanItem(itemId: string): Promise<PlanActionResult> {
-  return editDraft((items) => removeFromDraft(items, itemId));
-}
-
-export async function movePlanItem(itemId: string, direction: MoveDirection): Promise<PlanActionResult> {
-  return editDraft((items) => moveInDraft(items, itemId, direction));
-}
-
-/** Перетягування в чернетці: пункт стає на позицію toIndex. */
-export async function reorderPlanItem(itemId: string, toIndex: number): Promise<PlanActionResult> {
-  let blocked = false;
-  const result = await editDraft((items) => {
-    const moved = moveToIndex(items, itemId, toIndex);
-    if (moved === null) blocked = true;
-    return moved ?? items;
-  });
-  if (result.ok && blocked) return { ok: false, error: 'Кроки одного навчального плану йдуть по порядку: місцями їх не поміняти' };
-  return result;
-}
-
-export async function setPlanItemMinutes(itemId: string, minutes: number): Promise<PlanActionResult> {
-  return editDraft((items) => setMinutesInDraft(items, itemId, minutes));
-}
-
-/** Додати в чернетку кандидата, якого план не взяв (з тим самим фокусом і бюджетом, з якими план складали). */
-export async function addPlanItem(candidateId: string): Promise<PlanActionResult> {
-  const now = new Date();
-  const plan = await db.dailyPlan.findUnique({ where: { day: dayKey(now) } });
-  const candidates = await buildCandidates(now, {
-    focus: plan?.focus ?? NO_FOCUS,
-    budget: plan?.budget || DEFAULT_BUDGET,
-  });
-  return editDraft((items) => addToDraft(items, candidateId, candidates));
-}
-
-/** Нова разова справа прямо з чернетки: потрапляє в план і в Tasks (якщо не зробиш, план запропонує її завтра). */
-export async function addPlanTask(title: string, minutes: number): Promise<PlanActionResult> {
-  const text = title.trim().slice(0, 200);
-  if (!text) return { ok: false, error: 'Напиши, що за справа' };
-  return editDraft(async (items) => {
-    const task = await db.task.create({ data: { title: text, minutes: clampMinutes(minutes), repeat: 'ONCE' } });
-    return [...items, toPlanItem({
-      id: `task:${task.id}`, kind: 'TASK', title: task.title, href: '/tasks', topicId: null,
-      defaultMinutes: task.minutes, hint: 'Разова справа, додана сьогодні.', group: 'tasks',
-    })];
-  });
-}
-
-const LIVE_CODING_COUNT = 3;
-const LIVE_CODING_TITLE = 'Live code next problem';
-const LIVE_CODING_MINUTES = 40;
-
-/** Кнопка "+ 3 live coding": три разові справи на початок чернетки, без опису. */
-export async function addLiveCodingTasks(): Promise<PlanActionResult> {
-  return editDraft(async (items) => {
-    const added: PlanItem[] = [];
-    for (let index = 0; index < LIVE_CODING_COUNT; index += 1) {
-      const task = await db.task.create({ data: { title: LIVE_CODING_TITLE, minutes: LIVE_CODING_MINUTES, repeat: 'ONCE' } });
-      added.push(toPlanItem({
-        id: `task:${task.id}`, kind: 'TASK', title: task.title, href: '/tasks', topicId: null,
-        defaultMinutes: task.minutes, group: 'tasks',
-      }));
-    }
-    return [...added, ...items];
-  });
-}
-
-export async function startDay(): Promise<PlanActionResult> {
-  const day = dayKey(new Date());
-  const plan = await db.dailyPlan.findUnique({ where: { day } });
-  if (!plan) return { ok: false, error: 'Спершу склади план на сьогодні' };
-  if (plan.startedAt) return { ok: true };
-  if (parsePlanItems(plan.items).length === 0) return { ok: false, error: 'План порожній: додай хоча б один пункт' };
-  await db.dailyPlan.update({ where: { day }, data: { startedAt: new Date() } });
-  refresh();
-  return { ok: true };
-}
-
-export async function setPlanItemDone(itemId: string, done: boolean): Promise<void> {
-  if (itemId.startsWith('plan:')) {
-    await setPlanStepDone(Number(itemId.replace('plan:', '')), done);
-  }
-  if (itemId.startsWith('task:')) {
-    // разова справа закривається і в Tasks, повторювана живе тільки в плані дня
-    const task = await db.task.findUnique({ where: { id: Number(itemId.replace('task:', '')) } });
-    if (task?.repeat === 'ONCE') await db.task.update({ where: { id: task.id }, data: { doneAt: done ? new Date() : null } });
-  }
-  const day = dayKey(new Date());
-  const plan = await db.dailyPlan.findUnique({ where: { day } });
-  if (!plan) return;
-  const items = parsePlanItems(plan.items).map((item) => (item.id === itemId ? { ...item, manualDone: done } : item));
-  await db.dailyPlan.update({ where: { day }, data: { items: toJson(items) } });
-  refresh();
-}
-
 // ================================================================== tasks (справи поза навчанням)
 
 const TASK_REPEATS: readonly TaskRepeat[] = ['ONCE', 'DAILY', 'WEEKDAYS'];
@@ -627,50 +374,6 @@ export async function setTaskDone(id: number, done: boolean): Promise<void> {
 export async function deleteTask(id: number): Promise<void> {
   await db.task.delete({ where: { id } });
   refresh();
-}
-
-/** Пропустити поточний вузол карти: переносимо його в кінець дня. Кроки навчального плану (mandatory) не переставляються. */
-export async function skipPlanItem(itemId: string): Promise<void> {
-  const day = dayKey(new Date());
-  const plan = await db.dailyPlan.findUnique({ where: { day } });
-  if (!plan) return;
-  const items = parsePlanItems(plan.items);
-  const index = items.findIndex((item) => item.id === itemId);
-  const item = items[index];
-  if (!item || item.mandatory === true) return;
-  items.splice(index, 1);
-  items.push(item);
-  await db.dailyPlan.update({ where: { day }, data: { items: items.map((planItem) => ({ ...planItem })) } });
-  refresh();
-}
-
-/** Вечірня перевірка: апка сама рахує виконане, Gemini пише короткий огляд. */
-export async function reviewToday(jobId?: string): Promise<PlanActionResult> {
-  const now = new Date();
-  const plan = await getTodayPlan(now);
-  if (!plan) return { ok: false, error: 'Спершу склади план на сьогодні' };
-
-  const done = plan.items.filter((item) => item.done);
-  const undone = plan.items.filter((item) => !item.done);
-  let review = `Зроблено ${done.length} з ${plan.items.length}.` +
-    (undone.length ? ` Не зроблено: ${undone.map((item) => item.title).join('; ')}.` : ' Все виконано.');
-
-  let note: string | undefined;
-  if (isGeminiConfigured()) {
-    try {
-      review = await reviewDay({
-        items: plan.items.map((item) => ({ title: item.title, minutes: item.minutes, done: item.done })),
-        recalls: await todayRecallSummary(now),
-      }, jobId);
-    } catch (error) {
-      console.error(error);
-      review += ' (огляд без AI)';
-      note = `Gemini не написав огляд: ${error instanceof Error ? error.message : 'помилка'}`;
-    }
-  }
-  await db.dailyPlan.update({ where: { day: dayKey(now) }, data: { review } });
-  refresh();
-  return { ok: true, note };
 }
 
 // ================================================================== Gemini: перевірка моделей

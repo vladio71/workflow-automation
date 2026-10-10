@@ -5,6 +5,8 @@ import { PatternPill } from '@/components/PatternPill';
 import { CellSteps } from '@/components/CellSteps';
 import { MAP, cellNeighbours, getCell, groupOf, newNodeIds, previousCell, productOf, type Cell } from '@/lib/content';
 import { getCellProgress } from '@/lib/progress';
+import { getCellRedos } from '@/lib/norm';
+import { CellRedo } from '@/components/CellRedo';
 
 interface CellPageProps {
   params: Promise<{ cell: string }>;
@@ -28,7 +30,7 @@ export default async function CellPage({ params }: CellPageProps) {
   const previous = previousCell(cell);
   const around = cellNeighbours(cell);
   const fresh = [...newNodeIds(cell)];
-  const progress = await getCellProgress(cell.id);
+  const [progress, redo] = await Promise.all([getCellProgress(cell.id), getCellRedos(cell.id)]);
 
   return (
     <div className="page wide">
@@ -93,6 +95,9 @@ export default async function CellPage({ params }: CellPageProps) {
               <div className="refs">Твої діаграми і книга: {cell.refs.map((ref) => <span key={ref} className="ref">{ref}</span>)}</div>
             )}
           </CellSteps>
+          {redo.closed && (
+            <CellRedo cellId={cell.id} redos={redo.redos.map((entry) => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt.toISOString() }))} />
+          )}
         </div>
       </div>
     </div>

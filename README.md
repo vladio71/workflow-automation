@@ -1,8 +1,8 @@
 # learning-app
 
-Особиста апка для навчання: retrospective revision timetable (Ali Abdaal), цикли по 2 тижні, база знань по темах, картки з інтервальним повторенням (замість Anki), AI-план на день у вигляді карти з вечірньою перевіркою, рівні live coding (вставив код → тести), recall-сесії з перевіркою відповіді через Gemini, mock system design інтерв'ю.
+Особиста апка для навчання: навчальний матеріал по system design прямо в апці (карта навантажень 4 продукти × 5 груп, 14 патернів мислення, сеньйорський мінімум з дрилами, довідник), норма дня замість планування (нове, повтор, вголос, live code, картки), цикли по розділах матеріалу, картки з інтервальним повторенням (замість Anki), база знань по темах з recall через Gemini, рівні live coding (вставив код → тести), mock system design інтерв'ю, парковка для кролячих нір.
 
-**Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, стиль Notion (світла і темна тема за налаштуваннями системи).
+**Стек:** Next.js 16 (App Router, server actions), TypeScript, Prisma 7 + Postgres 16 (Docker), Gemini (`@google/genai`), Tailwind 4, IBM Plex + Unbounded (fontsource), світла і темна тема за налаштуваннями системи.
 
 ## Запуск
 
@@ -67,24 +67,27 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `docs/notion/` | початкова версія системи для Notion |
 | `docs/wallpaper-1920x1080.png` | шпалери з планом |
 | `seed/` | нотатки GraphQL, з яких заливається стартова тема |
-| `prisma/schema.prisma` | Topic, Question, DeletedCard, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, DailyPlan, InboxItem, MockSession, CardReview, TelegramDelivery, LevelAttempt |
+| `prisma/schema.prisma` | Topic, Question, DeletedCard, Source, PlanStep, RecallLog, Cycle, ActivityLog, DailyLog, ParkingItem, CellProgress, CellRedo, DrillAttempt, SpokenAnswer, MockSession, CardReview, TelegramDelivery, LevelAttempt, Task, TaskTick |
+| `src/content/*.json` | навчальний матеріал: карта (клітинки зі схемами, словник блоків), патерни, модулі мінімуму з дрилами, довідник (затримки, AWS, масштаб баз, джерела) |
+| `src/lib/content.ts` | типи матеріалу і доступ: клітинка, сусіди, що нового на групі, де патерн спрацював, порядок проходження |
+| `src/lib/progress.ts` | прогрес по матеріалу: кроки клітинки, спроби дрилів, відповіді вголос, парковка |
+| `src/lib/norm.ts` | норма дня: що в кожному слоті сьогодні і чи він закритий; повтори клітинок |
+| `src/lib/sections.ts` | розділи матеріалу для циклів |
+| `src/components/CellDiagram.tsx`, `CellSteps.tsx`, `CellRedo.tsx` | схема клітинки, три кроки, повтор по пам'яті |
+| `src/components/DrillForm.tsx`, `SpokenForm.tsx` | дрил зі спробою і чеклістом; слот «вголос» |
+| `src/components/ReferenceDiagrams.tsx` | шкала затримок і діаграми масштабу баз |
 | `src/lib/learn-format.ts` | парсер `learn/` (та сама логіка, що `scripts/learn-format.mjs` у graphql-base) |
 | `src/lib/sync.ts` | Sync: тягне `learn/` з GitHub, upsert тем, карток і кроків плану; картки, змінені чи видалені в апці, не чіпає |
-| `src/lib/study-plan.ts` | навчальний план: які кроки і переробки йдуть у план дня |
-| `src/lib/plan-order.ts` | AI не може викинути чи переставити кроки плану; правки чернетки дня (прибрати, порядок, додати, перепланування) |
+| `src/lib/study-plan.ts` | навчальний план з `learn/plan.md`: прогрес кроків, наступний крок |
 | `src/lib/schedule.ts` | інтервали повторення: 2 → 7 → 21 → 42 → 84 дні |
-| `src/lib/gemini.ts` | екзаменатор (structured JSON), інтерв'юер, план дня і вечірній огляд; стрімінг, запасні моделі на 429 і зависання, перевірка моделей |
+| `src/lib/gemini.ts` | екзаменатор (structured JSON) та інтерв'юер; стрімінг, запасні моделі на 429 і зависання, перевірка моделей |
 | `src/lib/ai-status.ts`, `src/app/api/ai/status` | статус поточного запиту до Gemini в пам'яті процесу (модель, думає/пише, що впало) і route handler, який його віддає |
 | `src/components/AiStatus.tsx` | рядок статусу під кнопкою, поки чекаємо Gemini |
 | `src/components/GeminiCheck.tsx`, `src/lib/ai-labels.ts` | кнопка «Перевірити Gemini» на Sources; короткі назви моделей |
 | `src/lib/activity.ts` | лог часу, стрік, аналітика |
-| `src/lib/planner.ts` | кандидати для плану з даних (з фокусом і справами), план за правилами без AI, автовизначення виконаного |
-| `src/components/DayMap.tsx` | план дня як карта: вузли, стежка, бос, фініш |
 | `src/lib/levels.ts` | рівні: читає вправи з `LEVELS_DIR`, прогрес з таблиці спроб |
 | `src/lib/level-runner.ts` | прогін коду: тимчасова копія вправи + vitest з live-code, таймаут 30 с |
 | `src/lib/level-schedule.ts` | повтори рівнів 2 → 7 → 21 → 42 і рамки 🥉 🥈 🥇 (чиста логіка) |
-| `src/lib/plan-order.ts` | порядок дня і правки чернетки: обов'язкові кроки плану, розминка першою, бос одразу після неї |
-| `src/lib/day-focus.ts` | фокус дня: рівні live-code або навчальний план |
 | `src/components/LiveCodeCoach.tsx` | попап правил live code і нагадування на 25-й хвилині (кнопка в меню) |
 | `src/lib/live-code-rules.ts` | текст правил: золоте правило, чекліст, підказки L1-L3, закріплення, sanity checks |
 | `src/lib/live-code-session.ts` | таймер нагадування в браузері: ручний старт або від старту рівня |
@@ -96,4 +99,5 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats; додати, змінити, видалити картку |
 | `src/app/api/sync` | автосинк з Today (route handler, щоб не блокувати кнопки) |
+| `src/app/parking` | парковка (колишній Inbox): питання з кролячих нір, одне на тиждень на експеримент |
 | `src/bot/` | Telegram-бот: `main.ts` (polling і щоденна розсилка), `bot.ts` (картки, кнопки, захист від дублів), `format.ts` (тексти, markdown карток у Telegram HTML) |

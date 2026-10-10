@@ -6,13 +6,11 @@ import {
   addLiveCodingTasks, addPlanItem, addPlanTask, generatePlan, movePlanItem, removePlanItem, reorderPlanItem, reviewToday, setPlanItemDone,
   setPlanItemMinutes, skipPlanItem, startDay, type PlanActionResult,
 } from '@/app/actions';
-import { Chest } from '@/components/Chest';
 import { openTaskSession } from '@/components/TowerCard';
 import { AiStatus } from '@/components/AiStatus';
 import { newJobId } from '@/lib/ai-labels';
 import { DayMap, type NodeState } from '@/components/DayMap';
 import { MIN_ITEM_MINUTES, canMove, findBossId } from '@/lib/plan-order';
-import type { ChestState } from '@/lib/loot';
 import { NO_FOCUS, type FocusOption } from '@/lib/day-focus';
 import type { PlanItemKind, PlanItemWithStatus } from '@/lib/planner';
 
@@ -41,8 +39,6 @@ export interface AddableItem {
 interface PlanCardProps {
   plan: PlanCardPlan | null;
   geminiEnabled: boolean;
-  /** скриня: квитки за пройдені вузли */
-  chest: ChestState | null;
   focusOptions: FocusOption[];
   addable: AddableItem[];
 }
@@ -83,7 +79,7 @@ function ItemLink({ item, children, className }: { item: PlanItemWithStatus; chi
   return <Link href={item.href} className={className} draggable={false}>{children}</Link>;
 }
 
-export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: PlanCardProps) {
+export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCardProps) {
   const [budget, setBudget] = useState(plan?.budget || DEFAULT_BUDGET);
   const [focus, setFocus] = useState(plan?.focus ?? NO_FOCUS);
   const [wish, setWish] = useState(plan?.wish ?? '');
@@ -386,8 +382,6 @@ export function PlanCard({ plan, geminiEnabled, chest, focusOptions, addable }: 
           {items.length > 0 && (
             <DayMap items={items} icons={KIND_ICON} selectedId={selected?.id ?? null} bossId={bossId} stateOf={stateOf} onSelect={setPickedId} />
           )}
-
-          {chest && items.length > 0 && <Chest state={chest} nextTitle={current?.title ?? null} />}
 
           {selected && selectedState && (
             <div className="callout" style={{ marginBottom: 0 }}>

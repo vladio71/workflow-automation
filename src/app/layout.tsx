@@ -45,7 +45,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="sidebar-section">Practice</div>
             <NavLink href="/levels" icon="⚔️" label="Levels" count={dueLevels} />
             <LiveCodeCoach />
-            <NavLink href="/loot" icon="🎁" label="Loot" />
             <NavLink href="/mock" icon="🎙️" label="Mock interview" />
             <div className="sidebar-section">System</div>
             <NavLink href="/guide" icon="📖" label="Guide" />

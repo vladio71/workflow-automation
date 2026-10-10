@@ -24,8 +24,6 @@ import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync'
 import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels';
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
-import { finishRest, openChest, type OpenChestResult } from '@/lib/loot';
-import { refillPool, type RefillResult } from '@/lib/loot-refill';
 import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
 import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, Track } from '@/generated/prisma/enums';
 
@@ -798,30 +796,4 @@ export async function giveUpLevel(key: string, code: string, elapsedMinutes: num
   await logLevelTime(level.key, level.title, elapsedMinutes, level.minutes * 3, true);
   refresh();
   return { ok: true, reference: (await getLevelDetails(level)).reference };
-}
-
-// ================================================================== скриня
-
-/** Відкрити скриню: квиток за пройдений вузол → випадкова картка відпочинку. */
-export async function openChestNow(): Promise<OpenChestResult> {
-  try {
-    const result = await openChest();
-    refresh();
-    return result;
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not open the chest.' };
-  }
-}
-
-/** "Назад на карту": відпочинок закінчено. */
-export async function finishRestNow(pullId: number): Promise<void> {
-  await finishRest(pullId);
-  refresh();
-}
-
-/** Кнопка Refill на /loot: наповнити пул зараз, не чекаючи 30 хв. */
-export async function refillLootNow(): Promise<RefillResult> {
-  const result = await refillPool({ force: true });
-  refresh();
-  return result;
 }

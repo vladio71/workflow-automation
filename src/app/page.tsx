@@ -7,7 +7,6 @@ import { formatMinutes, getAnalytics } from '@/lib/activity';
 import { isGeminiConfigured } from '@/lib/gemini';
 import { DEFAULT_BUDGET, buildCandidates, getTodayPlan } from '@/lib/planner';
 import { addableCandidates } from '@/lib/plan-order';
-import { getChestState } from '@/lib/loot';
 import { scanLevels } from '@/lib/levels';
 import { getTowers } from '@/lib/task-sessions';
 import { buildCampaign } from '@/lib/campaign';
@@ -16,7 +15,6 @@ import { CampaignStrip } from '@/components/CampaignMap';
 import { LEVELS_FOCUS, planFocus, type FocusOption } from '@/lib/day-focus';
 import { QuickCapture } from '@/components/QuickCapture';
 import { AutoSync } from '@/components/AutoSync';
-import { LootRefill } from '@/components/LootRefill';
 import { Tag } from '@/components/Tag';
 import { CONFIDENCES, optionFor } from '@/lib/labels';
 import { getActiveCycle, getNextSystemDesignTopic } from '@/lib/queries';
@@ -28,7 +26,7 @@ import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, dailyItems, cycle, cardCategories, cardQueue, sdTopic, studyPlans, chest, levelScan, towers, firstStep] = await Promise.all([
+  const [plan, stats, allTopics, dailyItems, cycle, cardCategories, cardQueue, sdTopic, studyPlans, levelScan, towers, firstStep] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -38,7 +36,6 @@ export default async function TodayPage() {
     getCardQueue(now),
     getNextSystemDesignTopic(),
     getStudyPlans(),
-    getChestState(now),
     scanLevels(),
     getTowers(now),
     getFirstStep(now),
@@ -71,7 +68,6 @@ export default async function TodayPage() {
   return (
     <div className="page">
       <AutoSync />
-      <LootRefill />
       <div className="page-icon">☀️</div>
       <h1 className="page-title">Today</h1>
       <p className="page-sub">
@@ -100,7 +96,6 @@ export default async function TodayPage() {
           aiError: plan.aiError,
         } : null}
         geminiEnabled={isGeminiConfigured()}
-        chest={chest}
         focusOptions={focusOptions}
         addable={addable}
       />

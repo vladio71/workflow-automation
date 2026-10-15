@@ -30,11 +30,6 @@
 
   --map-done: #448361;
   --map-line: rgba(55, 53, 47, 0.25);
-  --rarity-common: rgba(55, 53, 47, 0.35);
-  --rarity-uncommon: #448361;
-  --rarity-rare: #337ea9;
-  --rarity-epic: #9065b0;
-  --rarity-legendary: #d9730d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,11 +61,6 @@
 
     --map-done: #4dab9a;
     --map-line: rgba(255, 255, 255, 0.25);
-    --rarity-common: rgba(255, 255, 255, 0.35);
-    --rarity-uncommon: #4dab9a;
-    --rarity-rare: #529cca;
-    --rarity-epic: #9a6dd7;
-    --rarity-legendary: #ffa344;
   }
 }
 
@@ -297,104 +287,6 @@ select.input option { background: var(--bg); color: var(--text); }
   .level-play { position: static; }
 }
 
-/* ---------------- скриня ---------------- */
-.loot-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  border: 1px dashed var(--border-strong); border-radius: 8px; padding: 8px 12px; margin: 4px 0 12px;
-}
-.loot-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; background: var(--rarity-common); }
-.loot-card { border: 2px solid var(--rarity-common); border-radius: 12px; padding: 14px 16px; background: var(--bg); }
-.loot-rarity { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rarity-common); }
-.r-COMMON { --rarity: var(--rarity-common); }
-.r-UNCOMMON { --rarity: var(--rarity-uncommon); }
-.r-RARE { --rarity: var(--rarity-rare); }
-.r-EPIC { --rarity: var(--rarity-epic); }
-.r-LEGENDARY { --rarity: var(--rarity-legendary); }
-.loot-card.r-COMMON, .loot-card.r-UNCOMMON, .loot-card.r-RARE, .loot-card.r-EPIC, .loot-card.r-LEGENDARY { border-color: var(--rarity); }
-.loot-rarity.r-COMMON, .loot-rarity.r-UNCOMMON, .loot-rarity.r-RARE, .loot-rarity.r-EPIC, .loot-rarity.r-LEGENDARY { color: var(--rarity); }
-.loot-dot.r-COMMON, .loot-dot.r-UNCOMMON, .loot-dot.r-RARE, .loot-dot.r-EPIC, .loot-dot.r-LEGENDARY { background: var(--rarity); }
-.loot-card.r-LEGENDARY { box-shadow: 0 0 0 4px color-mix(in srgb, var(--rarity-legendary) 18%, transparent); }
-.loot-card.reveal { animation: loot-reveal 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
-@keyframes loot-reveal {
-  0% { transform: perspective(600px) rotateX(75deg) scale(0.7); opacity: 0; }
-  60% { transform: perspective(600px) rotateX(0deg) scale(1.03); opacity: 1; }
-  100% { transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .loot-card.reveal { animation: none; }
-}
-
-/* ---------------- live code: попап правил і нагадування ---------------- */
-.nav-button { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; font-size: 14px; white-space: nowrap; }
-.nav-link .count.alert { color: var(--tag-red-fg); background: var(--tag-red-bg); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
-.modal {
-  width: min(720px, calc(100vw - 32px)); max-height: min(88vh, 940px); padding: 0; margin: auto;
-  border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--shadow);
-}
-.modal[open] { display: flex; flex-direction: column; }
-.modal::backdrop { background: rgba(15, 15, 15, 0.45); }
-.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 8px; }
-.modal-head h2 { flex: 1; font-size: 18px; font-weight: 600; }
-.modal-body { padding: 4px 20px 16px; overflow-y: auto; font-size: 14px; }
-.modal-foot {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 20px;
-  border-top: 1px solid var(--border); background: var(--sidebar); border-radius: 0 0 10px 10px;
-}
-.golden { background: var(--tag-yellow-bg); color: var(--tag-yellow-fg); border-radius: 6px; padding: 10px 14px; font-weight: 600; }
-.rule-title { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 4px; }
-/* тег і текст в одній сітці: у правилах і в чеклісті текст починається з того самого місця */
-.rule-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; align-items: start; padding: 4px 0; line-height: 21px; }
-.rule-row .tag, .rule-check .tag { justify-self: start; margin-top: 1px; }
-.rule-check {
-  display: grid; grid-template-columns: 16px 78px minmax(0, 1fr); gap: 10px; align-items: start; line-height: 21px;
-  width: 100%; padding: 4px 0; background: none; border: 0; text-align: left; font: inherit; color: inherit; border-radius: 4px;
-}
-.rule-check:hover { background: var(--hover); }
-.rule-check .box { margin-top: 3px; }
-.rule-check.on .label { color: var(--faint); }
-.modal .db td:nth-child(-n + 2) { white-space: nowrap; }
-
-/* ---------------- башта дня (справа-сесія) ---------------- */
-:root {
-  --tower-stone: #e3d8c8;
-  --tower-stone-edge: #a8977f;
-  --tower-window: #f2c14e;
-  --tower-dark-window: #8f8170;
-  --tower-bonus: #f3d98b;
-  --tower-scaffold: #b9ad9c;
-  --tower-ground: rgba(55, 53, 47, 0.18);
-  --tower-flag: #e2574c;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --tower-stone: #5b5248;
-    --tower-stone-edge: #8c7d6b;
-    --tower-window: #f2c94c;
-    --tower-dark-window: #3a332c;
-    --tower-bonus: #8d7228;
-    --tower-scaffold: #6c6257;
-    --tower-ground: rgba(255, 255, 255, 0.16);
-    --tower-flag: #eb5757;
-  }
-}
-.tower-card { padding: 14px 18px; margin-bottom: 8px; }
-.tower-card:hover { background: var(--bg); }
-.tower-row { display: flex; gap: 18px; align-items: flex-end; }
-.tower-row + .tower-row { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
-.tower-grow { transform-box: fill-box; transform-origin: bottom center; animation: tower-grow 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.25); }
-@keyframes tower-grow {
-  from { transform: translateY(-14px) scaleY(0.4); opacity: 0; }
-  to { transform: none; opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tower-grow { animation: none; }
-}
-.modal-body.session { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: start; padding-top: 8px; }
-.session-tower { display: flex; align-items: flex-end; min-height: 200px; }
-.session-count { font-size: 44px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.session-count .faint { font-size: 26px; font-weight: 600; }
-.session-log { max-height: 180px; overflow-y: auto; }
-.session-log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .modal-body.session { grid-template-columns: minmax(0, 1fr); }
 }

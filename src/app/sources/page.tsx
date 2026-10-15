@@ -7,13 +7,6 @@ import { GeminiCheck } from '@/components/GeminiCheck';
 import { geminiModels, isGeminiConfigured } from '@/lib/gemini';
 import { modelLabel } from '@/lib/ai-labels';
 import { recentJobs, type AiJob } from '@/lib/ai-status';
-import { lootAiSearchState, type LootAiSearchState } from '@/lib/loot-refill';
-
-const LOOT_SEARCH_LABEL: Record<LootAiSearchState, string> = {
-  off: 'вимкнено (LOOT_AI_SEARCH у .env)',
-  on: 'увімкнено',
-  blocked: 'на сьогодні вимкнено: пошук уперся в ліміт',
-};
 
 function jobLine(job: AiJob): string {
   const seconds = Math.round(((job.endedAt ?? Date.now()) - job.startedAt) / 1000);
@@ -93,7 +86,6 @@ export default async function SourcesPage() {
         <div style={{ fontSize: 14 }}>
           <p className="muted" style={{ marginBottom: 8 }}>
             Моделі по черзі: {geminiModels().map(modelLabel).join(' → ')}. На ліміт, перевантаження (503), обрив відповіді, зависання чи 404 апка одразу йде до наступної.
-            Пошук для скрині: {LOOT_SEARCH_LABEL[lootAiSearchState()]}.
           </p>
           <GeminiCheck />
           {jobs.length > 0 && (

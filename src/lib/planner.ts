@@ -104,9 +104,15 @@ function daysSince(from: Date, now: Date): number {
 }
 
 async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidate[]; once: PlanCandidate[] }> {
-  // разова справа, зроблена сьогодні, лишається кандидатом: інакше перепланування ввечері її загубить
+  // разова справа, зроблена сьогодні, лишається кандидатом: інакше перепланування ввечері її загубить.
+  // Справа з кінцевою датою (until) після неї в план не йде.
   const tasks = await db.task.findMany({
-    where: { OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }] },
+    where: {
+      AND: [
+        { OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }] },
+        { OR: [{ until: null }, { until: { gte: dayKey(now) } }] },
+      ],
+    },
     orderBy: { createdAt: 'asc' },
   });
   const recurring: PlanCandidate[] = [];

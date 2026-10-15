@@ -22,12 +22,13 @@ import { CONFIDENCES, optionFor } from '@/lib/labels';
 import { getActiveCycle, getNextSystemDesignTopic } from '@/lib/queries';
 import { getCardCategories, getCardQueue } from '@/lib/cards';
 import { getDailyItems } from '@/lib/daily';
+import { getFirstStep } from '@/lib/handoff';
 import { db } from '@/lib/db';
 import { getStudyPlans, planProgress, stepHref } from '@/lib/study-plan';
 
 export default async function TodayPage() {
   const now = new Date();
-  const [plan, stats, allTopics, dailyItems, cycle, cardCategories, cardQueue, sdTopic, studyPlans, chest, levelScan, towers] = await Promise.all([
+  const [plan, stats, allTopics, dailyItems, cycle, cardCategories, cardQueue, sdTopic, studyPlans, chest, levelScan, towers, firstStep] = await Promise.all([
     getTodayPlan(now),
     getAnalytics(7, now),
     db.topic.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
@@ -40,6 +41,7 @@ export default async function TodayPage() {
     getChestState(now),
     scanLevels(),
     getTowers(now),
+    getFirstStep(now),
   ]);
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
@@ -75,6 +77,16 @@ export default async function TodayPage() {
       <p className="page-sub">
         {dateLabel} · 🔥 {stats.streak.current} day streak · {formatMinutes(stats.todayMinutes)} today · {formatMinutes(stats.weekMinutes)} this week
       </p>
+
+      {firstStep && (
+        <div className="callout" style={{ margin: '0 0 14px' }}>
+          <span className="emoji">▶️</span>
+          <div>
+            <div className="faint" style={{ fontSize: 12 }}>Починаю з (записано вчора ввечері)</div>
+            <div style={{ fontWeight: 600 }}>{firstStep}</div>
+          </div>
+        </div>
+      )}
 
       <PlanCard
         plan={plan ? {

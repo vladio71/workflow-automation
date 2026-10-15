@@ -463,3 +463,11 @@ select.input option { background: var(--bg); color: var(--text); }
 .category-trigger:hover { background: var(--hover); color: var(--text); }
 .category-menu { left: auto; right: 0; min-width: 240px; max-height: 320px; overflow-y: auto; }
 .category-menu .select-option { font: inherit; font-size: 14px; color: var(--text); text-align: left; }
+
+/* ---------------- /mini: сторінка для оверлею (desk.py), без сайдбару ---------------- */
+.app:has(.mini) .sidebar { display: none; }
+.page.mini { max-width: none; margin: 0; padding: 14px 16px 18px; font-size: 14px; }
+.mini-first { margin: 0 0 12px; padding: 10px 12px; }
+.mini-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 6px; }
+.mini .check { padding: 5px 2px; border-bottom: 1px solid var(--border); }
+.mini .check:last-of-type { border-bottom: 0; }

@@ -15,6 +15,11 @@ function dateLabel(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+/** until лежить як DATE (опівніч UTC), тому показуємо його за UTC, інакше в Києві це "попередній день" */
+function untilLabel(date: Date): string {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 function TaskRow({ task, today }: { task: Task; today: number }) {
   const once = task.repeat === 'ONCE';
   const done = task.doneAt !== null;
@@ -37,6 +42,7 @@ function TaskRow({ task, today }: { task: Task; today: number }) {
         <div className="faint" style={{ fontSize: 12 }}>
           {task.minutes} min · {REPEAT_LABEL[task.repeat]}
           {session && ` · сесія: ${task.target} за день`}
+          {task.until && ` · до ${untilLabel(task.until)}`}
           {once && (done && task.doneAt ? ` · зроблено ${dateLabel(task.doneAt)}` : ` · з ${dateLabel(task.createdAt)}`)}
         </div>
       </div>
@@ -86,6 +92,7 @@ export default async function TasksPage() {
           <option value="DAILY">щодня</option>
         </select>
         <input className="input" name="target" type="number" min={0} max={MAX_TARGET} placeholder="ціль" title="Ціль на день (необов'язково): 10 = сесія з лічильником і баштою" style={{ width: 70, height: 30 }} />
+        <input className="input" name="until" type="date" title="До якого дня включно справа в плані (необов'язково): після цієї дати зникає сама" style={{ width: 'auto', height: 30 }} />
         <button className="btn primary">Add</button>
       </form>
 

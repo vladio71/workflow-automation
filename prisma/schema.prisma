@@ -271,8 +271,17 @@ model Task {
   target    Int        @default(0)
   /// разова справа: коли зроблено. Повторювані відмічаються тільки в плані дня
   doneAt    DateTime?
+  /// останній день, коли справа ще в плані (підготовка до інтерв'ю до 19.10). null = без кінця
+  until     DateTime?  @db.Date
   createdAt DateTime   @default(now())
   ticks     TaskTick[]
+}
+
+/// Вечірня передача дня: "завтра починаю з ...". day = день, на який цей перший крок (один рядок на день).
+model Handoff {
+  day       DateTime @id @db.Date
+  firstStep String
+  createdAt DateTime @default(now())
 }
 
 /// Один крок справи-сесії: відправив резюме, написав рекрутеру. З них росте башта дня.

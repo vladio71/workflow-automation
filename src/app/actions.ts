@@ -508,13 +508,22 @@ export async function setPlanItemDone(itemId: string, done: boolean): Promise<vo
 
 const TASK_REPEATS: readonly TaskRepeat[] = ['ONCE', 'DAILY', 'WEEKDAYS'];
 
+/** "2026-10-19" з поля type="date" -> ключ дня для колонки DATE (як dayKey); порожнє або криве -> null */
+function parseDateField(value: FormDataEntryValue | null): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ''));
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export async function createTask(formData: FormData): Promise<void> {
   const title = String(formData.get('title') ?? '').trim().slice(0, 200);
   if (!title) return;
   const repeatValue = String(formData.get('repeat') ?? 'ONCE');
   const repeat = TASK_REPEATS.find((value) => value === repeatValue) ?? 'ONCE';
   const target = clampTarget(Number(formData.get('target') ?? 0));
-  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat, target } });
+  const until = parseDateField(formData.get('until'));
+  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat, target, until } });
   refresh();
 }
 

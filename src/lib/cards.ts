@@ -131,6 +131,11 @@ function byDeadlineFirst(now: Date) {
 export interface CardQueue {
   due: CardView[];
   fresh: CardView[];
+  /**
+   * Порядок для Review: усі картки з живим дедлайном (прострочені й нові) попереду,
+   * далі звичайні прострочені, далі звичайні нові. Саме цей список показувати, а не [...due, ...fresh].
+   */
+  review: CardView[];
   /** скільки нових ще можна взяти сьогодні */
   newLeft: number;
   reviewedToday: number;
@@ -189,7 +194,13 @@ export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilt
   const order = byDeadlineFirst(now);
   const dueViews = due.map(toView).sort(order);
   const freshViews = [...urgentFresh.map(toView), ...regularFresh.map(toView)].sort(order);
-  return { due: dueViews, fresh: freshViews, newLeft, reviewedToday };
+  const isUrgent = (card: CardView): boolean => deadlineActive(card.deadline, now);
+  const review = [
+    ...[...dueViews.filter(isUrgent), ...freshViews.filter(isUrgent)].sort(order),
+    ...dueViews.filter((card) => !isUrgent(card)),
+    ...freshViews.filter((card) => !isUrgent(card)),
+  ];
+  return { due: dueViews, fresh: freshViews, review, newLeft, reviewedToday };
 }
 
 /** Для лічильника в сайдбарі і плану дня: скільки карток чекає сьогодні. */

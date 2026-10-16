@@ -30,7 +30,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
     ? categories.find((category) => category.id === only.topicId)?.name ?? NO_CATEGORY_NAME
     : null;
 
-  const reviewCards: ReviewCard[] = [...queue.due, ...queue.fresh].map((card) => ({
+  const reviewCards: ReviewCard[] = queue.review.map((card) => ({
     id: card.id,
     question: card.question,
     answer: card.answer,

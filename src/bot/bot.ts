@@ -229,7 +229,7 @@ export class CardBot {
       db.telegramDelivery.findMany({ where: { day }, select: { questionId: true } }),
     ]);
     const delivered = new Set(deliveredToday.map((delivery) => delivery.questionId));
-    return [...queue.due, ...queue.fresh].find((candidate) => !delivered.has(candidate.id)) ?? null;
+    return queue.review.find((candidate) => !delivered.has(candidate.id)) ?? null;
   }
 
   /**

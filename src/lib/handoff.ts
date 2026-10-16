@@ -5,9 +5,9 @@ import { dayKey } from './queries';
 /** Вечірня передача дня: "завтра починаю з ...". Один рядок на день (Handoff.day = день, на який крок). */
 
 export const MAX_FIRST_STEP = 200;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 /** до цієї години "завтра" ще означає сьогодні: натиснув "кінець дня" о пів на першу ночі */
-const LATE_NIGHT_HOUR = 5;
+export const LATE_NIGHT_HOUR = 5;
 
 /** Перший крок на день now ('' якщо не записано). */
 export async function getFirstStep(now: Date = new Date()): Promise<string> {

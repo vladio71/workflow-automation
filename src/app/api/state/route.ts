@@ -1,5 +1,5 @@
 import { rejectUnlessAutomation } from '@/lib/automation';
-import { getFirstStep, handoffDay } from '@/lib/handoff';
+import { DAY_MS, LATE_NIGHT_HOUR, getFirstStep, handoffDay } from '@/lib/handoff';
 import { getTodayPlan } from '@/lib/planner';
 import { dayKey } from '@/lib/queries';
 import { db } from '@/lib/db';
@@ -7,10 +7,13 @@ import { db } from '@/lib/db';
 /**
  * Стан дня для скриптів на комп'ютері (desk.py, блокер): чи день почато, скільки пунктів закрито,
  * перший крок на сьогодні з вечірньої передачі. Тільки з токеном (x-automation-token).
+ *
+ * Ніч (до LATE_NIGHT_HOUR): якщо на сьогодні плану ще нема, а вчорашній почато, віддаємо вчорашній.
+ * Так закритий о 01:00 останній пункт дає allDone для того дня, і блокер бачить момент закриття.
  */
 
 export interface DayState {
-  /** YYYY-MM-DD за часом апки */
+  /** YYYY-MM-DD за часом апки: день плану, про який звіт (уночі до 5:00 може бути вчорашній) */
   day: string;
   /** план на сьогодні складено */
   planned: boolean;
@@ -35,8 +38,17 @@ export async function GET(request: Request): Promise<Response> {
   if (rejected) return rejected;
 
   const now = new Date();
-  const [plan, firstStep, next] = await Promise.all([
-    getTodayPlan(now),
+  let planDay = now;
+  let plan = await getTodayPlan(now);
+  if (plan === null && now.getHours() < LATE_NIGHT_HOUR) {
+    const yesterday = new Date(now.getTime() - DAY_MS);
+    const prev = await getTodayPlan(yesterday);
+    if (prev !== null && prev.startedAt !== null) {
+      plan = prev;
+      planDay = yesterday;
+    }
+  }
+  const [firstStep, next] = await Promise.all([
     getFirstStep(now),
     db.handoff.findUnique({ where: { day: handoffDay(now) } }),
   ]);
@@ -45,7 +57,7 @@ export async function GET(request: Request): Promise<Response> {
   const started = plan !== null && plan.startedAt !== null;
 
   const state: DayState = {
-    day: isoDay(dayKey(now)),
+    day: isoDay(dayKey(planDay)),
     planned: plan !== null,
     started,
     done,

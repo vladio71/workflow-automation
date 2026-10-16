@@ -109,6 +109,8 @@ async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidat
   const tasks = await db.task.findMany({
     where: {
       AND: [
+        // беклог у план не йде, поки справу не витягнеш у TODO
+        { status: { in: ['TODO', 'IN_PROGRESS'] } },
         { OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }] },
         { OR: [{ until: null }, { until: { gte: dayKey(now) } }] },
       ],

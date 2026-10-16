@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     getStreak(),
     getCardCounts(),
     getDueLevelCount(),
-    db.task.count({ where: { repeat: 'ONCE', doneAt: null } }),
+    db.task.count({ where: { repeat: 'ONCE', doneAt: null, status: { in: ['TODO', 'IN_PROGRESS'] } } }),
   ]);
 
   return (

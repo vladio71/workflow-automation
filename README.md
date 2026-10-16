@@ -92,7 +92,7 @@ npm run app        # Postgres + нові міграції + prisma generate + з
 | `src/components/Tower.tsx`, `TowerCard.tsx` | башта дня (поверх за кожен +1, прапор на цілі), скайлайн за 14 днів, попап сесії |
 | `src/lib/campaign.ts`, `src/components/CampaignMap.tsx` | навчальний план як карта кампанії: регіони-тижні, фортеці-задачі, тріщини на переробках |
 | `src/app/actions.ts` | усі зміни даних (server actions) |
-| `src/app/tasks` | справи поза навчанням (Task): повторювані і разові |
+| `src/app/tasks` | справи поза навчанням (Task): борд Backlog / To do / In progress, `src/app/api/tasks` кладе в беклог ззовні |
 | `src/app/api/mock/[id]` | стрімінг відповіді інтерв'юера |
 | `src/lib/cards.ts` | картки: розклад 1 → 3 → 7 → … днів, черга на сьогодні, час у Stats; додати, змінити, видалити картку |
 | `src/app/api/sync` | автосинк з Today (route handler, щоб не блокувати кнопки) |

@@ -27,7 +27,8 @@ import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels'
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
 import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
-import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, Track } from '@/generated/prisma/enums';
+import { clampPriority, updateBacklogTask } from '@/lib/task-backlog';
+import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, TaskStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
 function refresh(): void {
@@ -449,7 +450,7 @@ export async function addPlanTask(title: string, minutes: number): Promise<PlanA
   const text = title.trim().slice(0, 200);
   if (!text) return { ok: false, error: 'Напиши, що за справа' };
   return editDraft(async (items) => {
-    const task = await db.task.create({ data: { title: text, minutes: clampMinutes(minutes), repeat: 'ONCE' } });
+    const task = await db.task.create({ data: { title: text, minutes: clampMinutes(minutes), repeat: 'ONCE', status: 'TODO' } });
     return [...items, toPlanItem({
       id: `task:${task.id}`, kind: 'TASK', title: task.title, href: '/tasks', topicId: null,
       defaultMinutes: task.minutes, hint: 'Разова справа, додана сьогодні.', group: 'tasks',
@@ -543,7 +544,21 @@ export async function createTask(formData: FormData): Promise<void> {
   const repeat = TASK_REPEATS.find((value) => value === repeatValue) ?? 'ONCE';
   const target = clampTarget(Number(formData.get('target') ?? 0));
   const until = parseDateField(formData.get('until'));
-  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat, target, until } });
+  const priority = clampPriority(Number(formData.get('priority') ?? 3));
+  // з форми Tasks разова справа йде в беклог; повторювана одразу в роботі, бо беклог для неї не має сенсу
+  const status: TaskStatus = repeat === 'ONCE' ? 'BACKLOG' : 'TODO';
+  await db.task.create({ data: { title, minutes: clampMinutes(Number(formData.get('minutes') ?? 30)), repeat, target, until, status, priority } });
+  refresh();
+}
+
+/** Перекинути справу між колонками борду. 'DONE' ставить doneAt, інший статус знімає його. */
+export async function setTaskStatus(id: number, status: TaskStatus | 'DONE'): Promise<void> {
+  await updateBacklogTask(id, { status });
+  refresh();
+}
+
+export async function setTaskPriority(id: number, formData: FormData): Promise<void> {
+  await db.task.update({ where: { id }, data: { priority: clampPriority(Number(formData.get('priority') ?? 3)) } });
   refresh();
 }
 

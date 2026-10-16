@@ -256,6 +256,13 @@ model DailyPlan {
   updatedAt     DateTime  @updatedAt
 }
 
+/// Колонка беклогу: BACKLOG не йде в план дня, поки не витягнеш у TODO
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+}
+
 enum TaskRepeat {
   /// разова: пропонується в план, поки не зробиш
   ONCE
@@ -276,7 +283,13 @@ model Task {
   doneAt    DateTime?
   /// останній день, коли справа ще в плані (підготовка до інтерв'ю до 19.10). null = без кінця
   until     DateTime?  @db.Date
+  /// беклог як у Jira: BACKLOG | TODO | IN_PROGRESS; зроблено = doneAt
+  status    TaskStatus @default(BACKLOG)
+  /// 1 high … 4 low
+  priority  Int        @default(3)
+  notes     String     @default("")
   createdAt DateTime   @default(now())
+  updatedAt DateTime   @default(now()) @updatedAt
   ticks     TaskTick[]
 }
 

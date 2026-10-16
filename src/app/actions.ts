@@ -8,7 +8,7 @@ import { endOfDay, schedule, startOfDay } from '@/lib/schedule';
 import {
   checkModels, generateDayPlan, gradeAnswer, isGeminiConfigured, reviewDay, type GradeInput, type GradeResult, type ModelCheck,
 } from '@/lib/gemini';
-import { DEFAULT_BUDGET, buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem } from '@/lib/planner';
+import { DEFAULT_BUDGET, buildCandidates, getTodayPlan, parsePlanItems, rulePlan, todayRecallSummary, withStatus, type PlanItem, type PlanItemKind } from '@/lib/planner';
 import {
   addToDraft, clampMinutes, enforceMandatory, keepDone, momentumOrder, moveInDraft, moveToIndex, removeFromDraft, setMinutesInDraft, toPlanItem,
   type MoveDirection,
@@ -499,9 +499,29 @@ export async function setPlanItemDone(itemId: string, done: boolean): Promise<vo
   const day = dayKey(new Date());
   const plan = await db.dailyPlan.findUnique({ where: { day } });
   if (!plan) return;
-  const items = parsePlanItems(plan.items).map((item) => (item.id === itemId ? { ...item, manualDone: done } : item));
+  const parsed = parsePlanItems(plan.items);
+  const items = parsed.map((item) => (item.id === itemId ? { ...item, manualDone: done } : item));
   await db.dailyPlan.update({ where: { day }, data: { items: toJson(items) } });
+  const item = parsed.find((candidate) => candidate.id === itemId);
+  if (item) await syncPlanItemTime(item, done, day);
   refresh();
+}
+
+/** Ручна галочка в плані дня = запис часу в stats на minutes пункту; зняв галочку = запис зникає. */
+const PLAN_KIND_TO_ACTIVITY: Record<PlanItemKind, ActivityKind> = {
+  ANKI: 'CARDS', CARDS: 'CARDS', RECALL: 'RECALL', QUESTIONS: 'QUESTIONS', MOCK: 'MOCK', LEVEL: 'DRILL',
+  CYCLE: 'STUDY', SYSTEM_DESIGN: 'STUDY', OUT_LOUD: 'STUDY', PLAN: 'STUDY', INBOX: 'OTHER', TASK: 'OTHER',
+};
+
+async function syncPlanItemTime(item: PlanItem, done: boolean, day: Date): Promise<void> {
+  const note = `plan-item:${item.id}`;
+  const existing = await db.activityLog.findFirst({ where: { day, note } });
+  if (done && !existing) {
+    await logActivity({ minutes: item.minutes, kind: PLAN_KIND_TO_ACTIVITY[item.kind], topicId: item.topicId, track: null, note });
+  }
+  if (!done && existing) {
+    await db.activityLog.delete({ where: { id: existing.id } });
+  }
 }
 
 // ================================================================== tasks (справи поза навчанням)

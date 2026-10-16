@@ -244,6 +244,8 @@ async function applyLearn(source: Source, learn: RepoLearn): Promise<string> {
         track: folder.topic.track,
         ...(folder.notes ? { notes: folder.notes } : {}),
         ...(folder.topic.drill ? { drill: folder.topic.drill } : {}),
+        // дедлайн з topic.md головний: прибрали з файлу, прибирається і в апці
+        deadline: folder.topic.deadline ? new Date(`${folder.topic.deadline}T00:00:00Z`) : null,
       };
       const topic = await tx.topic.upsert({
         where: { sourceId_sourcePath: { sourceId: source.id, sourcePath: folder.path } },

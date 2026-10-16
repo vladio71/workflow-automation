@@ -15,9 +15,11 @@ import {
 } from '@/lib/plan-order';
 import { getStudyPlans, markAttemptDone } from '@/lib/study-plan';
 import {
-  createCard, createCategory, deleteCard, getCardCounts, reviewCard, setCardCategory, updateCard,
+  createCard, createCategory, deleteCard, getCardCounts, reviewCard, setCardCategory, setCategoryDeadline, updateCard,
   type CardTextInput, type CategoryChoice, type NewCardInput, type ReviewInput,
 } from '@/lib/cards';
+import { isDateKey } from '@/lib/learn-format';
+import { ImportError, finishImport, importCards, previewImport, type ImportPreview, type ImportResult, type ImportTarget } from '@/lib/import-cards';
 import { createDailyItem, deleteDailyItem, renameDailyItem, reorderDailyItems, setDailyItemChecked } from '@/lib/daily';
 import { logActivity } from '@/lib/activity';
 import { normalizeRepo, syncAll, syncSource, type SyncResult } from '@/lib/sync';
@@ -748,10 +750,42 @@ export async function editCard(id: number, input: CardTextInput): Promise<void> 
   refresh();
 }
 
+/** Сторінка категорії → Deadline. "" = прибрати. Дата як YYYY-MM-DD, зберігається без часу. */
+export async function changeCategoryDeadline(topicId: number, value: string): Promise<boolean> {
+  if (value && !isDateKey(value)) return false;
+  await setCategoryDeadline(topicId, value ? new Date(`${value}T00:00:00Z`) : null);
+  refresh();
+  return true;
+}
+
 /** All cards → Delete. Картку з репо Sync не поверне. */
 export async function removeCard(id: number): Promise<void> {
   await deleteCard(id);
   refresh();
+}
+
+// ================================================================== import (Q:/A: текст -> картки)
+
+const MAX_IMPORT_CHARS = 500_000;
+
+/** Import → передпоказ: скільки карток розпізнано і де помилки формату. */
+export async function previewCardImport(text: string): Promise<ImportPreview> {
+  return previewImport(text.slice(0, MAX_IMPORT_CHARS));
+}
+
+export type CardImportOutcome = { ok: true; result: ImportResult } | { ok: false; error: string };
+
+/** Import → Import. Помилки формату і дедлайну повертаються текстом, не кидаються. */
+export async function runCardImport(text: string, target: ImportTarget): Promise<CardImportOutcome> {
+  try {
+    const result = await importCards(text.slice(0, MAX_IMPORT_CHARS), target);
+    await finishImport(result);
+    refresh();
+    return { ok: true, result };
+  } catch (error) {
+    if (error instanceof ImportError) return { ok: false, error: error.message };
+    throw error;
+  }
 }
 
 // ================================================================== levels (вправи live-code)

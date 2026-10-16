@@ -37,6 +37,47 @@ export function scheduleCard(current: number, grade: CardGrade, now: Date): Card
   return { interval, dueAt: new Date(startOfDay(now).getTime() + interval * DAY_MS) };
 }
 
+/**
+ * Скільки днів від сьогодні до дедлайну: 0 = дедлайн сьогодні, від'ємне = минув.
+ * deadline це колонка DATE (опівніч UTC), тому порівнюємо з dayKey(now), а не з локальним startOfDay.
+ */
+export function daysUntilDeadline(deadline: Date, now: Date): number {
+  return Math.round((deadline.getTime() - dayKey(now).getTime()) / DAY_MS);
+}
+
+/** Підпис дедлайну для UI: "today", "in 3d", "2d ago". */
+export function deadlineLabel(deadline: Date, now: Date): string {
+  const diff = daysUntilDeadline(deadline, now);
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'tomorrow';
+  return diff > 0 ? `in ${diff}d` : `${-diff}d ago`;
+}
+
+export function deadlineActive(deadline: Date | null, now: Date): deadline is Date {
+  return deadline !== null && daysUntilDeadline(deadline, now) >= 0;
+}
+
+/**
+ * Інтервал до дедлайну: драбина стискається під дату, що лишилась.
+ * Кожне наступне повторення приблизно вдвічі довше за попереднє (1, 2, 4, ...), але жодне не перестрибує
+ * переддень дедлайну: останній раз картку видно за день до нього. Лишився 1 день або менше: щодня.
+ * FORGOT завжди на завтра, HARD повторює поточний крок (мінімум 1).
+ */
+export function nextDeadlineInterval(current: number, grade: CardGrade, daysLeft: number): number {
+  const last = Math.max(1, daysLeft - 1); // переддень дедлайну
+  if (grade === 'FORGOT') return 1;
+  if (grade === 'HARD') return Math.min(last, Math.max(current, 1));
+  const doubled = Math.max(1, current) * 2;
+  const next = current === 0 ? 1 : doubled;
+  return Math.min(last, next);
+}
+
+export function scheduleCardWithDeadline(current: number, grade: CardGrade, now: Date, deadline: Date | null): CardSchedule {
+  if (!deadlineActive(deadline, now)) return scheduleCard(current, grade, now);
+  const interval = nextDeadlineInterval(current, grade, daysUntilDeadline(deadline, now));
+  return { interval, dueAt: new Date(startOfDay(now).getTime() + interval * DAY_MS) };
+}
+
 export interface CardView {
   id: number;
   question: string;
@@ -51,9 +92,12 @@ export interface CardView {
   fromRepo: boolean;
   /** картку з репо змінили в апці: Sync її більше не оновлює */
   editedInApp: boolean;
+  /** дедлайн категорії, якщо він ще не минув: картка в пріоритеті */
+  deadline: Date | null;
 }
 
-type QuestionWithTopic = Question & { topic: { id: number; name: string } | null };
+type QuestionWithTopic = Question & { topic: { id: number; name: string; deadline: Date | null } | null };
+const TOPIC_SELECT = { select: { id: true, name: true, deadline: true } } as const;
 
 function toView(question: QuestionWithTopic): CardView {
   return {
@@ -68,6 +112,19 @@ function toView(question: QuestionWithTopic): CardView {
     lapses: question.cardLapses,
     fromRepo: question.sourceId !== null,
     editedInApp: question.sourceId !== null && question.editedInApp,
+    deadline: question.topic?.deadline ?? null,
+  };
+}
+
+/**
+ * Порядок черги: спершу категорії з живим дедлайном (ближчий вище), потім решта.
+ * Усередині порядок як був: прострочені за терміном, нові за id.
+ */
+function byDeadlineFirst(now: Date) {
+  return (a: CardView, b: CardView): number => {
+    const da = deadlineActive(a.deadline, now) ? a.deadline.getTime() : Number.POSITIVE_INFINITY;
+    const db_ = deadlineActive(b.deadline, now) ? b.deadline.getTime() : Number.POSITIVE_INFINITY;
+    return da - db_;
   };
 }
 
@@ -90,27 +147,49 @@ export interface CategoryFilter {
  */
 export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilter): Promise<CardQueue> {
   const from = startOfDay(now);
+  const today = dayKey(now); // для колонки DATE (deadline)
   const inCategory = filter ? { topicId: filter.topicId } : {};
-  const [due, newSeenToday, reviewedToday] = await Promise.all([
+  const [due, newSeenToday, reviewedToday, urgentFresh] = await Promise.all([
     db.question.findMany({
       where: { kind: 'CONCEPT', cardDueAt: { lte: endOfDay(now) }, ...inCategory },
-      include: { topic: { select: { id: true, name: true } } },
+      include: { topic: TOPIC_SELECT },
       orderBy: { cardDueAt: 'asc' },
     }),
-    db.cardReview.count({ where: { wasNew: true, createdAt: { gte: from } } }),
+    // нові картки категорій з дедлайном у ліміт не входять, інакше вони з'їли б денну норму звичайних
+    db.cardReview.count({
+      where: {
+        wasNew: true,
+        createdAt: { gte: from },
+        OR: [{ question: { topicId: null } }, { question: { topic: { deadline: null } } }, { question: { topic: { deadline: { lt: today } } } }],
+      },
+    }),
     db.cardReview.count({ where: { grade: { not: 'PRACTICE' }, createdAt: { gte: from } } }),
+    // нові картки категорій з дедлайном: усі одразу, ліміт на день для них не діє
+    db.question.findMany({
+      where: { kind: 'CONCEPT', cardDueAt: null, topic: { deadline: { gte: today } }, ...inCategory },
+      include: { topic: TOPIC_SELECT },
+      orderBy: { id: 'asc' },
+    }),
   ]);
   const newLeft = Math.max(0, NEW_PER_DAY - newSeenToday);
-  const fresh =
+  const regularFresh =
     newLeft === 0
       ? []
       : await db.question.findMany({
-          where: { kind: 'CONCEPT', cardDueAt: null, ...inCategory },
-          include: { topic: { select: { id: true, name: true } } },
+          where: {
+            kind: 'CONCEPT',
+            cardDueAt: null,
+            OR: [{ topicId: null }, { topic: { deadline: null } }, { topic: { deadline: { lt: today } } }],
+            ...inCategory,
+          },
+          include: { topic: TOPIC_SELECT },
           orderBy: { id: 'asc' },
           take: newLeft,
         });
-  return { due: due.map(toView), fresh: fresh.map(toView), newLeft, reviewedToday };
+  const order = byDeadlineFirst(now);
+  const dueViews = due.map(toView).sort(order);
+  const freshViews = [...urgentFresh.map(toView), ...regularFresh.map(toView)].sort(order);
+  return { due: dueViews, fresh: freshViews, newLeft, reviewedToday };
 }
 
 /** Для лічильника в сайдбарі і плану дня: скільки карток чекає сьогодні. */
@@ -123,7 +202,7 @@ export async function getCardCounts(now: Date = new Date()): Promise<{ due: numb
 export async function getAllCards(): Promise<CardView[]> {
   const questions = await db.question.findMany({
     where: { kind: 'CONCEPT' },
-    include: { topic: { select: { id: true, name: true } } },
+    include: { topic: TOPIC_SELECT },
     orderBy: [{ topicId: 'asc' }, { id: 'asc' }],
   });
   return questions.map(toView);
@@ -133,7 +212,7 @@ export async function getAllCards(): Promise<CardView[]> {
 export async function getCard(questionId: number): Promise<CardView | null> {
   const question = await db.question.findUnique({
     where: { id: questionId },
-    include: { topic: { select: { id: true, name: true } } },
+    include: { topic: TOPIC_SELECT },
   });
   return question ? toView(question) : null;
 }
@@ -146,13 +225,19 @@ export interface ReviewInput {
 
 /** Показ картки: запис у журнал, новий розклад (крім PRACTICE), час у Stats одним рядком на день. */
 export async function reviewCard(input: ReviewInput, now: Date = new Date()): Promise<void> {
-  const question = await db.question.findUniqueOrThrow({ where: { id: input.questionId } });
+  const question = await db.question.findUniqueOrThrow({
+    where: { id: input.questionId },
+    include: { topic: { select: { deadline: true } } },
+  });
   const seconds = Math.max(0, Math.min(MAX_SECONDS_PER_CARD, Math.round(input.seconds)));
   const wasNew = question.cardDueAt === null && input.grade !== 'PRACTICE';
 
   // PRACTICE: розклад не чіпаємо. FORGOT у вільному режимі все одно ставить картку на завтра.
+  // Категорія з дедлайном: стиснута драбина; після дедлайну картка живе за звичайною.
   const changesSchedule = input.grade !== 'PRACTICE';
-  const next = changesSchedule ? scheduleCard(question.cardInterval, input.grade, now) : null;
+  const next = changesSchedule
+    ? scheduleCardWithDeadline(question.cardInterval, input.grade, now, question.topic?.deadline ?? null)
+    : null;
 
   await db.$transaction([
     db.cardReview.create({ data: { questionId: question.id, grade: input.grade, wasNew, seconds } }),
@@ -283,6 +368,8 @@ export interface CardCategory {
   fresh: number;
   /** найраніший термін серед уже показаних карток: коли категорія наступного разу стане due */
   nextDueAt: Date | null;
+  /** живий дедлайн категорії: вона йде першою і повторюється частіше */
+  deadline: Date | null;
 }
 
 export const NO_CATEGORY_NAME = 'No category';
@@ -292,14 +379,23 @@ export async function getCardCategories(now: Date = new Date()): Promise<CardCat
   const until = endOfDay(now);
   const questions = await db.question.findMany({
     where: { kind: 'CONCEPT' },
-    select: { topicId: true, cardDueAt: true, topic: { select: { name: true } } },
+    select: { topicId: true, cardDueAt: true, topic: { select: { name: true, deadline: true } } },
   });
   const byKey = new Map<string, CardCategory>();
   for (const question of questions) {
     const key = String(question.topicId);
     let category = byKey.get(key);
     if (!category) {
-      category = { id: question.topicId, name: question.topic?.name ?? NO_CATEGORY_NAME, total: 0, due: 0, fresh: 0, nextDueAt: null };
+      const deadline = question.topic?.deadline ?? null;
+      category = {
+        id: question.topicId,
+        name: question.topic?.name ?? NO_CATEGORY_NAME,
+        total: 0,
+        due: 0,
+        fresh: 0,
+        nextDueAt: null,
+        deadline: deadlineActive(deadline, now) ? deadline : null,
+      };
       byKey.set(key, category);
     }
     category.total += 1;
@@ -312,6 +408,9 @@ export async function getCardCategories(now: Date = new Date()): Promise<CardCat
     if (category.nextDueAt === null || dueAt < category.nextDueAt) category.nextDueAt = dueAt;
   }
   return [...byKey.values()].sort((a, b) => {
+    const da = a.deadline?.getTime() ?? Number.POSITIVE_INFINITY;
+    const db_ = b.deadline?.getTime() ?? Number.POSITIVE_INFINITY;
+    if (da !== db_) return da - db_;
     const byDue = Number(b.due > 0) - Number(a.due > 0);
     if (byDue !== 0) return byDue;
     return a.name.localeCompare(b.name);
@@ -336,7 +435,7 @@ export async function getCategoryChoices(): Promise<CategoryChoice[]> {
 }
 
 /** Категорією щойно користувались: вона піднімається нагору у виборі. */
-async function touchCategory(topicId: number, now: Date = new Date()): Promise<void> {
+export async function touchCategory(topicId: number, now: Date = new Date()): Promise<void> {
   await db.topic.updateMany({ where: { id: topicId }, data: { cardsUsedAt: now } });
 }
 
@@ -365,4 +464,9 @@ export async function setCardCategory(id: number, topicId: number | null): Promi
   await db.question.update({ where: { id }, data: { topicId } });
   if (topicId !== null) await touchCategory(topicId);
   return true;
+}
+
+/** Дедлайн категорії зі сторінки категорії. null = прибрати. Дата без часу (день дедлайну включно). */
+export async function setCategoryDeadline(topicId: number, deadline: Date | null): Promise<void> {
+  await db.topic.update({ where: { id: topicId }, data: { deadline } });
 }

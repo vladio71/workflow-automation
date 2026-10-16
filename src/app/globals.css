@@ -466,3 +466,14 @@ select.input option { background: var(--bg); color: var(--text); }
 .session-log { max-height: 180px; overflow-y: auto; }
 
 .session-log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; overflow-wrap: anywhere; }
+
+/* дедлайн категорії карток у таблиці категорій */
+.deadline-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fff3bf;
+  color: #7a5200;
+  font-size: 12px;
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { CardCategory } from '@/lib/cards';
+import { deadlineLabel, type CardCategory } from '@/lib/cards';
 import { categoryHref, categoryParam, categoryReviewHref } from '@/lib/card-links';
 import { relativeDay } from '@/lib/schedule';
 
@@ -26,11 +26,19 @@ export function CategoryTable({ categories, newLeft, now }: CategoryTableProps) 
       </thead>
       <tbody>
         {categories.map((category) => {
-          const waiting = category.due + Math.min(category.fresh, newLeft);
+          // категорія з дедлайном бере всі нові одразу, ліміт на день для неї не діє
+          const waiting = category.due + (category.deadline ? category.fresh : Math.min(category.fresh, newLeft));
           const overdue = category.due > 0;
           return (
             <tr key={categoryParam(category.id)} data-testid={`category-row-${categoryParam(category.id)}`}>
-              <td className="title-cell"><Link href={categoryHref(category.id)}>{category.name}</Link></td>
+              <td className="title-cell">
+                <Link href={categoryHref(category.id)}>{category.name}</Link>
+                {category.deadline && (
+                  <span className="deadline-badge" title="Deadline: cards are reviewed more often and come first">
+                    ⏱ {deadlineLabel(category.deadline, now)}
+                  </span>
+                )}
+              </td>
               <td className="muted" style={{ width: 70 }}>{category.total}</td>
               <td style={{ width: 70, color: overdue ? '#eb5757' : undefined }} className={overdue ? '' : 'faint'}>{category.due || ''}</td>
               <td className="muted" style={{ width: 70 }}>{category.fresh || ''}</td>

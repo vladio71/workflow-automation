@@ -363,3 +363,106 @@ select.input option { background: var(--bg); color: var(--text); }
 .mini-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 6px; }
 .mini .check { padding: 5px 2px; border-bottom: 1px solid var(--border); }
 .mini .check:last-of-type { border-bottom: 0; }
+
+/* ---------------- live code: попап правил і нагадування ---------------- */
+.nav-button { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; font-size: 14px; white-space: nowrap; }
+
+.nav-link .count.alert { color: var(--tag-red-fg); background: var(--tag-red-bg); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+
+.modal {
+  width: min(720px, calc(100vw - 32px)); max-height: min(88vh, 940px); padding: 0; margin: auto;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--shadow);
+}
+
+.modal[open] { display: flex; flex-direction: column; }
+
+.modal::backdrop { background: rgba(15, 15, 15, 0.45); }
+
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 8px; }
+
+.modal-head h2 { flex: 1; font-size: 18px; font-weight: 600; }
+
+.modal-body { padding: 4px 20px 16px; overflow-y: auto; font-size: 14px; }
+
+.modal-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 20px;
+  border-top: 1px solid var(--border); background: var(--sidebar); border-radius: 0 0 10px 10px;
+}
+
+.golden { background: var(--tag-yellow-bg); color: var(--tag-yellow-fg); border-radius: 6px; padding: 10px 14px; font-weight: 600; }
+
+.rule-title { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 4px; }
+
+/* тег і текст в одній сітці: у правилах і в чеклісті текст починається з того самого місця */
+.rule-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; align-items: start; padding: 4px 0; line-height: 21px; }
+
+.rule-row .tag, .rule-check .tag { justify-self: start; margin-top: 1px; }
+
+.rule-check {
+  display: grid; grid-template-columns: 16px 78px minmax(0, 1fr); gap: 10px; align-items: start; line-height: 21px;
+  width: 100%; padding: 4px 0; background: none; border: 0; text-align: left; font: inherit; color: inherit; border-radius: 4px;
+}
+
+.rule-check:hover { background: var(--hover); }
+
+.rule-check .box { margin-top: 3px; }
+
+.rule-check.on .label { color: var(--faint); }
+
+.modal .db td:nth-child(-n + 2) { white-space: nowrap; }
+
+/* ---------------- башта дня (справа-сесія) ---------------- */
+:root {
+  --tower-stone: #e3d8c8;
+  --tower-stone-edge: #a8977f;
+  --tower-window: #f2c14e;
+  --tower-dark-window: #8f8170;
+  --tower-bonus: #f3d98b;
+  --tower-scaffold: #b9ad9c;
+  --tower-ground: rgba(55, 53, 47, 0.18);
+  --tower-flag: #e2574c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tower-stone: #5b5248;
+    --tower-stone-edge: #8c7d6b;
+    --tower-window: #f2c94c;
+    --tower-dark-window: #3a332c;
+    --tower-bonus: #8d7228;
+    --tower-scaffold: #6c6257;
+    --tower-ground: rgba(255, 255, 255, 0.16);
+    --tower-flag: #eb5757;
+  }
+}
+
+.tower-card { padding: 14px 18px; margin-bottom: 8px; }
+
+.tower-card:hover { background: var(--bg); }
+
+.tower-row { display: flex; gap: 18px; align-items: flex-end; }
+
+.tower-row + .tower-row { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+
+.tower-grow { transform-box: fill-box; transform-origin: bottom center; animation: tower-grow 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.25); }
+
+@keyframes tower-grow {
+  from { transform: translateY(-14px) scaleY(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tower-grow { animation: none; }
+}
+
+.modal-body.session { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: start; padding-top: 8px; }
+
+.session-tower { display: flex; align-items: flex-end; min-height: 200px; }
+
+.session-count { font-size: 44px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+.session-count .faint { font-size: 26px; font-weight: 600; }
+
+.session-log { max-height: 180px; overflow-y: auto; }
+
+.session-log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; overflow-wrap: anywhere; }

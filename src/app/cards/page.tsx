@@ -53,6 +53,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
         <Link className={`db-tab ${tab === 'all' ? 'active' : ''}`} href="/cards?tab=all">All cards · {all.length}</Link>
         <span style={{ flex: 1 }} />
         {tab !== 'all' && <Link className="btn sm" href="/cards/new">+ New card</Link>}
+        {tab !== 'all' && <Link className="btn sm" href="/import" data-testid="import-link">⇪ Import</Link>}
         <span className="faint" style={{ fontSize: 13, marginLeft: 8 }}>{fullQueue.reviewedToday} reviewed today</span>
       </div>
 

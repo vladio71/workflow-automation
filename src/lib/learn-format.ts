@@ -38,6 +38,8 @@ export interface ParsedTopic {
   notesFile: string;
   /** front matter `drill:` шлях до папки чи файлу з дрілами */
   drill: string;
+  /** front matter `deadline: YYYY-MM-DD`: до цієї дати картки теми в пріоритеті; null = без дедлайну */
+  deadline: string | null;
   errors: string[];
 }
 
@@ -132,6 +134,13 @@ interface FrontMatter {
 }
 
 /** `---\nkey: value\n---\nтекст`: null, якщо front matter немає. */
+/** "2026-10-19": рівно дата, і вона справжня (не 2026-02-30). */
+export function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 function readFrontMatter(text: string): FrontMatter | null {
   const match = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   const head = match?.[1];
@@ -151,6 +160,7 @@ function readFrontMatter(text: string): FrontMatter | null {
  *   track: SYSTEM_DESIGN   GRAPHQL | SYSTEM_DESIGN | NODE | AI | PYTHON | OTHER
  *   notes: modules/02-caching/README.md   необов'язково: файл, який стане нотатками теми
  *   drill: modules/02-caching             необов'язково: де лежать дріли
+ *   deadline: 2026-10-19                  необов'язково: до цієї дати картки теми повторюються частіше
  *   ---
  */
 export function parseTopic(text: string): ParsedTopic {
@@ -162,6 +172,7 @@ export function parseTopic(text: string): ParsedTopic {
       notes: '',
       notesFile: '',
       drill: '',
+      deadline: null,
       errors: ['topic.md must start with front matter (--- name: ... track: ... ---)'],
     };
   }
@@ -176,12 +187,20 @@ export function parseTopic(text: string): ParsedTopic {
   if (TRACKS.includes(trackRaw as Track)) track = trackRaw as Track;
   else errors.push(`topic.md: track must be one of ${TRACKS.join(', ')}`);
 
+  const deadlineRaw = meta.get('deadline') ?? '';
+  let deadline: string | null = null;
+  if (deadlineRaw) {
+    if (isDateKey(deadlineRaw)) deadline = deadlineRaw;
+    else errors.push(`topic.md: deadline must be YYYY-MM-DD, got "${deadlineRaw}"`);
+  }
+
   return {
     name,
     track,
     notes: body.trim(),
     notesFile: meta.get('notes') ?? '',
     drill: meta.get('drill') ?? '',
+    deadline,
     errors,
   };
 }

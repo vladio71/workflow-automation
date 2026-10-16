@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CardBrowser } from '@/components/CardBrowser';
+import { CategoryDeadline } from '@/components/CategoryDeadline';
 import { NO_CATEGORY_NAME, getAllCards, getCardQueue, getCategoryChoices } from '@/lib/cards';
 import { categoryParam, categoryReviewHref, parseCategoryParam } from '@/lib/card-links';
 import { toBrowseCard } from '@/lib/card-view';
@@ -17,7 +18,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   if (!category) notFound();
   const now = new Date();
   const [topic, all, queue, choices] = await Promise.all([
-    category.topicId === null ? null : db.topic.findUnique({ where: { id: category.topicId }, select: { id: true, name: true } }),
+    category.topicId === null
+      ? null
+      : db.topic.findUnique({ where: { id: category.topicId }, select: { id: true, name: true, deadline: true, sourceId: true } }),
     getAllCards(),
     getCardQueue(now, category),
     getCategoryChoices(),
@@ -38,6 +41,16 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         {cards.length} cards · {queue.due.length} due · {queue.fresh.length} new today
         {topic && <> · <Link href={`/topics/${topic.id}`} style={{ textDecoration: 'underline' }}>topic page</Link></>}
       </p>
+
+      {topic && (
+        <div style={{ marginBottom: 12 }}>
+          <CategoryDeadline
+            topicId={topic.id}
+            value={topic.deadline ? topic.deadline.toISOString().slice(0, 10) : ''}
+            fromRepo={topic.sourceId !== null}
+          />
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         {waiting > 0 ? (

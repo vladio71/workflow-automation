@@ -477,3 +477,25 @@ select.input option { background: var(--bg); color: var(--text); }
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* ---------------- Tasks: борд і картка ---------------- */
+.task-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; align-items: start; }
+@media (max-width: 900px) { .task-board { grid-template-columns: minmax(0, 1fr); } }
+.task-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--bg); }
+.task-card-head { display: flex; align-items: flex-start; gap: 8px; }
+.task-card-title {
+  flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer; line-height: 1.35; overflow-wrap: anywhere;
+}
+.task-card-title:hover span { text-decoration: underline; }
+.task-card-meta { font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-card-row { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.task-card-row > :nth-last-child(1) { margin-left: auto; }
+.task-modal { width: min(560px, calc(100vw - 32px)); }
+.task-modal-body { display: flex; flex-direction: column; gap: 10px; }
+.task-modal-title { font-size: 17px; font-weight: 600; height: 36px; }
+.task-modal-notes { resize: vertical; font-family: inherit; line-height: 1.45; padding: 8px 10px; min-height: 120px; }
+.task-modal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.task-modal-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.task-modal-grid .input { height: 30px; width: 100%; }
+@media (max-width: 600px) { .task-modal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

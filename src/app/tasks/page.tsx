@@ -1,7 +1,8 @@
-import { createTask, deleteTask, setTaskPriority, setTaskStatus, setTaskTarget, tickTaskForm } from '../actions';
+import { createTask, deleteTask, setTaskStatus, tickTaskForm, updateTaskForm } from '../actions';
 import { db } from '@/lib/db';
 import { MAX_TARGET, todayTickCounts } from '@/lib/task-sessions';
 import { MAX_PRIORITY, MIN_PRIORITY, PRIORITY_LABEL, nextStatus, prevStatus } from '@/lib/task-backlog';
+import TaskCard, { type TaskCardData } from '@/components/TaskCard';
 import type { Task, TaskRepeat, TaskStatus } from '@/generated/prisma/client';
 
 const REPEAT_LABEL: Record<TaskRepeat, string> = {
@@ -17,90 +18,48 @@ const COLUMN_LABEL: Record<TaskStatus, string> = {
 };
 
 const COLUMNS: readonly TaskStatus[] = ['BACKLOG', 'TODO', 'IN_PROGRESS'];
-const PRIORITY_COLOR: Record<number, string> = { 1: 'red', 2: 'orange', 3: 'gray', 4: 'gray' };
-
-const CARD_STYLE = {
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  padding: '8px 10px',
-  marginBottom: 8,
-  background: 'var(--bg)',
-} as const;
 
 function dateLabel(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-/** until лежить як DATE (опівніч UTC), тому показуємо його за UTC, інакше в Києві це "попередній день" */
-function untilLabel(date: Date): string {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-}
-
-function PriorityTag({ task }: { task: Task }) {
-  return (
-    <form action={setTaskPriority.bind(null, task.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title="Пріоритет: 1 high … 4 low">
-      <select className={`tag ${PRIORITY_COLOR[task.priority] ?? 'gray'}`} name="priority" defaultValue={task.priority} style={{ border: 0, cursor: 'pointer' }}>
-        {Array.from({ length: MAX_PRIORITY - MIN_PRIORITY + 1 }, (_, index) => MIN_PRIORITY + index).map((value) => (
-          <option key={value} value={value}>P{value} {PRIORITY_LABEL[value]}</option>
-        ))}
-      </select>
-      <button className="btn sm ghost" title="Зберегти пріоритет">✓</button>
-    </form>
-  );
-}
-
-function TaskCard({ task, today }: { task: Task; today: number }) {
-  const once = task.repeat === 'ONCE';
+function toCardData(task: Task, todayCount: number): TaskCardData {
   const done = task.doneAt !== null;
-  const session = task.target > 0;
-  const next = nextStatus(task.status);
-  const prev = prevStatus(task.status);
+  return {
+    id: task.id,
+    title: task.title,
+    notes: task.notes,
+    minutes: task.minutes,
+    priority: task.priority,
+    repeatLabel: REPEAT_LABEL[task.repeat],
+    target: task.target,
+    todayCount,
+    // until лежить як DATE (опівніч UTC), тому беремо ISO-день, а не локальну дату
+    until: task.until ? task.until.toISOString().slice(0, 10) : null,
+    sinceLabel: done && task.doneAt ? `зроблено ${dateLabel(task.doneAt)}` : `з ${dateLabel(task.createdAt)}`,
+    status: task.status,
+    done,
+    prev: prevStatus(task.status),
+    next: nextStatus(task.status),
+  };
+}
+
+function Card({ task, today }: { task: Task; today: number }) {
   return (
-    <div className="row-hover" style={CARD_STYLE} data-task={task.id} data-status={done ? 'DONE' : task.status}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--faint)' : undefined, overflowWrap: 'anywhere' }}>
-            {session && '🏰 '}{task.title}
-          </div>
-          <div className="faint" style={{ fontSize: 12 }}>
-            {task.minutes} min · {REPEAT_LABEL[task.repeat]}
-            {session && ` · сесія: ${task.target} за день`}
-            {task.until && ` · до ${untilLabel(task.until)}`}
-            {once && (done && task.doneAt ? ` · зроблено ${dateLabel(task.doneAt)}` : ` · з ${dateLabel(task.createdAt)}`)}
-          </div>
-          {task.notes && <div className="faint" style={{ fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}>{task.notes}</div>}
-        </div>
-        {!done && <PriorityTag task={task} />}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-        {session && !done && (
-          <>
-            <span className={`tag ${today >= task.target ? 'green' : 'gray'}`}>{today}/{task.target} сьогодні</span>
-            <form action={tickTaskForm.bind(null, task.id)}><button className="btn sm" title="Відправив ще одне">+1</button></form>
-          </>
-        )}
-        {done ? (
-          <form action={setTaskStatus.bind(null, task.id, 'TODO')}><button className="btn sm ghost" title="Повернути в To do">↩ reopen</button></form>
-        ) : (
-          <>
-            {prev && (
-              <form action={setTaskStatus.bind(null, task.id, prev)}><button className="btn sm ghost" title={`← ${COLUMN_LABEL[prev]}`}>←</button></form>
-            )}
-            <form action={setTaskStatus.bind(null, task.id, next)}>
-              <button className={`btn sm ${next === 'DONE' ? 'primary' : ''}`} title={next === 'DONE' ? 'Зроблено' : `→ ${COLUMN_LABEL[next]}`}>
-                {next === 'DONE' ? '✓ done' : '→'}
-              </button>
-            </form>
-          </>
-        )}
-        <span style={{ flex: 1 }} />
-        <form action={setTaskTarget.bind(null, task.id)} style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Ціль на день: 0 = звичайна справа з галочкою">
-          <input className="input" name="target" type="number" min={0} max={MAX_TARGET} defaultValue={task.target} aria-label="Ціль на день" style={{ width: 54, height: 24 }} />
-          <button className="btn sm ghost" title="Зберегти ціль">✓</button>
-        </form>
-        <form action={deleteTask.bind(null, task.id)}><button className="btn sm ghost" title="Видалити">✕</button></form>
-      </div>
-    </div>
+    <TaskCard
+      task={toCardData(task, today)}
+      actions={{
+        save: updateTaskForm.bind(null, task.id),
+        moveNext: setTaskStatus.bind(null, task.id, nextStatus(task.status)),
+        movePrev: setTaskStatus.bind(null, task.id, prevStatus(task.status) ?? 'BACKLOG'),
+        reopen: setTaskStatus.bind(null, task.id, 'TODO'),
+        tick: tickTaskForm.bind(null, task.id),
+        remove: deleteTask.bind(null, task.id),
+      }}
+      columnLabel={COLUMN_LABEL}
+      priorityLabel={PRIORITY_LABEL}
+      maxTarget={MAX_TARGET}
+    />
   );
 }
 
@@ -113,7 +72,7 @@ export default async function TasksPage() {
     .filter((task) => task.doneAt !== null)
     .sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0))
     .slice(0, 15);
-  const card = (task: Task) => <TaskCard key={task.id} task={task} today={counts.get(task.id) ?? 0} />;
+  const card = (task: Task) => <Card key={task.id} task={task} today={counts.get(task.id) ?? 0} />;
 
   return (
     <div className="page">
@@ -144,7 +103,7 @@ export default async function TasksPage() {
         <button className="btn primary">Add</button>
       </form>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 16, alignItems: 'start' }}>
+      <div className="task-board">
         {COLUMNS.map((status) => {
           const column = byColumn(status);
           return (

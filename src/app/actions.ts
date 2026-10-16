@@ -27,7 +27,7 @@ import { findLevel, getLevelDetails, levelsDir, scanLevels } from '@/lib/levels'
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from '@/lib/day-focus';
 import { runLevel } from '@/lib/level-runner';
 import { clampTarget, todayTickCounts } from '@/lib/task-sessions';
-import { clampPriority, updateBacklogTask } from '@/lib/task-backlog';
+import { MAX_NOTES, clampPriority, updateBacklogTask } from '@/lib/task-backlog';
 import type { ActivityKind, Confidence, CycleStatus, TaskRepeat, TaskStatus, Track } from '@/generated/prisma/enums';
 
 /** Після будь-якої зміни перебудовуємо всі сторінки: апка маленька, так простіше і без багів з кешем. */
@@ -554,6 +554,25 @@ export async function createTask(formData: FormData): Promise<void> {
 /** Перекинути справу між колонками борду. 'DONE' ставить doneAt, інший статус знімає його. */
 export async function setTaskStatus(id: number, status: TaskStatus | 'DONE'): Promise<void> {
   await updateBacklogTask(id, { status });
+  refresh();
+}
+
+/** Форма в модалці справи: назва, опис, пріоритет, хвилини, ціль, до якого дня. */
+export async function updateTaskForm(id: number, formData: FormData): Promise<void> {
+  const title = String(formData.get('title') ?? '').trim().slice(0, 200);
+  if (!title) return;
+  const untilRaw = String(formData.get('until') ?? '');
+  await db.task.update({
+    where: { id },
+    data: {
+      title,
+      notes: String(formData.get('notes') ?? '').trim().slice(0, MAX_NOTES),
+      priority: clampPriority(Number(formData.get('priority') ?? 3)),
+      minutes: clampMinutes(Number(formData.get('minutes') ?? 30)),
+      target: clampTarget(Number(formData.get('target') ?? 0)),
+      until: untilRaw ? parseDateField(untilRaw) : null,
+    },
+  });
   refresh();
 }
 

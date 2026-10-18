@@ -7,12 +7,12 @@ import { adoptLevelSession, openRules, stopSession } from '@/lib/live-code-sessi
 
 interface LevelPlayProps {
   levelKey: string;
-  /** назва рівня: так його підпише нагадування */
+  /** Level name, used as the reminder label */
   title: string;
-  /** index.ts або index.tsx: так файл і називатиметься в копії вправи */
+  /** index.ts or index.tsx: the file name in the copy of the exercise */
   fileName: string;
   stub: string;
-  /** еталон видно, тільки якщо сьогодні вже пройшов або здався */
+  /** The reference is visible only if the level was passed or given up today */
   initialReference: string | null;
   passedToday: boolean;
   gaveUpToday: boolean;
@@ -27,7 +27,7 @@ interface RunView {
   durationMs: number;
 }
 
-/** локальна дата, а не UTC: після 21:00 за Києвом UTC уже "завтра" */
+/** Local date, not UTC: after 21:00 Kyiv time UTC is already "tomorrow" */
 function localDay(): string {
   const now = new Date();
   return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
@@ -46,7 +46,7 @@ function writeStorage(key: string, value: string | null): void {
     if (value === null) window.localStorage.removeItem(key);
     else window.localStorage.setItem(key, value);
   } catch {
-    // приватне вікно або заблоковане сховище: чернетка просто не збережеться
+    // private window or blocked storage: the draft simply is not saved
   }
 }
 
@@ -55,7 +55,7 @@ export function LevelPlay(props: LevelPlayProps) {
   const startKey = `level-start:${props.levelKey}:${localDay()}`;
 
   const [code, setCode] = useState(props.stub);
-  // годинника на сторінці нема (тиснув, а не допомагав): старт тільки для часу в Stats і нагадування "перевір, де ти"
+  // no clock on the page (it pressured instead of helping): the start time only feeds Stats and the reminder
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [run, setRun] = useState<RunView | null>(null);
   const [reference, setReference] = useState<string | null>(props.initialReference);
@@ -65,7 +65,7 @@ export function LevelPlay(props: LevelPlayProps) {
   const [givingUp, startGivingUp] = useTransition();
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
-  // чернетка і старт таймера живуть у браузері: перезавантаження сторінки їх не губить
+  // the draft and the timer start live in localStorage, so a page reload does not lose them
   useEffect(() => {
     const draft = readStorage(draftKey);
     if (draft !== null) setCode(draft);
@@ -75,7 +75,7 @@ export function LevelPlay(props: LevelPlayProps) {
     setStartedAt(start);
   }, [draftKey, startKey]);
 
-  // нагадування "перевір, де ти" (LiveCodeCoach) іде від старту рівня; пройшов або відкрив еталон, і таймер не потрібен
+  // the LiveCodeCoach reminder counts from the level start; once passed or the reference is open, the timer is not needed
   const sessionHref = `/levels/${props.levelKey}`;
   const active = !passed && reference === null;
   useEffect(() => {
@@ -105,7 +105,7 @@ export function LevelPlay(props: LevelPlayProps) {
       if (result.passed) {
         setPassed(true);
         setReference(result.reference);
-        // наступного разу (повтор через 2 дні) починаєш з чистої заготовки
+        // next time (the redo in 2 days) starts from a clean stub
         writeStorage(draftKey, null);
       }
     });
@@ -126,7 +126,7 @@ export function LevelPlay(props: LevelPlayProps) {
     changeCode(props.stub);
   }
 
-  /** Tab = 2 пробіли, Ctrl/Cmd+Enter = прогнати тести */
+  /** Tab = 2 spaces, Ctrl/Cmd+Enter = run the tests */
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();

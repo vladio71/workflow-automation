@@ -7,20 +7,20 @@ export interface DailyListItem {
   id: number;
   title: string;
   checked: boolean;
-  /** галочку цього пункту апка ставить і сама (картки, recall) */
+  /** The app also ticks this item by itself (cards, recall) */
   auto: boolean;
 }
 
 interface DropTarget {
   id: number;
-  /** лінія вставки над пунктом чи під ним */
+  /** Insert line above the item or below it */
   below: boolean;
 }
 
 /**
- * Daily як to-do в Notion: клік по тексту = правка, Enter = новий пункт нижче,
- * Backspace у порожньому = видалити, ручка зліва = перетягнути.
- * Список після завантаження живе тут: правки одразу видно, сервер тільки зберігає.
+ * Daily as a Notion-style to-do: click the text to edit, Enter adds an item below,
+ * Backspace in an empty item deletes it, the grip on the left drags.
+ * After loading, the list lives here: edits show at once, the server only persists them.
  */
 export function DailyList({ items: initial }: { items: DailyListItem[] }) {
   const [items, setItems] = useState<DailyListItem[]>(initial);
@@ -30,10 +30,10 @@ export function DailyList({ items: initial }: { items: DailyListItem[] }) {
   const [, startTransition] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
   const inputs = useRef(new Map<number, HTMLInputElement>());
-  /** назви, як вони збережені на сервері: щоб не зберігати те саме двічі */
+  /** Titles as saved on the server, so the same value is not saved twice */
   const saved = useRef(new Map<number, string>(initial.map((item) => [item.id, item.title])));
 
-  // сервер перемалював сторінку (галочка, план дня): беремо його список, якщо зараз нічого не редагується
+  // the server re-rendered the page (a tick, the day plan): take its list unless something is being edited right now
   useEffect(() => {
     if (listRef.current?.contains(document.activeElement)) return;
     setItems(initial);
@@ -99,7 +99,7 @@ export function DailyList({ items: initial }: { items: DailyListItem[] }) {
     }
   };
 
-  // порожній пункт, з якого пішли, не лишаємо: інакше список обростає порожніми рядками
+  // an empty item is removed on blur, otherwise the list fills up with empty rows
   const onBlur = (item: DailyListItem): void => {
     if (item.title.trim() === '') remove(item.id, false);
     else save(item);

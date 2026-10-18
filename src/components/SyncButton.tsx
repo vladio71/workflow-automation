@@ -8,7 +8,7 @@ interface SyncButtonProps {
   action: () => Promise<SyncResult | SyncResult[]>;
 }
 
-/** Кнопка Sync: показує результат одразу поруч, без перезавантаження сторінки. */
+/** Sync button: shows the result right next to it, without a page reload. */
 export function SyncButton({ label, action }: SyncButtonProps) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState('');

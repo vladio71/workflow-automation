@@ -25,18 +25,18 @@ interface Tip {
   label: string;
 }
 
-/** Хвилини по днях: вертикальні стовпці, одна серія, підказка при наведенні на стовпець. */
+/** Minutes per day: vertical bars, one series, tooltip on hover. */
 export function DailyBars({ data }: { data: DayPoint[] }) {
   const [tip, setTip] = useState<Tip | null>(null);
   const width = 760;
   const height = 180;
   const padTop = 12;
   const padBottom = 22;
-  const padLeft = 34; // місце під підписи осі, щоб не налазили на стовпці
+  const padLeft = 34; // room for the axis labels so they do not overlap the bars
   const max = Math.max(60, ...data.map((d) => d.minutes));
   const niceMax = Math.ceil(max / 60) * 60;
   const slot = (width - padLeft) / data.length;
-  const barWidth = Math.max(4, slot - 4); // 2px зазор з кожного боку
+  const barWidth = Math.max(4, slot - 4); // 2px gap on each side
   const plotHeight = height - padTop - padBottom;
   const gridLines = [0, 0.5, 1].map((f) => Math.round(niceMax * f));
 
@@ -67,7 +67,7 @@ export function DailyBars({ data }: { data: DayPoint[] }) {
                   opacity={tip && tip.label !== formatDay(point.day) ? 0.55 : 1}
                 />
               )}
-              {/* ціль наведення більша за стовпець: уся колонка */}
+              {/* the hover target is the whole column, larger than the bar itself */}
               <rect
                 x={padLeft + index * slot} y={0} width={slot} height={height} fill="transparent"
                 onMouseMove={(event) => {
@@ -89,13 +89,13 @@ export function DailyBars({ data }: { data: DayPoint[] }) {
   );
 }
 
-/** Календар активності як на GitHub: колонки = тижні, рядки = дні тижня. Один відтінок, 5 рівнів. */
+/** GitHub-style activity calendar: columns are weeks, rows are weekdays. One hue, 5 levels. */
 export function ActivityHeatmap({ data }: { data: DayPoint[] }) {
   const [tip, setTip] = useState<Tip | null>(null);
   const cell = 13;
   const gap = 3;
   const first = data[0] ? new Date(`${data[0].day}T00:00:00Z`) : new Date();
-  const offset = (first.getUTCDay() + 6) % 7; // понеділок = 0
+  const offset = (first.getUTCDay() + 6) % 7; // Monday = 0
   const weeks = Math.ceil((data.length + offset) / 7);
   const level = (minutes: number): number => (minutes === 0 ? 0 : minutes < 30 ? 1 : minutes < 60 ? 2 : minutes < 120 ? 3 : 4);
   const width = weeks * (cell + gap);

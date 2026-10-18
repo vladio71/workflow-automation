@@ -6,7 +6,7 @@ interface CheckItemProps {
   checked: boolean;
   label: React.ReactNode;
   action: (value: boolean) => Promise<void>;
-  /** Закреслювати виконане (для чекліста дня так, для прапорців-налаштувань ні). */
+  /** Strike through when checked: yes for the daily checklist, no for settings toggles. */
   strike?: boolean;
 }
 

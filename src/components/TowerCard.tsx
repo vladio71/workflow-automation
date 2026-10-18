@@ -6,9 +6,9 @@ import { Skyline, Tower } from '@/components/Tower';
 import type { TowerData } from '@/lib/task-sessions';
 
 /**
- * Башти дня на Today: по одній на кожну справу-сесію (у справи є ціль на день).
- * "▶ Сесія" відкриває попап: +1 за кожне відправлене резюме, башта росте на очах.
- * Вузол такої справи на карті відкриває той самий попап через openTaskSession.
+ * Day towers on Today: one per session task (a task with a daily target).
+ * The session dialog adds +1 per sent application and the tower grows live.
+ * The task's node on the day map opens the same dialog through openTaskSession.
  */
 const OPEN_EVENT = 'task-session:open';
 const GROW_MS = 700;

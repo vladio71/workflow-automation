@@ -10,14 +10,14 @@ interface InlineTextProps {
   multiline?: boolean;
 }
 
-/** Текст, який редагується на місці і зберігається, коли втрачає фокус (як у Notion). */
+/** Text edited in place and saved on blur, Notion-style. */
 export function InlineText({ value, action, placeholder = 'Empty', className = '', multiline = false }: InlineTextProps) {
   const [text, setText] = useState(value);
   const [, startTransition] = useTransition();
   const areaRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setText(value), [value]);
 
-  // textarea росте під текст, як блок у Notion
+  // the textarea grows with its text, like a Notion block
   useLayoutEffect(() => {
     const area = areaRef.current;
     if (!area) return;

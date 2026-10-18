@@ -5,15 +5,15 @@ import { changeCategoryDeadline } from '@/app/actions';
 
 interface CategoryDeadlineProps {
   topicId: number;
-  /** YYYY-MM-DD або "" */
+  /** YYYY-MM-DD or "" */
   value: string;
-  /** картка з репо: дедлайн задається в topic.md і Sync його перезапише */
+  /** Repo category: the deadline is set in topic.md and Sync overwrites it */
   fromRepo: boolean;
 }
 
 /**
- * Дедлайн категорії на її сторінці. До дати картки повторюються частіше (1, 2, 4 дні, але не далі
- * переддня) і йдуть першими в черзі без ліміту нових; після дати категорія звичайна.
+ * Category deadline on its page. Until the date the cards repeat more often (1, 2, 4 days, never past the day before)
+ * and come first in the queue with no new-card limit; after the date the category is ordinary.
  */
 export function CategoryDeadline({ topicId, value, fromRepo }: CategoryDeadlineProps) {
   const [draft, setDraft] = useState(value);

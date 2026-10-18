@@ -10,15 +10,14 @@ import {
 } from '@/lib/live-code-session';
 
 /**
- * Правила live code в попапі + нагадування на 25-й хвилині.
- * Кнопка в меню відкриває правила (почитати перед стартом і звірити себе). Таймер стартує тут вручну
- * або сам, коли відкриваєш рівень. На 25:00 (налаштовується) приходить сповіщення браузера, на сторінці
- * відкривається попап "перевір, де ти", а у вкладці з'являється 👀. Годинника ніде не показуємо.
+ * Live code rules in a dialog plus a "check where you are" reminder at the 25th minute (configurable).
+ * The timer starts here by hand or when a level is opened. When it fires: browser notification,
+ * the dialog opens, 👀 in the tab title. No clock is shown anywhere on purpose.
  */
 type View = 'rules' | 'reminder' | 'look' | 'solved';
 type Permission = NotificationPermission | 'unsupported';
 
-/** позначка у вкладці, поки нагадування без відповіді. Годинника ніде нема: він тисне, а не допомагає */
+/** Tab title mark while the reminder is unanswered. No clock anywhere: it pressures instead of helping */
 const TITLE_MARK = '👀 ';
 
 function currentPermission(): Permission {
@@ -34,7 +33,7 @@ function notify(title: string, body: string): void {
       notification.close();
     };
   } catch {
-    // браузер без підтримки сповіщень зі сторінки: лишаються попап і 👀 у вкладці
+    // browser does not support page notifications: the dialog and the 👀 tab mark still work
   }
 }
 
@@ -72,19 +71,19 @@ function SelfCheck({ checks, onToggle }: { checks: boolean[]; onToggle: (index: 
 
 export function LiveCodeCoach() {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  /** remindAt, для якого попап уже відкривали в цій вкладці */
+  /** The remindAt for which the dialog was already opened in this tab */
   const shownFor = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>('rules');
   const [session, setSession] = useState<LiveCodeSession | null>(null);
-  /** сесія, яку щойно закрили з нагадування: для посилання назад до рівня */
+  /** The session just closed from the reminder, kept for the link back to the level */
   const [finished, setFinished] = useState<LiveCodeSession | null>(null);
   const [freeChecks, setFreeChecks] = useState<boolean[]>([]);
   const [remindMinutes, setRemindMinutes] = useState(DEFAULT_REMIND_MINUTES);
   const [now, setNow] = useState(0);
   const [permission, setPermission] = useState<Permission>('unsupported');
 
-  // сесія живе в localStorage: читаємо на старті, після змін у цій вкладці (SESSION_EVENT) і в інших (storage)
+  // the session lives in localStorage: read on mount, after changes in this tab (SESSION_EVENT) and in other tabs (storage)
   useEffect(() => {
     const sync = () => setSession(readSession());
     const showRules = () => {
@@ -114,7 +113,7 @@ export function LiveCodeCoach() {
 
   const pending = session !== null && now >= session.remindAt;
 
-  // час вийшов: попап на сторінці і одне системне сповіщення на весь браузер
+  // time is up: open the dialog and send one system notification for the whole browser, not one per tab
   useEffect(() => {
     if (!session || !pending || shownFor.current === session.remindAt) return;
     shownFor.current = session.remindAt;
@@ -127,7 +126,7 @@ export function LiveCodeCoach() {
     }
   }, [session, pending]);
 
-  // 👀 у назві вкладки, поки нагадування без відповіді (Next міняє title при переходах, тож ставимо щосекунди)
+  // 👀 in the tab title while the reminder is unanswered; Next rewrites the title on navigation, so re-apply every second
   useEffect(() => {
     if (pending && !document.title.startsWith(TITLE_MARK)) document.title = TITLE_MARK + document.title;
     if (!pending && document.title.startsWith(TITLE_MARK)) document.title = document.title.slice(TITLE_MARK.length);
@@ -150,7 +149,7 @@ export function LiveCodeCoach() {
   }
 
   function start() {
-    // дозвіл питаємо по кліку: без жесту браузер може його мовчки заблокувати
+    // ask for permission on click: without a user gesture the browser may silently block it
     void askPermission();
     writeRemindMinutes(remindMinutes);
     startManualSession();

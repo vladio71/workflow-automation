@@ -5,7 +5,7 @@ import { checkGeminiNow } from '@/app/actions';
 import type { ModelCheck } from '@/lib/gemini';
 import { modelLabel } from '@/lib/ai-labels';
 
-/** Кнопка "Перевірити Gemini": по одному крихітному запиту на кожну модель зі списку, біля кожної статус і час. */
+/** "Check Gemini" button: one tiny request per model in the list, with status and time next to each. */
 export function GeminiCheck() {
   const [results, setResults] = useState<ModelCheck[] | null>(null);
   const [error, setError] = useState<string | null>(null);

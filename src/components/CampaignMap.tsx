@@ -8,13 +8,13 @@ import type { Campaign, CampaignRegion, CampaignSite, SiteKind } from '@/lib/cam
 import type { PlanStepKind } from '@/generated/prisma/enums';
 
 /**
- * Карта кампанії навчального плану: регіони = тижні з plan.md, у кожному стежка з вузлів.
- * Фортеця = задача (спроба, еталон, саммарі: кільце з трьох частин), 📖/🔎 = читання і поглиблення, 🐉 = екзамен.
- * Тріснута фортеця = настав термін переробки задачі. Регіон, пройдений до кінця, отримує прапор.
+ * Campaign map of a study plan: regions are the weeks from plan.md, each a trail of nodes.
+ * Fortress = task (attempt, reference, summary as a three-part ring), 📖/🔎 = reading and depth, 🐉 = exam.
+ * A cracked fortress means the task is due for a redo. A fully cleared region gets a flag.
  */
 
 const WIDTH = 760;
-/** більше вузлів у ряд не влазить з підписами; на міні-карті підписів майже нема, тож 9 */
+/** More nodes per row do not fit with labels; the mini map has almost no labels, so 9 */
 const MAX_PER_ROW = 8;
 const MAX_PER_ROW_COMPACT = 9;
 const PAD_X = 52;
@@ -56,7 +56,7 @@ function segmentPath(from: Point, to: Point): string {
   return `M ${from.x} ${from.y} C ${from.x + outward} ${from.y}, ${to.x + outward} ${to.y}, ${to.x} ${to.y}`;
 }
 
-/** Дуга кільця фортеці: частина i з n (від 12 години за годинниковою стрілкою, з проміжками). */
+/** Fortress ring arc: part i of n, clockwise from 12 o'clock, with gaps between parts. */
 function ringArc(center: Point, radius: number, index: number, parts: number): string {
   const gap = parts > 1 ? 0.18 : 0;
   const start = (index / parts) * Math.PI * 2 + gap / 2 - Math.PI / 2;
@@ -69,7 +69,7 @@ function ringArc(center: Point, radius: number, index: number, parts: number): s
   return `M ${sx} ${sy} A ${radius} ${radius} 0 ${large} 1 ${ex} ${ey}`;
 }
 
-/** Ряди однакової довжини: 9 вузлів = 5 + 4, а не 8 + 1. */
+/** Rows of even length: 9 nodes become 5 + 4, not 8 + 1. */
 function perRowFor(count: number, compact: boolean): number {
   const max = compact ? MAX_PER_ROW_COMPACT : MAX_PER_ROW;
   const rows = Math.max(1, Math.ceil(count / max));
@@ -94,7 +94,7 @@ function Site({ site, point, selected, compact, onSelect }: {
   const fill = state === 'done' ? 'var(--tag-green-bg)' : state === 'current' ? 'var(--tag-blue-bg)' : 'var(--callout)';
   const stroke = state === 'done' ? 'var(--map-done)' : state === 'current' ? 'var(--accent)' : 'var(--border-strong)';
   const showRing = site.kind === 'fortress' && site.steps.length > 1;
-  // на міні-карті вся смужка є посиланням, тож вузли не кнопки
+  // on the mini map the whole strip is a link, so the nodes are not buttons
   const interaction = compact ? {} : {
     role: 'button',
     tabIndex: 0,
@@ -131,7 +131,7 @@ function Site({ site, point, selected, compact, onSelect }: {
             style={{ fill: 'none', stroke: '#fff', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
         </g>
       )}
-      {/* на міні-карті підписані тільки поточний вузол і тріщини, інакше підписи налазять */}
+      {/* on the mini map only the current node and cracked ones get labels, otherwise labels overlap */}
       {(!compact || state === 'current' || site.cracked) && (
         <text x={point.x} y={point.y + radius + 16} textAnchor="middle"
           style={{ fontSize: compact ? 11.5 : 12, fontWeight: state === 'current' ? 600 : 500, fill: site.cracked ? 'var(--tag-red-fg)' : state === 'locked' ? 'var(--faint)' : 'var(--text)' }}>
@@ -208,11 +208,11 @@ function SiteDetails({ site }: { site: CampaignSite }) {
   );
 }
 
-/** Уся кампанія: регіони один під одним, клік по вузлу показує його кроки. */
+/** The whole campaign: regions stacked vertically, clicking a node shows its steps. */
 export function CampaignMap({ campaign }: { campaign: Campaign }) {
   const [selected, setSelected] = useState<CampaignSite | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
-  // після зміни даних (галочка) беремо свіжу версію вибраного вузла
+  // after the data changes (a step is ticked) use the fresh copy of the selected node, not the stale one in state
   const fresh = selected && selectedRegion !== null
     ? campaign.regions[selectedRegion]?.sites.find((site) => site.id === selected.id) ?? null
     : null;
@@ -248,7 +248,7 @@ export function CampaignMap({ campaign }: { campaign: Campaign }) {
   );
 }
 
-/** Міні-карта на Today: тільки поточний регіон, клік веде на сторінку плану. */
+/** Mini map on Today: only the current region, a click leads to the plan page. */
 export function CampaignStrip({ campaign }: { campaign: Campaign }) {
   const region = campaign.regions[campaign.currentRegion];
   if (!region) return null;

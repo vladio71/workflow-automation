@@ -21,7 +21,7 @@ interface RecallQuestion {
   kind: 'CONCEPT' | 'TASK';
   question: string;
   reference: string;
-  /** TASK: посилання на файл-еталон у репо і команда перевірки */
+  /** TASK only: link to the reference file in the repo and the check command */
   refUrl: string | null;
   refPath: string;
   check: string;
@@ -62,10 +62,10 @@ export function RecallSession({ topic, questions, initialQuestionId, geminiEnabl
   const [revealed, setRevealed] = useState(false);
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** коли відкрив сесію: час іде в лог, але на екрані не тікає */
+  /** When the session was opened: the time goes to the log but is not shown ticking on screen */
   const startedAt = useRef<number>(Date.now());
   const [grading, startGrading] = useTransition();
-  /** запит до Gemini, статус якого показуємо під кнопкою, поки він іде */
+  /** The Gemini request whose status is shown under the button while it runs */
   const [jobId, setJobId] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 

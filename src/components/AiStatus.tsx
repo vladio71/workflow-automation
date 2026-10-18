@@ -5,12 +5,11 @@ import { z } from 'zod';
 import { modelLabel } from '@/lib/ai-labels';
 
 /**
- * Рядок "що зараз з Gemini" під кнопкою, поки чекаємо відповідь: модель, секунди, думає чи пише,
- * скільки вже прийшло, і що впало до цього ("3.8 Flash: ліміт (429) → пробую 3.7 Flash").
- * Питає /api/ai/status кожні 0,8 с, тільки поки active.
+ * Live Gemini status line under a button while a response is awaited: model, seconds, thinking or writing,
+ * chars received so far, and the failed attempts before it. Polls /api/ai/status every 0.8 s, only while active.
  */
 const POLL_MS = 800;
-/** стільки секунд тиші, і показуємо "нічого нового N с": видно, що модель, можливо, зависла */
+/** After this many quiet seconds show "nothing new for N s", so a stuck model is visible */
 const QUIET_AFTER_S = 8;
 
 const AttemptSchema = z.object({ model: z.string(), outcome: z.string(), detail: z.string(), ms: z.number() });
@@ -43,13 +42,13 @@ export function AiStatus({ jobId, active }: { jobId: string | null; active: bool
     const load = async () => {
       try {
         const response = await fetch(`/api/ai/status?job=${encodeURIComponent(jobId)}`, { cache: 'no-store' });
-        // тіло читаємо завжди, і на 404 теж: непрочитана відповідь лишається відкритим запитом у браузері
+        // always read the body, on 404 too: an unread response stays an open request in the browser
         const body: unknown = await response.json();
         if (!response.ok) return;
         const parsed = JobSchema.safeParse(body);
         if (!stopped && parsed.success) setJob(parsed.data);
       } catch {
-        // мережа моргнула: наступне опитування спробує ще раз
+        // network blip: the next poll tries again
       }
     };
     void load();
@@ -68,7 +67,7 @@ export function AiStatus({ jobId, active }: { jobId: string | null; active: bool
 
   if (!jobId) return null;
   if (!job) {
-    // запит ще не дійшов до Gemini: апка спершу збирає кандидатів з бази
+    // the request has not reached Gemini yet: the app first gathers candidates from the database
     return active ? <p className="ai-status faint" data-testid="ai-status">⏳ готую запит до Gemini…</p> : null;
   }
 
@@ -92,7 +91,7 @@ export function AiStatus({ jobId, active }: { jobId: string | null; active: bool
     );
   }
 
-  // успіх після запасної моделі: варто знати, що основна впала; звичайний успіх нічого не показує
+  // success after a fallback model is worth knowing, since the primary one failed; a plain success shows nothing
   if (job.state === 'done' && trail && job.model) {
     return <p className="ai-status faint" data-testid="ai-status">✓ відповів {modelLabel(job.model)} (до цього {trail})</p>;
   }

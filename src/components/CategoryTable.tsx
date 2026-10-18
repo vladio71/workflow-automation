@@ -5,12 +5,12 @@ import { relativeDay } from '@/lib/schedule';
 
 interface CategoryTableProps {
   categories: CardCategory[];
-  /** скільки нових карток ще можна взяти сьогодні (ліміт спільний на всі категорії) */
+  /** How many new cards can still be taken today (the limit is shared across all categories) */
   newLeft: number;
   now: Date;
 }
 
-/** Категорії карток таблицею: скільки карток, скільки чекає сьогодні, коли наступний термін. */
+/** Card categories as a table: card count, how many are due today, next due date. */
 export function CategoryTable({ categories, newLeft, now }: CategoryTableProps) {
   return (
     <table className="db" data-testid="category-table">
@@ -26,7 +26,7 @@ export function CategoryTable({ categories, newLeft, now }: CategoryTableProps) 
       </thead>
       <tbody>
         {categories.map((category) => {
-          // категорія з дедлайном бере всі нові одразу, ліміт на день для неї не діє
+          // a category with a deadline takes all its new cards at once, the daily limit does not apply to it
           const waiting = category.due + (category.deadline ? category.fresh : Math.min(category.fresh, newLeft));
           const overdue = category.due > 0;
           return (

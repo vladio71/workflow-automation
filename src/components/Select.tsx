@@ -6,12 +6,12 @@ import type { Option } from '@/lib/labels';
 interface SelectProps<T extends string> {
   value: T | null;
   options: readonly Option<T>[];
-  /** Server action, вже прив'язана до id запису (.bind у серверному компоненті). */
+  /** Server action already bound to the record id (.bind in the server component). */
   action: (value: T) => Promise<void>;
   placeholder?: string;
 }
 
-/** Select як у Notion: клік по пілюлі відкриває список кольорових варіантів. */
+/** Notion-style select: clicking the pill opens a list of colored options. */
 export function Select<T extends string>({ value, options, action, placeholder = 'Empty' }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<T | null>(value);

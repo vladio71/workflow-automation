@@ -8,8 +8,8 @@ interface SyncResponse {
 }
 
 /**
- * На Today: один раз при відкритті підтягнути репо, які давно не синкались, і перемалювати сторінку.
- * Звичайний fetch до /api/sync, а не server action: так sync не блокує інші кнопки на сторінці.
+ * On Today: once on open, pull the repos that have not synced in a while and refresh the page.
+ * A plain fetch to /api/sync rather than a server action, so the sync does not block other buttons on the page.
  */
 export function AutoSync() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export function AutoSync() {
         if (result.synced > 0) router.refresh();
       })
       .catch(() => {
-        // мережа впала: не страшно, помилка видна на /sources після ручного Sync
+        // network failure is fine here: the error shows on /sources after a manual Sync
       });
   }, [router]);
   return null;

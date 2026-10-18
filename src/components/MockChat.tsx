@@ -39,7 +39,7 @@ export function MockChat({ sessionId, startedAt, initial }: { sessionId: number;
       const { value, done } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
-      // дописуємо шматок до останнього (порожнього) повідомлення моделі
+      // append the chunk to the last (initially empty) model message
       setMessages((prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];

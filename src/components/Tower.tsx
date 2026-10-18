@@ -1,6 +1,6 @@
 /**
- * Башта дня: кожен крок сесії (відправлене резюме) = поверх. Недобудовані поверхи до цілі стоять риштуванням,
- * на цілі зверху зубці і прапор, понад ціль поверхи золоті. Без хуків: малюється і на сервері, і в клієнті.
+ * Day tower: each session step (a sent application) is a floor. Floors still missing up to the target are scaffolding,
+ * reaching the target adds merlons and a flag, floors above the target are golden. No hooks: renders on the server and the client.
  */
 
 export type TowerSize = 'lg' | 'md';
@@ -9,7 +9,7 @@ interface TowerProps {
   count: number;
   target: number;
   size?: TowerSize;
-  /** щойно додали поверх: верхній збудований з'являється з анімацією */
+  /** A floor was just added: the top built floor appears with an animation */
   grow?: boolean;
 }
 
@@ -31,7 +31,7 @@ function Window({ x, y, width, height, lit }: { x: number; y: number; width: num
   return <rect x={x} y={y} width={width} height={height} rx={1.5} style={{ fill: lit ? 'var(--tower-window)' : 'var(--tower-dark-window)' }} />;
 }
 
-/** Дах, коли ціль дня є: зубці і прапор. */
+/** Roof once the daily target is reached: merlons and a flag. */
 function Roof({ left, width, floor, topY, grow }: { left: number; width: number; floor: number; topY: number; grow: boolean }) {
   const merlon = width / 7;
   const merlonTop = topY - floor * 0.4;
@@ -68,7 +68,6 @@ export function Tower({ count, target, size = 'md', grow = false }: TowerProps) 
       aria-label={`Башта: ${count} з ${target}`}
       style={{ display: 'block', maxWidth: '100%' }}
     >
-      {/* земля і фундамент */}
       <rect x={4} y={groundY} width={viewWidth - 8} height={3} rx={1.5} style={{ fill: 'var(--tower-ground)' }} />
       <rect x={left - 6} y={groundY - 4} width={width + 12} height={5} rx={2} style={{ fill: 'var(--tower-stone-edge)' }} />
 
@@ -76,7 +75,6 @@ export function Tower({ count, target, size = 'md', grow = false }: TowerProps) 
         const y = groundY - 4 - (index + 1) * floor;
         const built = index < count;
         if (!built) {
-          // риштування: пунктирний каркас з розкосом
           return (
             <g key={`s-${index}`} style={{ opacity: 0.55 }}>
               <rect x={left} y={y} width={width} height={floor} style={{ fill: 'none', stroke: 'var(--tower-scaffold)', strokeWidth: 1 }} strokeDasharray="3 3" />
@@ -120,7 +118,7 @@ export interface SkylineDay {
   count: number;
 }
 
-/** Скайлайн: маленькі башти за останні дні. Висота = скільки відправив, прапор = ціль дня була. */
+/** Skyline: small towers for the last days. Height = how many were sent, flag = the daily target was reached. */
 export function Skyline({ days, target }: { days: readonly SkylineDay[]; target: number }) {
   const slot = 22;
   const maxFloors = Math.max(target, ...days.map((day) => day.count), 1);
@@ -146,7 +144,7 @@ export function Skyline({ days, target }: { days: readonly SkylineDay[]; target:
               <g>
                 <rect x={x} y={groundY - towerHeight} width={12} height={towerHeight} rx={1}
                   style={{ fill: reached ? 'var(--tower-stone)' : 'var(--tower-scaffold)', stroke: isToday ? 'var(--accent)' : 'var(--tower-stone-edge)', strokeWidth: isToday ? 1.5 : 1 }} />
-                {/* вікна: по одному на поверх, якщо поверхи не надто тонкі */}
+                {/* windows: one per floor, skipped when floors are too thin */}
                 {floor >= 3.5 && Array.from({ length: entry.count }, (_, level) => (
                   <rect key={level} x={x + 5} y={groundY - (level + 1) * floor + floor * 0.3} width={2} height={Math.min(2, floor * 0.4)} style={{ fill: 'var(--tower-window)' }} />
                 ))}

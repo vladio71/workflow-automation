@@ -16,22 +16,22 @@ export interface BrowseCard {
   /** "new", "due", "in 3d" */
   dueLabel: string;
   lapses: number;
-  /** картка прийшла з репо */
+  /** The card came from a repo */
   fromRepo: boolean;
-  /** картку з репо змінили в апці: Sync її більше не оновлює */
+  /** A repo card edited in the app: Sync no longer updates it */
   editedInApp: boolean;
 }
 
-/** null у topicId = картки без категорії */
+/** topicId null = cards without a category */
 export interface LockedCategory {
   topicId: number | null;
 }
 
 interface CardBrowserProps {
   cards: BrowseCard[];
-  /** усі категорії для вибору на картці, спершу нещодавні */
+  /** All categories for the picker on a card, most recently used first */
   categories: CategoryOption[];
-  /** сторінка однієї категорії: фільтра категорій нема, картки вже тільки її */
+  /** Single category page: no category filter, the cards are already only that category's */
   locked?: LockedCategory;
 }
 
@@ -41,7 +41,7 @@ interface TopicOption {
   count: number;
 }
 
-/** фільтр "усі категорії"; окреме значення, бо null уже означає "без категорії" */
+/** The "all categories" filter; a separate value because null already means "no category" */
 const ALL = 'all';
 
 const ROW_STYLE: CSSProperties = { padding: '8px 6px', borderBottom: '1px solid var(--border)', borderRadius: 4 };
@@ -52,8 +52,8 @@ function topicKey(topicId: number | null): string {
 }
 
 /**
- * Картки без розкладу, згруповані по категоріях: пошук, показати відповіді, пройти вибрані підряд.
- * Клік по картці відкриває її сторінку (правка), клік по категорії картки, доданої руками, міняє категорію.
+ * All cards grouped by category, outside the schedule: search, show answers, go through the selection in a row.
+ * Clicking a card opens its page (edit); the category of a hand-added card can be changed in place.
  */
 export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
   const [filter, setFilter] = useState<string>(ALL);
@@ -186,7 +186,7 @@ export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
   );
 }
 
-/** Вільний прохід: Space = відповідь, → = далі, F = забув (картка стане в розклад на завтра). */
+/** Free run: Space = answer, → = next, F = forgot (the card is scheduled for tomorrow). */
 function CardPractice({ cards, onExit }: { cards: BrowseCard[]; onExit: () => void }) {
   const [position, setPosition] = useState(0);
   const [revealed, setRevealed] = useState(false);

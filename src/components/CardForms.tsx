@@ -16,7 +16,7 @@ interface AutoTextareaProps {
   onCancel: () => void;
 }
 
-/** Поле, яке росте під текст. Ctrl/Cmd+Enter = зберегти, Esc = скасувати. */
+/** Textarea that grows with its text. Ctrl/Cmd+Enter = submit, Esc = cancel. */
 function AutoTextarea({ value, placeholder, testId, autoFocus = false, areaRef, onChange, onSubmit, onCancel }: AutoTextareaProps) {
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const ref = areaRef ?? ownRef;
@@ -59,13 +59,13 @@ const FORM_STYLE: CSSProperties = { border: '1px solid var(--border)', borderRad
 
 interface NewCardFormProps {
   categories: CategoryOption[];
-  /** категорія, з якої прийшов: нова картка за замовчуванням іде в неї */
+  /** The category the user came from: a new card goes there by default */
   defaultTopicId: number | null;
-  /** куди повертає Close і Esc */
+  /** Where Close and Esc return to */
   backHref: string;
 }
 
-/** Сторінка New card: питання, відповідь і категорія. Форма лишається відкритою, щоб додати кілька підряд. */
+/** New card page: question, answer and category. The form stays open to add several cards in a row. */
 export function NewCardForm({ categories, defaultTopicId, backHref }: NewCardFormProps) {
   const router = useRouter();
   const [question, setQuestion] = useState('');
@@ -123,7 +123,7 @@ interface EditCardFormProps {
   onDone: () => void;
 }
 
-/** Питання і відповідь картки. Розклад картки не міняється. */
+/** Edits the card's question and answer. The card's schedule is not changed. */
 export function EditCardForm({ card, onDone }: EditCardFormProps) {
   const [question, setQuestion] = useState(card.question);
   const [answer, setAnswer] = useState(card.answer);
@@ -169,11 +169,11 @@ export interface EditorCard extends EditableCard {
 interface CardEditorProps {
   card: EditorCard;
   categories: CategoryOption[];
-  /** куди повертає Save, Cancel і Delete */
+  /** Where Save, Cancel and Delete return to */
   backHref: string;
 }
 
-/** Сторінка картки: категорія, питання, відповідь, видалення. */
+/** Card page: category, question, answer, delete. */
 export function CardEditor({ card, categories, backHref }: CardEditorProps) {
   const router = useRouter();
   const [topicId, setTopicId] = useState<number | null>(card.topicId);

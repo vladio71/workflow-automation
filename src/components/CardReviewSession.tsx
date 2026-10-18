@@ -16,7 +16,7 @@ export interface ReviewCard {
 
 interface QueueEntry {
   card: ReviewCard;
-  /** картку забув і бачиш удруге в цій сесії: розклад уже виставлений, тут просто закріпити */
+  /** A forgotten card seen a second time in this session: the schedule is already set, this pass only reinforces */
   relearn: boolean;
 }
 
@@ -32,7 +32,7 @@ const GRADES: { grade: CardGrade; key: string; label: string; tag: string; hint:
   { grade: 'GOOD', key: '3', label: 'Remembered', tag: 'green', hint: 'next interval' },
 ];
 
-/** Сесія повторення: Space = показати відповідь, 1/2/3 = оцінка. "Забув" повертає картку в кінець сесії. */
+/** Review session: Space = show the answer, 1/2/3 = grade. "Forgot" puts the card back at the end of the session. */
 export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
   const [queue, setQueue] = useState<QueueEntry[]>(() => cards.map((card) => ({ card, relearn: false })));
   const [position, setPosition] = useState(0);
@@ -56,7 +56,7 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
     (value: CardGrade) => {
       if (!entry || !revealed) return;
       const seconds = (Date.now() - shownAt.current) / 1000;
-      // повторний показ після "Забув" розклад не міняє: картка вже стоїть на завтра
+      // the second showing after "Forgot" does not change the schedule: the card is already set for tomorrow
       const sent: CardGrade = entry.relearn ? 'PRACTICE' : value;
       startTransition(async () => {
         await gradeCard({ questionId: entry.card.id, grade: sent, seconds });

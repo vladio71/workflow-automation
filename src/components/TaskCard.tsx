@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Картка справи на борді Tasks: компактна, клік по назві відкриває модалку з усім
- * (опис, хвилини, пріоритет, ціль, дата, видалити). Серверні дії приходять з page.tsx уже прив'язані до id.
+ * Compact task card on the Tasks board; clicking the title opens a dialog with the full form.
+ * Server actions come from page.tsx already bound to the task id.
  */
 
 export type TaskStatusValue = 'BACKLOG' | 'TODO' | 'IN_PROGRESS';
@@ -19,9 +19,9 @@ export interface TaskCardData {
   repeatLabel: string;
   target: number;
   todayCount: number;
-  /** "2026-10-19" або null */
+  /** "2026-10-19" or null */
   until: string | null;
-  /** підпис під назвою: "з 16 Oct" / "зроблено 17 Oct" */
+  /** Caption under the title: created on / done on date, already formatted */
   sinceLabel: string;
   status: TaskStatusValue;
   done: boolean;
@@ -30,7 +30,7 @@ export interface TaskCardData {
 }
 
 export interface TaskCardActions {
-  /** форма модалки: title, notes, priority, minutes, target, until */
+  /** Dialog form fields: title, notes, priority, minutes, target, until */
   save: (formData: FormData) => Promise<void>;
   moveNext: () => Promise<void>;
   movePrev: () => Promise<void>;

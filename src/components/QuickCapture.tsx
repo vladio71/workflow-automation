@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import { addInbox } from '@/app/actions';
 
-/** Швидкий запис в Inbox: Enter і забув. Розбирати в неділю. */
+/** Quick capture into Inbox: press Enter and forget it. Inbox is sorted out on Sunday. */
 export function QuickCapture({ placeholder = 'Capture an idea, link or "don\'t get X"... (Enter)' }: { placeholder?: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   return (

@@ -20,8 +20,8 @@ Q: Навіщо wallets.balance, якщо є ledger?
 A: Кеш суми і рядок, який лочать FOR UPDATE.`;
 
 /**
- * Import: текст або .md → передпоказ (скільки карток, помилки) → категорія і дедлайн → Import.
- * Передпоказ рахує сервер тим самим парсером, що й Sync, з невеликою затримкою після вводу.
+ * Import: text or a .md file, then a preview (card count, errors), then category and deadline, then Import.
+ * The preview is computed on the server with the same parser Sync uses, debounced after typing.
  */
 export function ImportForm({ categories }: ImportFormProps) {
   const [text, setText] = useState('');

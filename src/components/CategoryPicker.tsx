@@ -9,25 +9,25 @@ export interface CategoryOption {
 }
 
 interface CategoryPickerProps {
-  /** null = без категорії */
+  /** null = no category */
   value: number | null;
-  /** усі категорії; порядок задає сервер: спершу ті, якими користувався останніми */
+  /** All categories; the server sets the order, most recently used first */
   categories: CategoryOption[];
   onChoose: (topicId: number | null) => void;
-  /** текст, коли категорії нема */
+  /** Text shown when there is no category */
   placeholder?: string;
   testId?: string;
 }
 
 /**
- * Вибір категорії картки: клік відкриває список наявних, "+ Add new" відкриває попап з назвою.
- * Нова категорія створюється і одразу вибирається.
+ * Card category picker: a click opens the list of existing categories, "+ Add new" opens a naming dialog.
+ * A new category is created and selected at once.
  */
 export function CategoryPicker({ value, categories, onChoose, placeholder = 'No category', testId = 'category-picker' }: CategoryPickerProps) {
   const [open, setOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
-  /** категорії, створені тут: показуємо їх одразу, не чекаючи, поки сторінка перечитає список */
+  /** Categories created here, shown at once without waiting for the page to refetch the list */
   const [created, setCreated] = useState<CategoryOption[]>([]);
   const [pending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);

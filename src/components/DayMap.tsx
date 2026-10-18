@@ -3,8 +3,8 @@
 import type { PlanItemWithStatus } from '@/lib/planner';
 
 /**
- * План дня як карта: вузли на звивистій стежці в порядку виконання.
- * Пройдені горять, поточний пульсує, наступні закриті, поки не пройдеш поточний. Найдовший пункт = бос.
+ * The day plan as a map: nodes on a winding trail in execution order.
+ * Cleared nodes are lit, the current one pulses, the rest stay locked until the current one is cleared. The longest item is the boss.
  */
 export type NodeState = 'done' | 'current' | 'locked';
 
@@ -29,10 +29,10 @@ const PAD_TOP = 56;
 const ROW_HEIGHT = 150;
 const RADIUS = 24;
 const BOSS_RADIUS = 31;
-/** наскільки U-поворот між рядами виходить за крайній вузол */
+/** How far the U-turn between rows bulges past the outermost node */
 const TURN_BULGE = 64;
 
-/** Змійка: парні ряди зліва направо, непарні справа наліво; легка хвиля по висоті, щоб було схоже на стежку. */
+/** Snake layout: even rows left to right, odd rows right to left, with a slight vertical wave so it looks like a trail. */
 function pointAt(index: number): Point {
   const row = Math.floor(index / PER_ROW);
   const step = index % PER_ROW;
@@ -42,7 +42,7 @@ function pointAt(index: number): Point {
   return { x, y: PAD_TOP + row * ROW_HEIGHT + wave };
 }
 
-/** Відрізок стежки між вузлами: у межах ряду S-крива, між рядами дуга назовні. */
+/** Trail segment between nodes: an S-curve within a row, an outward arc between rows. */
 function segmentPath(from: Point, to: Point): string {
   const sameRow = Math.abs(from.y - to.y) < ROW_HEIGHT / 2;
   if (sameRow) {
@@ -71,7 +71,7 @@ export function DayMap({ items, icons, selectedId, bossId, stateOf, onSelect }: 
 
   return (
     <svg viewBox={`0 0 ${WIDTH} ${height}`} width="100%" role="img" aria-label="Plan for today as a map" style={{ display: 'block', margin: '6px 0 2px' }}>
-      {/* стежка: пройдене суцільне зелене, решта пунктиром */}
+      {/* trail: walked segments solid green, the rest dashed */}
       {trail.slice(1).map((to, index) => {
         const from = trail[index];
         if (!from) return null;
@@ -88,7 +88,6 @@ export function DayMap({ items, icons, selectedId, bossId, stateOf, onSelect }: 
         );
       })}
 
-      {/* фініш */}
       <g style={{ opacity: allDone ? 1 : 0.35 }}>
         <text x={finish.x} y={finish.y + 9} textAnchor="middle" style={{ fontSize: 28 }}>🏁</text>
         <text x={finish.x} y={finish.y + 40} textAnchor="middle" style={{ fontSize: 12, fill: 'var(--muted)' }}>{allDone ? 'Day cleared' : 'Finish'}</text>
@@ -130,7 +129,7 @@ export function DayMap({ items, icons, selectedId, bossId, stateOf, onSelect }: 
               {icons[item.kind]}
             </text>
             {isBoss && <text x={point.x} y={point.y - radius - 6} textAnchor="middle" style={{ fontSize: 18 }}>👑</text>}
-            {/* справа-сесія: кільце прогресу 3/10 */}
+            {/* session task: progress ring, e.g. 3/10 */}
             {item.progress && item.progress.target > 0 && state !== 'done' && (
               <circle
                 cx={point.x}

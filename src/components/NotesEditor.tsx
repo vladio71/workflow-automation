@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-/** База знань по темі: markdown. Клік по тексту = редагування, вихід з поля = збереження. */
+/** Topic knowledge base in markdown. Click the text to edit, blur saves. */
 export function NotesEditor({ value, action }: { value: string; action: (value: string) => Promise<void> }) {
   const [text, setText] = useState(value);
   const [editing, setEditing] = useState(false);

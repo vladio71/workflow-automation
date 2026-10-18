@@ -18,17 +18,17 @@ export interface PlanCardPlan {
   summary: string;
   review: string;
   items: PlanItemWithStatus[];
-  /** false = чернетка: пункти ще можна правити; true = день почато, план став картою */
+  /** false = draft, items can still be edited; true = the day has started and the plan became the map */
   started: boolean;
-  /** '' без фокусу, 'levels' або 'plan:<id>' (day-focus.ts) */
+  /** '' for no focus, 'levels' or 'plan:<id>' (see day-focus.ts) */
   focus: string;
   wish: string;
   budget: number;
-  /** чому Gemini не склав план; '' = склав (або ключа нема) */
+  /** Why Gemini did not build the plan; '' when it did (or there is no key) */
   aiError: string;
 }
 
-/** Кандидат, якого план не взяв: його можна додати в чернетку. */
+/** A candidate the plan did not take; it can be added to the draft. */
 export interface AddableItem {
   id: string;
   kind: PlanItemKind;
@@ -39,7 +39,6 @@ export interface AddableItem {
 interface PlanCardProps {
   plan: PlanCardPlan | null;
   geminiEnabled: boolean;
-  /** скриня: квитки за пройдені вузли */
   focusOptions: FocusOption[];
   addable: AddableItem[];
 }
@@ -63,7 +62,7 @@ const KIND_ICON: Record<PlanItemKind, string> = {
   TASK: '📌',
 };
 
-/** Куди впаде перетягнутий пункт чернетки: над пунктом id чи під ним. */
+/** Where a dragged draft item lands: above the item with this id or below it. */
 interface DropTarget {
   id: string;
   below: boolean;
@@ -76,7 +75,7 @@ function ItemLink({ item, children, className }: { item: PlanItemWithStatus; chi
   if (item.href.startsWith('http')) {
     return <a href={item.href} target="_blank" rel="noreferrer" className={className} draggable={false}>{children} ↗</a>;
   }
-  // draggable={false}: у чернетці тягнеться весь рядок, а не посилання з нього
+  // draggable={false}: in the draft the whole row is dragged, not the link inside it
   return <Link href={item.href} className={className} draggable={false}>{children}</Link>;
 }
 
@@ -89,7 +88,7 @@ export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCar
   const [taskMinutes, setTaskMinutes] = useState(30);
   const [note, setNote] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  /** запит до Gemini, статус якого показуємо під кнопками */
+  /** The Gemini request whose status is shown under the buttons */
   const [jobId, setJobId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [planning, startPlanning] = useTransition();
@@ -97,12 +96,12 @@ export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCar
   const [reviewing, startReviewing] = useTransition();
   const [changing, startChange] = useTransition();
 
-  /** перетягування в чернетці: що тягнемо, куди цілимось, і порядок, показаний до відповіді сервера */
+  /** Drag and drop in the draft: what is dragged, where it is aimed, and the order shown until the server answers */
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
   const [draggedOrder, setDraggedOrder] = useState<string[] | null>(null);
   const serverItems = plan?.items;
-  // сервер віддав новий план: показуємо його порядок
+  // the server returned a new plan: show its order
   useEffect(() => setDraggedOrder(null), [serverItems]);
 
   const isDraft = plan !== null && !plan.started;
@@ -122,7 +121,7 @@ export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCar
     });
   }
 
-  /** Правка чернетки: помилку показуємо під карткою, а after скидає поле вводу тільки після успіху. */
+  /** Draft edit: the error is shown under the card, and after() resets the input only on success. */
   function edit(action: () => Promise<PlanActionResult>, after?: () => void) {
     setNote(null);
     startEditing(async () => {
@@ -188,7 +187,7 @@ export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCar
   }
   const done = items.filter((item) => item.done).length;
   const minutes = items.reduce((sum, item) => sum + item.minutes, 0);
-  // карта: поточний вузол = перший невиконаний; все після нього закрите, поки його не пройдеш
+  // map: the current node is the first unfinished one; everything after it stays locked until it is cleared
   const current = items.find((item) => !item.done) ?? null;
   const currentIndex = current ? items.indexOf(current) : items.length;
   const stateOf = (item: PlanItemWithStatus): NodeState => {
@@ -411,14 +410,14 @@ export function PlanCard({ plan, geminiEnabled, focusOptions, addable }: PlanCar
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  {/* справа-сесія: замість переходу на Tasks відкривається сесія з баштою */}
+                  {/* session task: opens the tower session dialog instead of navigating to Tasks */}
                   {selected.progress && selectedState !== 'locked' && (
                     <button className="btn primary sm" onClick={() => openTaskSession(Number(selected.id.replace('task:', '')))}>▶ Сесія</button>
                   )}
                   {selectedState === 'current' && !selected.progress && (
                     <ItemLink item={selected} className="btn primary sm">Start</ItemLink>
                   )}
-                  {/* рівень закривають тільки зелені тести, галочкою його не пройти */}
+                  {/* only green tests clear a level, it cannot be ticked off by hand */}
                   {selectedState === 'current' && !selected.autoDone && selected.kind !== 'LEVEL' && (
                     <button className="btn sm" disabled={changing} onClick={() => startChange(() => setPlanItemDone(selected.id, true))}>
                       Mark done

@@ -6,14 +6,14 @@ import { ACTIVITY_KINDS, TRACKS } from '@/lib/labels';
 import type { ActivityKind } from '@/generated/prisma/enums';
 
 interface LogTimeProps {
-  /** Якщо форма на сторінці теми: тема вже відома, список тем не показуємо. */
+  /** Set when the form is on a topic page: the topic is known, so the topic list is hidden. */
   topicId?: number;
   topics?: { id: number; name: string }[];
 }
 
 const QUICK_MINUTES: readonly number[] = [15, 30, 45, 60, 90];
 
-/** Записати час за 2 кліки: скільки хвилин + що робив. Тема чи трек за бажанням. */
+/** Log time in 2 clicks: how many minutes plus what was done. Topic or track are optional. */
 export function LogTime({ topicId, topics = [] }: LogTimeProps) {
   const [minutes, setMinutes] = useState(30);
   const [kind, setKind] = useState<ActivityKind>('STUDY');

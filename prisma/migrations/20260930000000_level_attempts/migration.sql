@@ -1,4 +1,4 @@
--- Рівні: спроби пройти вправу live-code (код, вердикт тестів, вивід)
+-- Levels: attempts at a live-code exercise (code, test verdict, output)
 CREATE TABLE "LevelAttempt" (
     "id" SERIAL NOT NULL,
     "levelKey" TEXT NOT NULL,

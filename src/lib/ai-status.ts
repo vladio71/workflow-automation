@@ -2,16 +2,16 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 /**
- * Статус запитів до Gemini, поки вони йдуть: яка модель, скільки секунд, думає чи вже пише, що впало.
- * Клієнт питає /api/ai/status?job=<id> раз на секунду і показує це під кнопкою.
- * Живе в пам'яті процесу (на globalThis, щоб server actions і route handlers бачили один і той самий Map).
+ * Status of in-flight Gemini requests: which model, how many seconds, thinking or writing, what failed.
+ * The client polls /api/ai/status?job=<id> once a second and shows it under the button.
+ * Lives in process memory (on globalThis so server actions and route handlers see the same Map).
  */
 
 export type AiTask = 'plan' | 'review' | 'grade' | 'check';
 export type AiPhase = 'waiting' | 'thinking' | 'writing';
 export type AiJobState = 'running' | 'done' | 'failed';
 
-/** Чим закінчилась спроба: від цього залежить, чи йти до наступної моделі. */
+/** How an attempt ended: decides whether to move on to the next model. */
 export type AttemptOutcome =
   | 'ok'
   | 'quota'
@@ -27,7 +27,7 @@ export type AttemptOutcome =
 export interface AttemptRecord {
   model: string;
   outcome: AttemptOutcome;
-  /** людською мовою: "ліміт на день (429)" */
+  /** human-readable: "daily limit (429)" */
   detail: string;
   ms: number;
 }
@@ -37,15 +37,15 @@ export interface AiJob {
   task: AiTask;
   label: string;
   state: AiJobState;
-  /** модель, яку пробуємо зараз (або яка відповіла) */
+  /** model being tried now (or the one that answered) */
   model: string | null;
   phase: AiPhase;
   startedAt: number;
   attemptStartedAt: number;
   endedAt: number | null;
-  /** скільки символів відповіді вже прийшло */
+  /** answer characters received so far */
   chars: number;
-  /** скільки шматків "роздумів" прийшло (видно, що модель жива, ще до відповіді) */
+  /** "thought" chunks received (shows the model is alive before the answer starts) */
   thoughts: number;
   lastChunkAt: number | null;
   attempts: AttemptRecord[];
@@ -65,7 +65,7 @@ function store(): Map<string, AiJob> {
   return holder.aiJobs;
 }
 
-/** id приходить з клієнта (щоб він міг питати статус ще до відповіді); чужий формат = свій id. */
+/** The id comes from the client (so it can poll status before the answer); an invalid format gets a fresh id. */
 export function startJob(task: AiTask, label: string, clientId?: string): AiJob {
   const jobs = store();
   const id = clientId && JOB_ID.test(clientId) ? clientId : randomUUID();
@@ -87,7 +87,7 @@ export function startJob(task: AiTask, label: string, clientId?: string): AiJob 
     error: null,
   };
   jobs.set(id, job);
-  // старі записи прибираємо: це не історія, а табло поточних запитів
+  // old entries are dropped: this is a board of current requests, not a history
   while (jobs.size > MAX_JOBS) {
     const oldest = jobs.keys().next().value;
     if (oldest === undefined) break;
@@ -100,7 +100,7 @@ export function getJob(id: string): AiJob | null {
   return store().get(id) ?? null;
 }
 
-/** Останні запити, новіші першими: для сторінки Sources. */
+/** Recent requests, newest first: for the Sources page. */
 export function recentJobs(limit = 10): AiJob[] {
   return [...store().values()].reverse().slice(0, limit);
 }

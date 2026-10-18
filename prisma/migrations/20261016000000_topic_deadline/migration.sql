@@ -1,2 +1,2 @@
--- Дедлайн категорії карток: до цієї дати картки повторюються частіше і йдуть першими в черзі.
+-- Card category deadline: until this date its cards repeat more often and go first in the queue.
 ALTER TABLE "Topic" ADD COLUMN "deadline" DATE;

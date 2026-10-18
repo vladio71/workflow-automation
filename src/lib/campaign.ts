@@ -3,10 +3,10 @@ import { endOfDay } from './schedule';
 import { stepHref, type StudyPlan } from './study-plan';
 
 /**
- * Навчальний план як карта кампанії (постійна, не скидається).
- * Регіон = група з plan.md ("Тиждень 1 · ..."). Задача (спроба → еталон → саммарі) = фортеця з трьох частин,
- * читання й поглиблення = менші вузли, екзамен = бос. Пройдене горить, поточне пульсує, решта закрита.
- * Задача, в якої настав термін переробки, "тріскається"; переробка (recall) її лагодить.
+ * Study plan as a campaign map (persistent, never reset).
+ * Region = group from plan.md ("Week 1 · ..."). Problem (attempt -> reference -> summary) = a three-part fortress,
+ * reading and depth = smaller nodes, exam = boss. Done glows, current pulses, the rest is locked.
+ * A problem whose redo is due "cracks"; redoing it (recall) repairs it.
  */
 
 export type SiteKind = 'fortress' | 'read' | 'depth' | 'boss';
@@ -25,10 +25,10 @@ export interface CampaignStep {
 export interface CampaignSite {
   id: string;
   kind: SiteKind;
-  /** коротка назва: текст до першої двокрапки ("URL shortener", "Модуль 02 кешування") */
+  /** short name: text before the first colon ("URL shortener", "Module 02 caching") */
   name: string;
   state: SiteState;
-  /** задача пройдена, але настав термін переробки */
+  /** problem done, but its redo is due */
   cracked: boolean;
   steps: CampaignStep[];
 }
@@ -47,7 +47,7 @@ export interface Campaign {
   regions: CampaignRegion[];
   done: number;
   total: number;
-  /** індекс регіону з поточним кроком; -1 = усе пройдено */
+  /** index of the region with the current step; -1 = everything done */
   currentRegion: number;
 }
 
@@ -88,7 +88,7 @@ export function buildCampaign(plan: StudyPlan, now: Date = new Date()): Campaign
     region.total += 1;
     if (campaignStep.done) region.done += 1;
 
-    // еталон і саммарі належать фортеці задачі, перед якою стоять
+    // reference and summary belong to the fortress of the problem they follow
     const last = region.sites[region.sites.length - 1];
     const joinsFortress = (step.kind === 'REFERENCE' || step.kind === 'SUMMARY') && last?.kind === 'fortress';
     if (joinsFortress && last) {
@@ -114,7 +114,7 @@ export function buildCampaign(plan: StudyPlan, now: Date = new Date()): Campaign
         currentSiteSeen = true;
         currentRegion = regionIndex;
       }
-      // тріщина тільки на пройденій задачі: непройдену ще нема що лагодити
+      // only a done problem can crack: an unfinished one has nothing to repair yet
       if (site.state !== 'done') site.cracked = false;
     }
     if (region.done === region.total) region.state = 'conquered';

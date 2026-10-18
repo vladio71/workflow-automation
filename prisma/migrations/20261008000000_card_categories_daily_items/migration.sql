@@ -1,8 +1,8 @@
--- Категорії карток: тема картки = її категорія. cardsUsedAt = коли категорією востаннє користувались,
--- за ним сортується список у виборі категорії.
+-- Card categories: a card's topic is its category. cardsUsedAt = when the category was last used,
+-- the category picker is sorted by it.
 ALTER TABLE "Topic" ADD COLUMN "cardsUsedAt" TIMESTAMP(3);
 
--- Daily на Today стає списком, який можна правити: пункти тут, галочки по днях у DailyCheck.
+-- Daily on Today becomes an editable list: items live here, per-day ticks in DailyCheck.
 CREATE TABLE "DailyItem" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE "DailyCheck" (
 CREATE INDEX "DailyCheck_day_idx" ON "DailyCheck"("day");
 ALTER TABLE "DailyCheck" ADD CONSTRAINT "DailyCheck_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "DailyItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- три пункти, які були зашиті в код: їхні галочки лишаються в DailyLog (cards і recall ставляться самі)
+-- the three items that used to be hardcoded: their ticks stay in DailyLog (cards and recall tick themselves)
 INSERT INTO "DailyItem" ("title", "position", "auto") VALUES
     ('Cards: everything due today (ticks itself when the queue is empty)', 0, 'cardsDone'),
     ('1 recall: blank page, then check', 1, 'recallDone'),

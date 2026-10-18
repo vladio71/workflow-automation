@@ -19,9 +19,9 @@ export async function getActiveCycle(): Promise<CycleWithProgress | null> {
 }
 
 /**
- * Що повторювати сьогодні: термін настав або тема червона. Спершу червоні, потім найстаріші.
- * Виняток: задачі з навчального плану (теми ATTEMPT-кроків) тільки за розкладом, навіть червоні:
- * задачу, розв'язану сьогодні на червоне, переробляють через 2 дні, а не того ж вечора.
+ * What to review today: due or red topics. Red first, then the oldest.
+ * Exception: study plan problems (topics of ATTEMPT steps) only by schedule, even when red:
+ * a problem solved red today is redone in 2 days, not the same evening.
  */
 export async function getDueTopics(now: Date = new Date()): Promise<Topic[]> {
   const until = endOfDay(now);
@@ -63,13 +63,13 @@ export async function getTodayLog(now: Date = new Date()): Promise<DailyLog> {
   };
 }
 
-/** Ключ дня для колонки DATE: опівніч UTC тієї ж календарної дати, що й локальна. */
+/** Day key for a DATE column: midnight UTC of the same calendar date as local. */
 export function dayKey(date: Date): Date {
   const local = startOfDay(date);
   return new Date(Date.UTC(local.getFullYear(), local.getMonth(), local.getDate()));
 }
 
-/** Наступний розділ праймера: перший не розпочатий, інакше найдавніше повторений. */
+/** Next primer chapter: the first not started one, otherwise the least recently reviewed. */
 export async function getNextSystemDesignTopic(): Promise<Topic | null> {
   const notStarted = await db.topic.findFirst({
     where: { track: 'SYSTEM_DESIGN', confidence: 'NOT_STARTED' },

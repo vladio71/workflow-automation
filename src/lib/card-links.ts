@@ -1,16 +1,16 @@
-/** Посилання на категорію карток. 'none' = картки без категорії. Окремий файл: потрібен і серверу, і клієнту. */
+/** Links to a card category. 'none' = cards without a category. Separate file: needed by both server and client. */
 export const NO_CATEGORY_PARAM = 'none';
 
 export function categoryParam(topicId: number | null): string {
   return topicId === null ? NO_CATEGORY_PARAM : String(topicId);
 }
 
-/** Сторінка категорії: усі її картки. */
+/** Category page: all of its cards. */
 export function categoryHref(topicId: number | null): string {
   return `/cards/category/${categoryParam(topicId)}`;
 }
 
-/** Review тільки цієї категорії: картки, в яких настав термін, плюс нові в межах ліміту на день. */
+/** Review of this category only: due cards plus new ones within the daily limit. */
 export function categoryReviewHref(topicId: number | null): string {
   return `/cards?topic=${categoryParam(topicId)}`;
 }
@@ -19,7 +19,7 @@ export interface ParsedCategory {
   topicId: number | null;
 }
 
-/** 'none' -> без категорії, '12' -> тема 12, усе інше -> null (такої категорії нема). */
+/** 'none' -> no category, '12' -> topic 12, anything else -> null (no such category). */
 export function parseCategoryParam(value: string | undefined): ParsedCategory | null {
   if (value === undefined || value === '') return null;
   if (value === NO_CATEGORY_PARAM) return { topicId: null };

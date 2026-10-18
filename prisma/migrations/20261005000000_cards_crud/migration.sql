@@ -1,5 +1,5 @@
--- Картки як у Quizlet: додати, змінити, видалити прямо в All cards.
--- Картку з репо, яку змінили в апці, Sync більше не перезаписує; видалену не створює знову.
+-- Quizlet-style cards: add, edit and delete directly in All cards.
+-- A repo card edited in the app is no longer overwritten by Sync; a deleted one is not recreated.
 ALTER TABLE "Question" ADD COLUMN "editedInApp" BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE "DeletedCard" (

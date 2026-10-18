@@ -1,4 +1,4 @@
--- Скриня: пул карток відпочинку і пули зі скрині
+-- Loot chest: pool of rest cards and the pulls from the chest
 CREATE TYPE "LootRarity" AS ENUM ('COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY');
 
 CREATE TABLE "RestCard" (

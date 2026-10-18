@@ -1,4 +1,4 @@
--- Справи-сесії: ціль на день і лог кроків, з яких росте башта дня.
+-- Session tasks: a daily target and a log of steps that build the day's tower.
 ALTER TABLE "Task" ADD COLUMN "target" INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE "TaskTick" (

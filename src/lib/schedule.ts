@@ -1,10 +1,10 @@
 import type { Confidence } from '@/generated/prisma/enums';
 
 /**
- * Інтервали повторення (дні). Як на шпалерах: 0 (зробив) -> +2 -> +7 -> +21, далі подвоюємо.
- *   GREEN (з пам'яті без підказок) -> наступний крок
- *   AMBER (дрібні прогалини)        -> той самий крок
- *   RED   (застряг)                 -> назад на 2 дні
+ * Review intervals (days). As on the wall chart: 0 (done) -> +2 -> +7 -> +21, then doubling.
+ *   GREEN (from memory, no hints) -> next step
+ *   AMBER (small gaps)            -> same step
+ *   RED   (stuck)                 -> back to 2 days
  */
 export const INTERVAL_LADDER: readonly number[] = [2, 7, 21, 42, 84];
 const FIRST_STEP = 2;
@@ -39,7 +39,7 @@ export function endOfDay(date: Date): Date {
   return copy;
 }
 
-/** "сьогодні", "через 3 дн.", "2 дн. тому" */
+/** "today", "in 3d", "2d ago" */
 export function relativeDay(date: Date | null, now: Date = new Date()): string {
   if (!date) return '';
   const diff = Math.round((startOfDay(date).getTime() - startOfDay(now).getTime()) / DAY_MS);

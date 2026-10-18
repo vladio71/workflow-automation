@@ -4,12 +4,12 @@ import { dayKey } from './queries';
 import { startOfDay } from './schedule';
 
 /**
- * Справи-сесії: у справи є ціль на день (розіслати 10 резюме), кожен крок = рядок TaskTick.
- * Прогрес рахується за сьогодні, тож башта дня щоночі починається з нуля, а історія лишається для скайлайну.
+ * Session tasks: a task has a daily target (send 10 resumes), each step = a TaskTick row.
+ * Progress is counted for today, so the day's tower restarts from zero every night while history stays for the skyline.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** скільки днів показує скайлайн, разом із сьогодні */
+/** days shown in the skyline, today included */
 export const SKYLINE_DAYS = 14;
 export const MAX_TARGET = 100;
 
@@ -21,7 +21,7 @@ export interface TaskProgress {
 export interface TowerTick {
   id: number;
   note: string;
-  /** ISO-час, щоб передати в клієнт */
+  /** ISO time, serializable for the client */
   at: string;
 }
 
@@ -37,7 +37,7 @@ export interface TowerData {
   target: number;
   count: number;
   ticks: TowerTick[];
-  /** від найстаршого дня до сьогодні */
+  /** oldest day to today */
   history: TowerDay[];
 }
 
@@ -50,7 +50,7 @@ function isoDay(day: Date): string {
   return day.toISOString().slice(0, 10);
 }
 
-/** Кроки за сьогодні: taskId -> кількість. */
+/** Today's steps: taskId -> count. */
 export async function todayTickCounts(taskIds: readonly number[], now: Date = new Date()): Promise<Map<number, number>> {
   if (taskIds.length === 0) return new Map();
   const rows = await db.taskTick.groupBy({
@@ -62,22 +62,22 @@ export async function todayTickCounts(taskIds: readonly number[], now: Date = ne
 }
 
 /**
- * Башти на сьогодні: усі справи з ціллю, які ще живі (повторювані, відкриті разові або закриті сьогодні),
- * з сьогоднішніми кроками і скайлайном за останні дні.
+ * Today's towers: all tasks with a target that are still alive (repeating, open one-offs or closed today),
+ * with today's steps and a skyline of the last days.
  */
 export async function getTowers(now: Date = new Date()): Promise<TowerData[]> {
   const today = dayKey(now);
   const tasks = await db.task.findMany({
     where: {
       target: { gt: 0 },
-      // разова справа, закрита сьогодні, лишається: її башту видно до кінця дня
+      // a one-off task closed today stays: its tower is visible until the end of the day
       OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }],
     },
     orderBy: { createdAt: 'asc' },
   });
   if (tasks.length === 0) return [];
 
-  // dayKey = UTC-північ локальної дати, тож дні назад рахуємо в UTC: перехід на зимовий час їх не зсуне
+  // dayKey is UTC midnight of the local date, so days back are counted in UTC: a DST switch cannot shift them
   const from = new Date(today.getTime() - (SKYLINE_DAYS - 1) * DAY_MS);
   const ticks = await db.taskTick.findMany({
     where: { taskId: { in: tasks.map((task) => task.id) }, day: { gte: from } },

@@ -1,4 +1,4 @@
--- План дня: чернетка до старту, фокус і побажання. Справи поза навчанням.
+-- Day plan: a draft until started, plus focus and wish. Tasks outside of study.
 CREATE TYPE "TaskRepeat" AS ENUM ('ONCE', 'DAILY', 'WEEKDAYS');
 
 CREATE TABLE "Task" (
@@ -16,5 +16,5 @@ ADD COLUMN "focus" TEXT NOT NULL DEFAULT '',
 ADD COLUMN "wish" TEXT NOT NULL DEFAULT '',
 ADD COLUMN "budget" INTEGER NOT NULL DEFAULT 0;
 
--- плани, складені до цієї зміни, вже були робочими, а не чернетками
+-- plans created before this change were already live, not drafts
 UPDATE "DailyPlan" SET "startedAt" = "createdAt";

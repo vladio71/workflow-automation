@@ -6,8 +6,8 @@ import { clampTarget } from './task-sessions';
 import type { Task, TaskRepeat, TaskStatus } from '@/generated/prisma/client';
 
 /**
- * Беклог справ як у Jira. Колонки: BACKLOG → TODO → IN_PROGRESS → Done (doneAt).
- * У план дня йдуть лише TODO та IN_PROGRESS. BACKLOG лежить, поки не витягнеш.
+ * Jira-style task backlog. Columns: BACKLOG -> TODO -> IN_PROGRESS -> Done (doneAt).
+ * Only TODO and IN_PROGRESS go into the day plan. BACKLOG waits until pulled.
  */
 
 export const TASK_STATUSES: readonly TaskStatus[] = ['BACKLOG', 'TODO', 'IN_PROGRESS'];
@@ -19,7 +19,7 @@ export const MAX_NOTES = 2000;
 
 export const PRIORITY_LABEL: Record<number, string> = { 1: 'high', 2: 'med+', 3: 'med', 4: 'low' };
 
-/** Статуси, при яких справа потрапляє в план дня. */
+/** Statuses in which a task gets into the day plan. */
 export const ACTIVE_STATUSES: readonly TaskStatus[] = ['TODO', 'IN_PROGRESS'];
 
 export function clampPriority(value: number): number {
@@ -29,7 +29,7 @@ export function clampPriority(value: number): number {
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 
-/** "2026-10-19" -> ключ дня для колонки DATE (опівніч UTC) */
+/** "2026-10-19" -> day key for a DATE column (midnight UTC) */
 export function toDateKey(value: string): Date {
   return new Date(`${value}T00:00:00Z`);
 }
@@ -46,7 +46,7 @@ export const CreateTaskSchema = z.object({
 });
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
 
-/** PATCH: усе необов'язкове; status: "DONE" ставить doneAt, будь-який інший статус його знімає */
+/** PATCH: everything optional; status "DONE" sets doneAt, any other status clears it */
 export const UpdateTaskSchema = z
   .object({
     title: z.string().trim().min(1).max(MAX_TITLE),
@@ -101,7 +101,7 @@ export async function createBacklogTask(input: CreateTaskInput): Promise<Task> {
       repeat: input.repeat ?? 'ONCE',
       target: clampTarget(input.target ?? 0),
       until: input.until ? toDateKey(input.until) : null,
-      // повторювані справи одразу в роботі: беклог для них не має сенсу
+      // repeating tasks start active: a backlog makes no sense for them
       status: input.status ?? (input.repeat && input.repeat !== 'ONCE' ? 'TODO' : 'BACKLOG'),
       priority: clampPriority(input.priority ?? 3),
       notes: (input.notes ?? '').trim(),
@@ -138,7 +138,7 @@ export async function listTasks(filter: TaskListFilter): Promise<Task[]> {
   return db.task.findMany({ where, orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] });
 }
 
-/** Наступна колонка для кнопки "→" на борді. IN_PROGRESS → done. */
+/** Next column for the "->" button on the board. IN_PROGRESS -> done. */
 export function nextStatus(status: TaskStatus): TaskStatus | 'DONE' {
   if (status === 'BACKLOG') return 'TODO';
   if (status === 'TODO') return 'IN_PROGRESS';

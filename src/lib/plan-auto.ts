@@ -7,9 +7,9 @@ import { DEFAULT_BUDGET, getTodayPlan } from './planner';
 import { dayKey } from './queries';
 
 /**
- * Скласти план на сьогодні без налаштувань, якщо його ще нема: для ранкового скрипта і кнопки на /mini.
- * Бюджет і фокус беруться з учорашнього плану, побажання — перший крок з вечірньої передачі.
- * Якщо план уже є, нічого не чіпає.
+ * Build today's plan with no settings if it does not exist yet: for the morning script and the /mini button.
+ * Budget and focus come from yesterday's plan, the wish is the first step from the evening handoff.
+ * An existing plan is left untouched.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;

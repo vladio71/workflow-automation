@@ -4,18 +4,17 @@ import { isDateKey, parseQuestions } from '@/lib/learn-format';
 import { touchCategory } from '@/lib/cards';
 
 /**
- * Швидке додавання карток без репо і Sync: вставив текст у форматі questions.md (Q:/A:), вибрав категорію,
- * готово. Той самий парсер, що в Sync, тому формат один. Картки стають звичайними картками апки
- * (без sourceId), Sync їх не чіпає.
+ * Quick card import without a repo or Sync: paste text in questions.md format (Q:/A:), pick a category, done.
+ * Same parser as Sync, so there is one format. The cards become ordinary app cards (no sourceId), Sync never touches them.
  *
- * Дублікати: питання, яке вже є в цій категорії (без урахування регістру і зайвих пробілів), не створюється
- * вдруге, а отримує нову відповідь. Розклад такої картки лишається.
+ * Duplicates: a question already in this category (ignoring case and extra whitespace) is not created twice
+ * but gets the new answer. Its schedule is kept.
  */
 
 export interface ImportPreview {
-  /** CONCEPT-картки, які будуть додані або оновлені */
+  /** CONCEPT cards that will be added or updated */
   cards: { question: string; answer: string }[];
-  /** T:-картки у тексті: сюди вони не імпортуються, тільки через репо */
+  /** T: cards in the text: not imported here, only via a repo */
   skippedTasks: number;
   errors: string[];
 }
@@ -27,11 +26,11 @@ export function previewImport(text: string): ImportPreview {
 }
 
 export interface ImportTarget {
-  /** існуюча категорія; null = без категорії (якщо newCategory теж порожнє) */
+  /** existing category; null = no category (when newCategory is empty too) */
   topicId: number | null;
-  /** створити категорію з такою назвою */
+  /** create a category with this name */
   newCategory?: string;
-  /** дедлайн категорії, YYYY-MM-DD; "" = не чіпати */
+  /** category deadline, YYYY-MM-DD; "" = leave as is */
   deadline?: string;
 }
 
@@ -47,7 +46,7 @@ function normalize(question: string): string {
   return question.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** Імпорт перевірених карток. Текст з помилками парсера сюди не доходить: previewImport перед цим. */
+/** Import of validated cards. Text with parser errors never gets here: previewImport runs first. */
 export async function importCards(text: string, target: ImportTarget): Promise<ImportResult> {
   const preview = previewImport(text);
   if (preview.errors.length > 0) throw new ImportError(preview.errors.join('\n'));
@@ -76,7 +75,7 @@ export async function importCards(text: string, target: ImportTarget): Promise<I
     const seen = new Set<string>();
     for (const card of preview.cards) {
       const key = normalize(card.question);
-      if (seen.has(key)) continue; // той самий текст двічі в одному імпорті
+      if (seen.has(key)) continue; // same text twice in one import
       seen.add(key);
       const id = byQuestion.get(key);
       if (id === undefined) {

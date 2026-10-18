@@ -1,15 +1,15 @@
 /**
- * Парсер формату learn/ у репо з матеріалом. Та сама логіка є в graphql-base
- * (scripts/learn-format.mjs, її запускає CI): якщо міняєш формат, міняй в обох місцях.
+ * Parser for the learn/ format in a material repo. The same logic lives in graphql-base
+ * (scripts/learn-format.mjs, run by CI): when changing the format, change both places.
  *
- * Картка = блок рядків між порожніми рядками.
- *   Q: питання / A: відповідь                 -> CONCEPT
- *   T: задача / Ref: файл / Check: команда     -> TASK
- * Рядок без ключа продовжує попереднє поле (багаторядкові відповіді).
- * Рядки з # і з відступом 4+ пробіли ігноруються. Абзац без жодного ключа теж.
- * Ref: шлях до файлу в репо або повний URL (https://...).
+ * Card = a block of lines between blank lines.
+ *   Q: question / A: answer                   -> CONCEPT
+ *   T: task / Ref: file / Check: command       -> TASK
+ * A line without a key continues the previous field (multi-line answers).
+ * Lines starting with # or indented by 4+ spaces are ignored. So is a paragraph with no key at all.
+ * Ref: path to a file in the repo or a full URL (https://...).
  *
- * learn/plan.md (необов'язково): навчальний план, послідовність кроків, див. parsePlan нижче.
+ * learn/plan.md (optional): study plan, a sequence of steps, see parsePlan below.
  */
 import type { Track } from '@/generated/prisma/client';
 
@@ -32,13 +32,13 @@ export interface ParsedQuestions {
 export interface ParsedTopic {
   name: string;
   track: Track;
-  /** текст під front matter (якщо є) */
+  /** text below the front matter (if any) */
   notes: string;
-  /** front matter `notes:` шлях до файлу в репо, який стає нотатками теми (наприклад README модуля) */
+  /** front matter `notes:` path to a repo file that becomes the topic notes (e.g. a module README) */
   notesFile: string;
-  /** front matter `drill:` шлях до папки чи файлу з дрілами */
+  /** front matter `drill:` path to a folder or file with drills */
   drill: string;
-  /** front matter `deadline: YYYY-MM-DD`: до цієї дати картки теми в пріоритеті; null = без дедлайну */
+  /** front matter `deadline: YYYY-MM-DD`: until this date the topic's cards are prioritized; null = no deadline */
   deadline: string | null;
   errors: string[];
 }
@@ -133,14 +133,14 @@ interface FrontMatter {
   body: string;
 }
 
-/** `---\nkey: value\n---\nтекст`: null, якщо front matter немає. */
-/** "2026-10-19": рівно дата, і вона справжня (не 2026-02-30). */
+/** "2026-10-19": exactly a date, and a real one (not 2026-02-30). */
 export function isDateKey(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+/** `---\nkey: value\n---\ntext`: null when there is no front matter. */
 function readFrontMatter(text: string): FrontMatter | null {
   const match = text.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   const head = match?.[1];
@@ -154,13 +154,13 @@ function readFrontMatter(text: string): FrontMatter | null {
 }
 
 /**
- * topic.md: front matter + необов'язкові нотатки нижче.
+ * topic.md: front matter + optional notes below.
  *   ---
- *   name: Caching          обов'язково
+ *   name: Caching          required
  *   track: SYSTEM_DESIGN   GRAPHQL | SYSTEM_DESIGN | NODE | AI | PYTHON | OTHER
- *   notes: modules/02-caching/README.md   необов'язково: файл, який стане нотатками теми
- *   drill: modules/02-caching             необов'язково: де лежать дріли
- *   deadline: 2026-10-19                  необов'язково: до цієї дати картки теми повторюються частіше
+ *   notes: modules/02-caching/README.md   optional: file that becomes the topic notes
+ *   drill: modules/02-caching             optional: where the drills live
+ *   deadline: 2026-10-19                  optional: until this date the topic's cards repeat more often
  *   ---
  */
 export function parseTopic(text: string): ParsedTopic {
@@ -210,23 +210,23 @@ export function parseTopic(text: string): ParsedTopic {
 export type PlanStepKind = 'READ' | 'ATTEMPT' | 'REFERENCE' | 'SUMMARY' | 'DEPTH' | 'EXAM';
 
 export interface ParsedPlanStep {
-  /** стабільний id кроку: прогрес прив'язаний до нього, тому текст і порядок можна міняти */
+  /** stable step id: progress is bound to it, so text and order can change */
   key: string;
   title: string;
   minutes: number;
   kind: PlanStepKind;
-  /** URL або шлях у репо */
+  /** URL or path in the repo */
   link: string;
-  /** папка теми в learn/ (для ATTEMPT обов'язково: спроба = recall цієї теми) */
+  /** topic folder under learn/ (required for ATTEMPT: attempt = recall of this topic) */
   topic: string;
-  /** останній заголовок `## ...` над кроком, наприклад "Тиждень 1" */
+  /** last `## ...` heading above the step, e.g. "Week 1" */
   group: string;
   line: number;
 }
 
 export interface ParsedPlan {
   name: string;
-  /** скільки хвилин на день план бере собі в плані дня */
+  /** minutes per day the plan takes for itself in the day plan */
   dailyMinutes: number;
   steps: ParsedPlanStep[];
   errors: string[];
@@ -240,15 +240,15 @@ const DEFAULT_DAILY_MINUTES = 180;
 const MAX_STEP_MINUTES = 600;
 
 /**
- * learn/plan.md: front matter (name, dailyMinutes) + кроки через порожній рядок.
- *   ## Тиждень 1              заголовок групи (для відображення)
+ * learn/plan.md: front matter (name, dailyMinutes) + steps separated by a blank line.
+ *   ## Week 1                 group heading (for display)
  *
- *   S: URL shortener: спроба 45 хв
- *   Id: p01-attempt           латиниця, цифри, дефіс; унікальний
+ *   S: URL shortener: attempt 45 min
+ *   Id: p01-attempt           latin letters, digits, dashes; unique
  *   Min: 45
- *   Kind: ATTEMPT             READ | ATTEMPT | REFERENCE | SUMMARY | DEPTH | EXAM (за замовчуванням READ)
- *   Topic: p01-url-shortener  папка в learn/
- *   Link: https://...         або шлях у репо
+ *   Kind: ATTEMPT             READ | ATTEMPT | REFERENCE | SUMMARY | DEPTH | EXAM (default READ)
+ *   Topic: p01-url-shortener  folder under learn/
+ *   Link: https://...         or a path in the repo
  */
 export function parsePlan(text: string): ParsedPlan {
   const frontMatter = readFrontMatter(text);
@@ -266,7 +266,7 @@ export function parsePlan(text: string): ParsedPlan {
     if (!Number.isInteger(dailyMinutes) || dailyMinutes <= 0) errors.push('plan.md: dailyMinutes must be a positive integer');
   }
 
-  // номер рядка body у файлі: front matter займає рядки до другого ---
+  // line offset of the body in the file: the front matter takes the lines up to the second ---
   const headLines = text.replace(/\r\n/g, '\n').split('\n').length - frontMatter.body.split('\n').length;
   const steps: ParsedPlanStep[] = [];
   let group = '';
@@ -341,7 +341,7 @@ export function parsePlan(text: string): ParsedPlan {
   return { name, dailyMinutes, steps, errors };
 }
 
-/** Посилання з Ref:/Link: це повний URL, а не шлях у репо. */
+/** A Ref:/Link: value is a full URL, not a path in the repo. */
 export function isUrl(value: string): boolean {
   return /^https?:\/\//.test(value);
 }

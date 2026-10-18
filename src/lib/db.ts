@@ -2,7 +2,7 @@ import 'server-only';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@/generated/prisma/client';
 
-// Один клієнт на процес. У dev Next перезавантажує модулі, тому тримаємо його в globalThis.
+// One client per process. In dev Next reloads modules, so the client is kept on globalThis.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createClient(): PrismaClient {

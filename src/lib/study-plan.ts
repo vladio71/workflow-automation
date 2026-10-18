@@ -5,32 +5,32 @@ import { endOfDay, startOfDay } from '@/lib/schedule';
 import { refUrl } from '@/lib/sync';
 
 /**
- * Навчальний план з learn/plan.md (зараз system-design-reps).
- * Кроки йдуть строго по порядку; апка щодня відбирає наступні кроки в межах ліміту плану (dailyMinutes):
- *   1. спершу переробки задач, у яких настав термін (максимум 2, по 45 хв);
- *   2. далі наступні кроки плану, поки влазять у ліміт;
- *   3. максимум одна НОВА задача на день (ATTEMPT або EXAM): пам'яті потрібен час між задачами.
- * День фокусу на план: ліміт = щонайменше 60% бюджету дня і до 2 нових задач.
- * Переробка = recall теми-задачі: після спроби ставиш колір, і розклад 2/7/21 днів робить решту.
+ * Study plan from learn/plan.md (currently system-design-reps).
+ * Steps go strictly in order; every day the app picks the next steps within the plan limit (dailyMinutes):
+ *   1. first the redos of problems that are due (at most 2, 45 min each);
+ *   2. then the next plan steps while they fit the limit;
+ *   3. at most one NEW problem per day (ATTEMPT or EXAM): memory needs time between problems.
+ * On a day focused on the plan: limit = at least 60% of the day budget and up to 2 new problems.
+ * Redo = recall of the problem topic: after the attempt a colour is set and the 2/7/21-day schedule does the rest.
  */
 
-/** переробка задачі з нуля: 45 хв, як співбесіда */
+/** redo of a problem from scratch: 45 min, like an interview */
 export const REDO_MINUTES = 45;
 const MAX_REDOS_PER_DAY = 2;
-/** саммарі закриває задачу того ж дня, поки еталон свіжий: йому дозволено вийти за ліміт на стільки хвилин */
+/** the summary closes the problem the same day while the reference is fresh: it may exceed the limit by this many minutes */
 const SUMMARY_OVERFLOW_MINUTES = 30;
 
 export interface StudyPlan {
   source: Source;
   steps: PlanStep[];
-  /** тема-задача для кожної папки, на яку посилаються кроки */
+  /** problem topic for every folder the steps refer to */
   topicByPath: Map<string, Topic>;
 }
 
 export interface PlanProgress {
   done: number;
   total: number;
-  /** група поточного кроку ("Тиждень 2") */
+  /** group of the current step ("Week 2") */
   group: string;
   next: PlanStep | null;
 }
@@ -41,17 +41,17 @@ export interface TodaySelection {
 }
 
 export interface TodayLimits {
-  /** скільки хвилин план бере сьогодні; за замовчуванням ліміт плану з plan.md (dailyMinutes) */
+  /** minutes the plan takes today; defaults to the plan limit from plan.md (dailyMinutes) */
   minutes: number;
-  /** скільки НОВИХ задач (ATTEMPT або EXAM) за день; у день фокусу на цей план 2, інакше 1 */
+  /** NEW problems (ATTEMPT or EXAM) per day; 2 on a day focused on this plan, otherwise 1 */
   newProblems: number;
 }
 
-/** День фокусу: те, що у фокусі, бере щонайменше таку частку бюджету дня. */
+/** Focus day: whatever is in focus takes at least this share of the day budget. */
 export const FOCUS_BUDGET_SHARE = 0.6;
 const FOCUS_NEW_PROBLEMS = 2;
 
-/** 'this' = цей план у фокусі, 'other' = у фокусі щось інше (інший план або рівні), 'none' = фокусу нема. */
+/** 'this' = this plan is in focus, 'other' = something else is (another plan or levels), 'none' = no focus. */
 export type FocusRole = 'this' | 'other' | 'none';
 
 export function todayLimits(plan: StudyPlan, role: FocusRole, dayBudgetMinutes: number): TodayLimits {
@@ -59,7 +59,7 @@ export function todayLimits(plan: StudyPlan, role: FocusRole, dayBudgetMinutes: 
   if (role === 'this') {
     return { minutes: Math.max(daily, Math.round(dayBudgetMinutes * FOCUS_BUDGET_SHARE)), newProblems: FOCUS_NEW_PROBLEMS };
   }
-  // у фокусі щось інше: план іде в режимі підтримки, не більше решти бюджету після частки фокусу
+  // something else is in focus: the plan runs in maintenance mode, at most what is left of the budget after the focus share
   if (role === 'other') return { minutes: Math.min(daily, Math.round(dayBudgetMinutes * (1 - FOCUS_BUDGET_SHARE))), newProblems: 1 };
   return { minutes: daily, newProblems: 1 };
 }
@@ -86,7 +86,7 @@ export function planProgress(plan: StudyPlan): PlanProgress {
   return { done, total: plan.steps.length, group: next?.group ?? 'done', next };
 }
 
-/** Куди веде крок: спроба -> recall теми-задачі, посилання -> файл у репо чи сайт, інакше сторінка плану. */
+/** Where a step leads: attempt -> recall of the problem topic, link -> repo file or website, otherwise the plan page. */
 export function stepHref(plan: StudyPlan, step: PlanStep): string {
   const topic = plan.topicByPath.get(step.topicPath);
   if (step.kind === 'ATTEMPT' && topic) return `/recall/${topic.id}`;
@@ -95,7 +95,7 @@ export function stepHref(plan: StudyPlan, step: PlanStep): string {
   return '/plan';
 }
 
-/** Теми-задачі плану (ті, на які посилаються ATTEMPT-кроки). */
+/** Problem topics of the plan (those referenced by ATTEMPT steps). */
 export function problemTopicIds(plan: StudyPlan): Set<number> {
   const ids = new Set<number>();
   for (const step of plan.steps) {
@@ -107,8 +107,8 @@ export function problemTopicIds(plan: StudyPlan): Set<number> {
 }
 
 /**
- * Що з плану робити сьогодні. dueTopics уже відсортовані (червоні, потім найстаріші).
- * Кроки, зроблені сьогодні, теж входять: інакше повторне "Re-plan" увечері видавало б понад ліміт.
+ * What to do from the plan today. dueTopics are already sorted (red, then the oldest).
+ * Steps done today are included too: otherwise an evening "Re-plan" would hand out more than the limit.
  */
 export function selectToday(
   plan: StudyPlan,
@@ -119,7 +119,7 @@ export function selectToday(
   const from = startOfDay(now);
   const to = endOfDay(now);
   const problemIds = problemTopicIds(plan);
-  // переробка тільки за розкладом: червона тема в загальному списку "due" одразу, а задачу переробляємо через 2 дні
+  // redo only by schedule: a red topic is "due" right away in the general list, but a problem is redone in 2 days
   const redos = dueTopics
     .filter((topic) => problemIds.has(topic.id) && topic.nextReviewAt !== null && topic.nextReviewAt <= to)
     .slice(0, MAX_REDOS_PER_DAY);
@@ -130,13 +130,13 @@ export function selectToday(
 
   for (const step of plan.steps) {
     const doneToday = step.doneAt !== null && step.doneAt >= from && step.doneAt <= to;
-    if (step.doneAt !== null && !doneToday) continue; // зроблено раніше
+    if (step.doneAt !== null && !doneToday) continue; // done earlier
 
     const isProblem = step.kind === 'ATTEMPT' || step.kind === 'EXAM';
-    if (isProblem && attempts >= limits.newProblems) break; // нових задач на день: 1, у день фокусу 2
+    if (isProblem && attempts >= limits.newProblems) break; // new problems per day: 1, on a focus day 2
     const allowance = step.kind === 'SUMMARY' ? SUMMARY_OVERFLOW_MINUTES : 0;
     const fits = step.minutes <= remaining + allowance;
-    // перший крок дня беремо, навіть якщо він довший за ліміт, інакше план застрягне назавжди
+    // the first step of the day is taken even if it is longer than the limit, otherwise the plan would be stuck forever
     const firstOfDay = steps.length === 0 && redos.length === 0;
     if (!fits && !firstOfDay) break;
 
@@ -148,7 +148,7 @@ export function selectToday(
 }
 
 
-/** Спроба задачі зараховується сама: пройшов recall її теми, тоді перший незроблений ATTEMPT з цією темою = зроблено. */
+/** A problem attempt counts itself: after a recall of its topic, the first undone ATTEMPT with that topic is done. */
 export async function markAttemptDone(topic: Pick<Topic, 'sourceId' | 'sourcePath'>, now: Date): Promise<void> {
   if (topic.sourceId === null || topic.sourcePath === '') return;
   const step = await db.planStep.findFirst({

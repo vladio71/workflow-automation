@@ -1,8 +1,8 @@
 /**
- * Стартові дані: одна тема GraphQL з твоїми нотатками, прив'язана до репо vladio71/graphql-base.
- * Картки приходять тільки з learn/ у репо: перший Sync (або відкриття Today) їх підтягне.
- * Решту тем і циклів додаєш сам. Запуск: npm run db:seed.
- * УВАГА: чистить усі дані (теми, питання, цикли, логи, плани, mock, inbox, спроби рівнів, справи). Запускай один раз на старті.
+ * Seed data: one GraphQL topic with the notes, linked to the vladio71/graphql-base repo.
+ * Cards come only from learn/ in the repo: the first Sync (or opening Today) pulls them in.
+ * Other topics and cycles are added by hand. Run: npm run db:seed.
+ * WARNING: wipes all data (topics, questions, cycles, logs, plans, mock, inbox, level attempts, tasks). Run once at the start.
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';

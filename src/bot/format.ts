@@ -2,8 +2,8 @@ import type { CardView } from '@/lib/cards';
 import type { InlineKeyboard } from './telegram';
 
 /**
- * Тексти і кнопки бота. Розмітка: Telegram HTML (https://core.telegram.org/bots/api#html-style).
- * Обмеження Telegram: <b> не може містити <code> чи <pre>, повідомлення до 4096 символів.
+ * Bot texts and buttons. Markup: Telegram HTML (https://core.telegram.org/bots/api#html-style).
+ * Telegram limits: <b> cannot contain <code> or <pre>, a message is at most 4096 characters.
  */
 
 export type BotGrade = 'FORGOT' | 'HARD' | 'GOOD';
@@ -14,11 +14,11 @@ const GRADE_ORDER: BotGrade[] = ['FORGOT', 'HARD', 'GOOD'];
 const GRADE_CODES: Record<BotGrade, string> = { FORGOT: 'f', HARD: 'h', GOOD: 'g' };
 const GRADE_BY_CODE: Record<string, BotGrade> = { f: 'FORGOT', h: 'HARD', g: 'GOOD' };
 
-/** запас до ліміту 4096: рахуємо разом з тегами, тож із запасом */
+/** headroom under the 4096 limit: counted with tags, hence the margin */
 const MESSAGE_ROOM = 3800;
 const QUESTION_ROOM = 1200;
 
-// ---------- кнопки ----------
+// ---------- buttons ----------
 
 export interface RevealAction {
   kind: 'reveal';
@@ -51,14 +51,14 @@ export function parseCallback(data: string): CallbackAction | null {
   return null;
 }
 
-/** "/today@MyBot arg" -> "/today"; не команда -> null */
+/** "/today@MyBot arg" -> "/today"; not a command -> null */
 export function parseCommand(text: string | undefined): string | null {
   const first = text?.trim().split(/\s+/)[0] ?? '';
   if (!first.startsWith('/')) return null;
   return (first.split('@')[0] ?? '').toLowerCase();
 }
 
-// ---------- markdown карток -> Telegram HTML ----------
+// ---------- card markdown -> Telegram HTML ----------
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -68,7 +68,7 @@ const FENCE = /```([\w+#-]*)[^\n]*\n([\s\S]*?)```/g;
 const CODE_SPAN = /`([^`\n]+)`/g;
 const SLOT = /\u0000(\d+)\u0000/g;
 
-/** `код`, **жирний** і [посилання](https://...) в одному рядку. Жирний і посилання не можуть містити код. */
+/** `code`, **bold** and [link](https://...) within one line. Bold and links cannot contain code. */
 function inlineHtml(text: string): string {
   const codes: string[] = [];
   const slotted = text.replace(CODE_SPAN, (_match: string, code: string) => {
@@ -97,7 +97,7 @@ function textBlockHtml(text: string): string {
     .join('\n');
 }
 
-/** Блоки коду, `код`, **жирний**, посилання, заголовки і списки. Решта лишається звичайним текстом. */
+/** Code blocks, `code`, **bold**, links, headings and lists. Everything else stays plain text. */
 export function markdownToHtml(markdown: string): string {
   const parts: string[] = [];
   let last = 0;
@@ -112,7 +112,7 @@ export function markdownToHtml(markdown: string): string {
   return parts.join('').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** Завелике -> обрізаний простий текст (без розмітки, щоб не розірвати тег чи блок коду). */
+/** Too long -> truncated plain text (no markup, so a tag or code block is never cut in half). */
 function fitHtml(markdown: string, room: number): string {
   const html = markdownToHtml(markdown);
   if (html.length <= room) return html;
@@ -124,7 +124,7 @@ function fitHtml(markdown: string, room: number): string {
   return `${escapeHtml(slice.trimEnd())}…${note}`;
 }
 
-// ---------- повідомлення ----------
+// ---------- messages ----------
 
 function header(card: CardView): string {
   return `<i>${escapeHtml(card.topicName)}</i>`;
@@ -134,7 +134,7 @@ export function questionText(card: CardView): string {
   return `${header(card)}\n\n${fitHtml(card.question, QUESTION_ROOM)}`;
 }
 
-/** Питання + відповідь; footer: результат оцінки. */
+/** Question + answer; footer: the grading result. */
 export function answerText(card: CardView, footer = ''): string {
   const head = `${questionText(card)}\n\n<b>Відповідь</b>\n`;
   const tail = footer ? `\n\n${footer}` : '';
@@ -166,7 +166,7 @@ export function cardsWord(count: number): string {
   return `${count} ${plural(count, 'картка', 'картки', 'карток')}`;
 }
 
-/** Після оцінки: card уже з новим розкладом. */
+/** After grading: card already carries the new schedule. */
 export function gradedFooter(grade: BotGrade, card: CardView): string {
   const next = card.dueAt ? `, наступний раз ${formatDay(card.dueAt)} (через ${daysWord(card.interval)})` : '';
   return `${GRADE_MARKS[grade]} <b>${GRADE_LABELS[grade]}</b>${next}`;

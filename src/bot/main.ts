@@ -1,7 +1,7 @@
 /**
- * Telegram-бот карток: окремий процес поруч з апкою, та сама БД і той самий розклад.
- * Запуск: npm run bot. tsx з умовою react-server, бо модулі апки імпортують 'server-only'.
- * Час (TELEGRAM_SEND_AT і "сьогодні") локальний, як в апці; на сервері задай TZ=Europe/Kyiv.
+ * Telegram card bot: a separate process next to the app, same DB and same schedule.
+ * Run: npm run bot. tsx with the react-server condition, because app modules import 'server-only'.
+ * Time (TELEGRAM_SEND_AT and "today") is local, as in the app; on a server set TZ=Europe/Kyiv.
  */
 import 'dotenv/config';
 import { db } from '@/lib/db';
@@ -15,13 +15,13 @@ const MAX_BACKOFF_MS = 30_000;
 async function main(): Promise<void> {
   const config = loadConfig(process.env);
   const tg = new TelegramClient(config.token, config.apiUrl);
-  const me = await tg.getMe(); // невірний токен падає тут, одразу
+  const me = await tg.getMe(); // a bad token fails here, right away
   await tg.deleteWebhook();
   await tg.setMyCommands([{ command: 'today', description: 'Картки на сьогодні' }]);
 
   const bot = new CardBot(tg, config);
   const stop = new AbortController();
-  // on, а не once: Ctrl+C може прийти двічі (від термінала і від tsx), друга копія не має вбити процес посеред запису
+  // on, not once: Ctrl+C can arrive twice (from the terminal and from tsx), the second must not kill the process mid-write
   process.on('SIGINT', () => stop.abort());
   process.on('SIGTERM', () => stop.abort());
 
@@ -38,14 +38,14 @@ async function main(): Promise<void> {
       await bot.tick(new Date()).catch((error: unknown) => console.error('daily push failed:', error));
       const updates = await tg.getUpdates(offset, POLL_TIMEOUT_SECONDS, stop.signal);
       for (const update of updates) {
-        // offset рухаємо, навіть якщо обробка впала: один зламаний апдейт не блокує решту
+        // the offset advances even if handling failed: one broken update must not block the rest
         offset = update.update_id + 1;
         await bot.handleUpdate(update, new Date()).catch((error: unknown) => console.error('update failed:', error));
       }
       failures = 0;
     } catch (error) {
       if (stop.signal.aborted) break;
-      if (error instanceof TelegramError && error.code === 401) throw error; // токен відкликали
+      if (error instanceof TelegramError && error.code === 401) throw error; // token revoked
       failures += 1;
       const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** failures);
       console.error(`polling failed, retry in ${delay / 1000}s:`, error);

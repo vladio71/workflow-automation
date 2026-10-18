@@ -1,7 +1,7 @@
--- Справа з кінцевою датою: після until планер її більше не пропонує (підготовка до інтерв'ю до 19.10).
+-- Task with an end date: after until the planner stops suggesting it (interview prep until 19.10).
 ALTER TABLE "Task" ADD COLUMN "until" DATE;
 
--- Вечірня передача дня: "завтра починаю з ...". day = день, на який цей перший крок.
+-- Evening handoff: "tomorrow I start with ...". day = the day this first step belongs to.
 CREATE TABLE "Handoff" (
     "day" DATE NOT NULL,
     "firstStep" TEXT NOT NULL,

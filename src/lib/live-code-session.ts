@@ -1,18 +1,18 @@
 /**
- * Таймер live code для нагадування "перевір, де ти". Живе в браузері (localStorage), одна сесія на всі вкладки.
- * Ручну сесію стартуєш з попапа правил; сесія рівня стартує сама, коли відкриваєш рівень, з його часу старту.
- * Тільки для клієнта: без window ці функції нічого не роблять.
+ * Live code timer for the "check where you are" reminder. Lives in the browser (localStorage), one session for all tabs.
+ * A manual session is started from the rules popup; a level session starts itself when a level is opened, from its start time.
+ * Client only: without window these functions do nothing.
  */
 
 export interface LiveCodeSession {
-  /** сторінка, де йде робота (рівень), або '' для ручного старту */
+  /** page where the work happens (a level), or '' for a manual start */
   href: string;
   label: string;
   startedAt: number;
   remindAt: number;
-  /** системне сповіщення для цього remindAt уже показане: не дублюємо після перезавантаження чи в іншій вкладці */
+  /** the system notification for this remindAt was already shown: not repeated after a reload or in another tab */
   notified: boolean;
-  /** галочки чекліста "звір себе" */
+  /** ticks of the "check yourself" checklist */
   checks: boolean[];
 }
 
@@ -21,14 +21,14 @@ export const MIN_REMIND_MINUTES = 5;
 export const MAX_REMIND_MINUTES = 90;
 export const SNOOZE_MINUTES = 10;
 export const MINUTE_MS = 60_000;
-/** забута сесія: через 3 год таймер уже нічого не означає */
+/** forgotten session: after 3 h the timer means nothing any more */
 const STALE_AFTER_MS = 3 * 60 * MINUTE_MS;
 
 const SESSION_KEY = 'live-code-session';
 const MINUTES_KEY = 'live-code-remind-minutes';
-/** зміна сесії в цій вкладці (подія storage приходить тільки в інші вкладки) */
+/** session change in this tab (the storage event only reaches other tabs) */
 export const SESSION_EVENT = 'live-code-session';
-/** відкрити попап правил (кнопка на сторінці рівня) */
+/** open the rules popup (button on the level page) */
 export const OPEN_RULES_EVENT = 'live-code-rules';
 
 function isSession(value: unknown): value is LiveCodeSession {
@@ -59,7 +59,7 @@ export function writeSession(session: LiveCodeSession | null): void {
     if (session) window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     else window.localStorage.removeItem(SESSION_KEY);
   } catch {
-    // приватне вікно або заблоковане сховище: таймер просто не переживе перезавантаження
+    // private window or blocked storage: the timer just will not survive a reload
   }
   window.dispatchEvent(new CustomEvent(SESSION_EVENT, { detail: session }));
 }
@@ -82,7 +82,7 @@ export function writeRemindMinutes(minutes: number): void {
   try {
     window.localStorage.setItem(MINUTES_KEY, String(clampRemindMinutes(minutes)));
   } catch {
-    // не збереглось: наступного разу знову 25
+    // not saved: next time it is 25 again
   }
 }
 
@@ -100,9 +100,9 @@ export function startManualSession(now: number = Date.now()): LiveCodeSession {
 }
 
 /**
- * Відкрив рівень, який ще не пройдено: таймер іде від старту рівня (той самий, що на сторінці рівня).
- * Та сама сесія вже йде, лишаємо як є. Якщо рівень відкрили знову, коли час нагадування вже минув,
- * нагадаємо через 10 хв, а не одразу з порога.
+ * An unfinished level was opened: the timer runs from the level start (the same one as on the level page).
+ * If that session is already running, it is left as is. If the level is reopened after the reminder time has passed,
+ * the reminder fires in 10 min rather than immediately.
  */
 export function adoptLevelSession(level: { href: string; label: string; startedAt: number }, now: number = Date.now()): void {
   if (now - level.startedAt > STALE_AFTER_MS) return;
@@ -119,7 +119,7 @@ export function adoptLevelSession(level: { href: string; label: string; startedA
   });
 }
 
-/** Зупинити таймер. З href: тільки якщо зараз іде саме ця сесія (рівень пройдено або відкрив еталон). */
+/** Stop the timer. With href: only if exactly this session is running (level passed or reference opened). */
 export function stopSession(href?: string): void {
   if (href !== undefined) {
     const current = readSession();

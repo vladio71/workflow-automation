@@ -1,4 +1,4 @@
--- Telegram-бот: доставка карток, одна на картку за день
+-- Telegram bot: card delivery, one delivery per card per day
 CREATE TYPE "TelegramDeliveryStatus" AS ENUM ('SENT', 'REVEALED', 'GRADED', 'STALE');
 
 CREATE TABLE "TelegramDelivery" (

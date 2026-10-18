@@ -5,27 +5,27 @@ import { db } from './db';
 import { levelProgress, type LevelProgress } from './level-schedule';
 
 /**
- * Рівні = вправи з локального клону live-code (LEVELS_DIR у .env).
- * Вправа = папка exercises/<група>/<назва> з README.md, index.ts(x) (заготовка), reference.ts(x) і index.test.ts(x).
- * Самі вправи в БД не копіюємо: читаємо з диска щоразу (це десятки маленьких файлів), у БД тільки спроби.
+ * Levels = exercises from the local live-code clone (LEVELS_DIR in .env).
+ * Exercise = folder exercises/<group>/<name> with README.md, index.ts(x) (stub), reference.ts(x) and index.test.ts(x).
+ * Exercises are not copied into the DB: they are read from disk every time (dozens of small files), the DB holds only attempts.
  */
 export interface Level {
-  /** папка відносно exercises/: "04-async/07-dataloader". Ключ для спроб і для URL */
+  /** folder relative to exercises/: "04-async/07-dataloader". Key for attempts and for the URL */
   key: string;
   /** "04-async" */
   group: string;
-  /** заголовок розділу з README репо ("Async і Node") або назва папки */
+  /** section heading from the repo README ("Async and Node") or the folder name */
   groupTitle: string;
   title: string;
-  /** час з README ("~30 хв") */
+  /** time from the README ("~30 min") */
   minutes: number;
   difficulty: string;
   pattern: string;
-  /** порядок як у репо (за назвами папок) */
+  /** order as in the repo (by folder names) */
   position: number;
-  /** абсолютний шлях до папки вправи */
+  /** absolute path to the exercise folder */
   dir: string;
-  /** файл, який пишеш ти: index.ts або index.tsx */
+  /** the file the user writes: index.ts or index.tsx */
   stubFile: string;
   referenceFile: string;
 }
@@ -33,7 +33,7 @@ export interface Level {
 export interface LevelsScan {
   dir: string;
   levels: Level[];
-  /** чому рівнів немає (LEVELS_DIR не заданий, папки немає тощо); null = все добре */
+  /** why there are no levels (LEVELS_DIR unset, folder missing, etc.); null = all good */
   error: string | null;
 }
 
@@ -67,13 +67,13 @@ async function firstExisting(dir: string, names: string[]): Promise<string | nul
       await fs.access(path.join(dir, name));
       return name;
     } catch {
-      // немає такого файлу, пробуємо наступний
+      // no such file, try the next one
     }
   }
   return null;
 }
 
-/** "### Async і Node" над списком з посиланнями на exercises/04-async/... -> 04-async = "Async і Node" */
+/** "### Async and Node" above a list of links to exercises/04-async/... -> 04-async = "Async and Node" */
 function parseGroupTitles(rootReadme: string): Map<string, string> {
   const titles = new Map<string, string>();
   let heading = '';
@@ -89,7 +89,7 @@ function parseGroupTitles(rootReadme: string): Map<string, string> {
   return titles;
 }
 
-/** "# Title" і рядок "**~30 хв · medium · патерн: ...**" з README вправи */
+/** "# Title" and the "**~30 min · medium · pattern: ...**" line from the exercise README */
 function parseReadmeMeta(readme: string): Pick<Level, 'title' | 'minutes' | 'difficulty' | 'pattern'> {
   const lines = readme.split('\n');
   const title = lines.find((line) => line.startsWith('# '))?.slice(2).trim() ?? '';
@@ -134,7 +134,7 @@ export async function scanLevels(): Promise<LevelsScan> {
         firstExisting(levelDir, ['reference.ts', 'reference.tsx']),
         firstExisting(levelDir, ['index.test.ts', 'index.test.tsx']),
       ]);
-      // без тестів або еталону рівень нічого не перевіряє: пропускаємо
+      // without tests or a reference the level checks nothing: skip it
       if (readme === null || !stubFile || !referenceFile || !testFile) continue;
       const meta = parseReadmeMeta(readme);
       levels.push({
@@ -163,7 +163,7 @@ export async function getLevelDetails(level: Level): Promise<LevelDetails> {
   return { readme: readme ?? '', stub: stub ?? '', reference: reference ?? '' };
 }
 
-/** Усі рівні з прогресом (рамка, термін повтору) з таблиці спроб. */
+/** All levels with progress (frame, repeat due date) from the attempts table. */
 export async function getLevelsWithProgress(now: Date = new Date()): Promise<{ scan: LevelsScan; levels: LevelWithProgress[] }> {
   const scan = await scanLevels();
   if (scan.levels.length === 0) return { scan, levels: [] };
@@ -186,7 +186,7 @@ export async function findLevel(key: string): Promise<Level | null> {
   return scan.levels.find((level) => level.key === key) ?? null;
 }
 
-/** Скільки рівнів чекає на повтор. Тільки з БД, без читання диска: для лічильника в меню на кожній сторінці. */
+/** How many levels are due for a repeat. DB only, no disk reads: for the menu counter on every page. */
 export async function getDueLevelCount(now: Date = new Date()): Promise<number> {
   if (!levelsDir()) return 0;
   const attempts = await db.levelAttempt.findMany({ select: { levelKey: true, passed: true, gaveUp: true, createdAt: true } });
@@ -210,8 +210,8 @@ export interface ReadmeHint {
 }
 
 /**
- * README вправи має підказку в <details> (сирий HTML). Markdown-рендер HTML не показує, і текст підказки
- * вилазив би прямо в умову. Тому виймаємо <details> окремо і малюємо їх згорнутими.
+ * The exercise README keeps hints in <details> (raw HTML). The Markdown renderer drops HTML, so the hint text
+ * would leak straight into the task statement. Hence <details> are extracted and rendered collapsed.
  */
 export function splitReadmeHints(readme: string): { body: string; hints: ReadmeHint[] } {
   const hints: ReadmeHint[] = [];

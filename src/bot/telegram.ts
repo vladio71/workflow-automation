@@ -1,6 +1,6 @@
 /**
- * Мінімальний клієнт Telegram Bot API: тільки методи, потрібні боту карток.
- * Базовий URL підмінюється (TELEGRAM_API_URL), щоб ганяти бота проти фейкового сервера.
+ * Minimal Telegram Bot API client: only the methods the card bot needs.
+ * The base URL can be overridden (TELEGRAM_API_URL) to run the bot against a fake server.
  */
 
 export interface TgUser {
@@ -57,7 +57,7 @@ export interface EditMessageInput {
   messageId: number;
   /** Telegram HTML */
   text: string;
-  /** без клавіатури кнопки з повідомлення зникають */
+  /** without a keyboard the message loses its buttons */
   keyboard?: InlineKeyboard;
 }
 
@@ -74,7 +74,7 @@ interface ApiResponse<T> {
   parameters?: { retry_after?: number };
 }
 
-/** Telegram відповів помилкою, тобто запит точно не виконано. Обрив мережі сюди не потрапляє: там невідомо, дійшло чи ні. */
+/** Telegram answered with an error, so the request was definitely not executed. A network failure is not this: there it is unknown whether it arrived. */
 export class TelegramError extends Error {
   readonly method: string;
   readonly code: number;
@@ -117,7 +117,7 @@ export class TelegramClient {
       const body = (await response.json()) as ApiResponse<T>;
       if (body.ok && body.result !== undefined) return body.result;
       const retryAfter = body.parameters?.retry_after;
-      // 429: Telegram сам каже, скільки секунд почекати
+      // 429: Telegram itself says how many seconds to wait
       if (body.error_code === 429 && retryAfter !== undefined && attempt < MAX_RATE_LIMIT_RETRIES) {
         await sleep(retryAfter * 1000, signal);
         continue;
@@ -130,7 +130,7 @@ export class TelegramClient {
     return this.call<TgUser>('getMe', {});
   }
 
-  /** getUpdates не працює, поки в бота є webhook */
+  /** getUpdates does not work while the bot has a webhook */
   deleteWebhook(): Promise<boolean> {
     return this.call<boolean>('deleteWebhook', {});
   }
@@ -139,7 +139,7 @@ export class TelegramClient {
     return this.call<boolean>('setMyCommands', { commands });
   }
 
-  /** Long polling: Telegram тримає запит до timeoutSeconds, поки не з'явиться апдейт. */
+  /** Long polling: Telegram holds the request up to timeoutSeconds until an update appears. */
   getUpdates(offset: number | undefined, timeoutSeconds: number, signal: AbortSignal): Promise<TgUpdate[]> {
     return this.call<TgUpdate[]>(
       'getUpdates',
@@ -169,18 +169,18 @@ export class TelegramClient {
         reply_markup: input.keyboard ?? { inline_keyboard: [] },
       });
     } catch (error) {
-      // повторне натискання тієї ж кнопки: текст уже такий, це не помилка
+      // the same button pressed again: the text is already like that, not an error
       if (error instanceof TelegramError && error.message.includes('message is not modified')) return;
       throw error;
     }
   }
 
-  /** Прибирає годинник на кнопці; text показується коротким сповіщенням. */
+  /** Clears the spinner on the button; text is shown as a short toast. */
   async answerCallback(callbackQueryId: string, text?: string): Promise<void> {
     try {
       await this.call<boolean>('answerCallbackQuery', { callback_query_id: callbackQueryId, text });
     } catch (error) {
-      // натискання старше ~15 хв: відповісти вже не можна, але саму дію ми виконали
+      // a press older than ~15 min can no longer be answered, but the action itself was done
       if (error instanceof TelegramError && error.code === 400) return;
       throw error;
     }

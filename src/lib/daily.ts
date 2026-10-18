@@ -3,10 +3,10 @@ import { db } from './db';
 import { dayKey, getTodayLog } from './queries';
 
 /**
- * Daily на Today: список пунктів, який правиш сам (як to-do в Notion).
- * Пункти одні на всі дні, галочки окремі на кожен день.
- * Три старі пункти (cards, recall, out loud) мають auto: їхня галочка живе в DailyLog,
- * бо її ставить сама апка (черга карток порожня, recall збережено) і читає план дня.
+ * Daily on Today: a user-editable list of items (like a Notion to-do).
+ * Items are shared across days, ticks are per day.
+ * The three legacy items (cards, recall, out loud) have auto: their tick lives in DailyLog,
+ * because the app sets it itself (card queue empty, recall saved) and the day plan reads it.
  */
 export type DailyAutoField = 'cardsDone' | 'recallDone' | 'outLoud';
 
@@ -17,7 +17,7 @@ export interface DailyItemView {
   id: number;
   title: string;
   checked: boolean;
-  /** галочку цього пункту апка ставить і сама */
+  /** the app can tick this item on its own */
   auto: boolean;
 }
 
@@ -60,7 +60,7 @@ export async function setDailyItemChecked(id: number, checked: boolean, now: Dat
   }
 }
 
-/** Новий пункт одразу після afterId (null = у кінець). Повертає id, щоб клієнт поставив у нього курсор. */
+/** New item right after afterId (null = at the end). Returns the id so the client can focus it. */
 export async function createDailyItem(afterId: number | null, title: string): Promise<number> {
   const items = await db.dailyItem.findMany({ orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { id: true } });
   const afterIndex = afterId === null ? -1 : items.findIndex((item) => item.id === afterId);
@@ -80,7 +80,7 @@ export async function deleteDailyItem(id: number): Promise<void> {
   await db.dailyItem.deleteMany({ where: { id } });
 }
 
-/** Новий порядок цілком: id, яких у списку вже нема, пропускаємо, а не згадані лишаються в кінці. */
+/** Full new order: ids no longer in the list are skipped, unmentioned ones stay at the end. */
 export async function reorderDailyItems(ids: number[]): Promise<void> {
   const items = await db.dailyItem.findMany({ orderBy: [{ position: 'asc' }, { id: 'asc' }], select: { id: true } });
   const known = new Set(items.map((item) => item.id));

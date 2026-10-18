@@ -2,15 +2,15 @@ import 'server-only';
 import { timingSafeEqual } from 'node:crypto';
 
 /**
- * Ендпоінти для скриптів на комп'ютері (/api/state, /api/handoff, /api/plan/generate): в апці нема
- * авторизації, а апка в інтернеті, тому ці ендпоінти пускають тільки з токеном.
- * Токен: AUTOMATION_TOKEN в env (Vercel і .env), той самий у desk.json і блокері.
- * Заголовок запиту: x-automation-token.
+ * Endpoints for scripts on the desktop (/api/state, /api/handoff, /api/plan/generate): the app has no
+ * auth but is public on the internet, so these endpoints only accept requests with a token.
+ * Token: AUTOMATION_TOKEN in env (Vercel and .env), the same one in desk.json and the blocker.
+ * Request header: x-automation-token.
  */
 
 export const AUTOMATION_HEADER = 'x-automation-token';
 
-/** null = пускаємо; інакше готова відповідь з помилкою. */
+/** null = allowed; otherwise a ready error response. */
 export function rejectUnlessAutomation(request: Request): Response | null {
   const expected = process.env.AUTOMATION_TOKEN ?? '';
   if (!expected) return Response.json({ error: 'AUTOMATION_TOKEN не заданий в env' }, { status: 503 });

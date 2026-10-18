@@ -16,7 +16,7 @@ enum Track {
   OTHER
 }
 
-/// CONCEPT = питання/відповідь (картки на сторінці Cards), TASK = задача руками (Recall і план)
+/// CONCEPT = question/answer (cards on the Cards page), TASK = hands-on task (Recall and plan)
 enum CardKind {
   CONCEPT
   TASK
@@ -33,7 +33,7 @@ enum ActivityKind {
   CARDS
 }
 
-/// Оцінка картки. PRACTICE = переглянув у вільному режимі (All cards), розклад не міняється.
+/// Card grade. PRACTICE = viewed in free mode (All cards), schedule unchanged.
 enum CardGrade {
   FORGOT
   HARD
@@ -59,14 +59,14 @@ enum MessageRole {
   MODEL
 }
 
-/// Тема = рядок retrospective timetable. notes = база знань по темі (markdown).
+/// Topic = a row of the retrospective timetable. notes = the topic's knowledge base (markdown).
 model Topic {
   id           Int         @id @default(autoincrement())
   name         String
   track        Track
   confidence   Confidence  @default(NOT_STARTED)
   lastRecallAt DateTime?
-  /// поточний крок інтервалу в днях (2 -> 7 -> 21 -> 42 -> 84)
+  /// current interval step in days (2 -> 7 -> 21 -> 42 -> 84)
   intervalDays Int         @default(0)
   nextReviewAt DateTime?
   drill        String      @default("")
@@ -74,18 +74,16 @@ model Topic {
   notes        String      @default("")
   cycleId      Int?
   cycle        Cycle?      @relation(fields: [cycleId], references: [id], onDelete: SetNull)
-  /// тема, яка синхронізується з репо: learn/topic.md (sourcePath "") або learn/<sourcePath>/topic.md
+  /// topic synced from a repo: learn/topic.md (sourcePath "") or learn/<sourcePath>/topic.md
   sourceId     Int?
   sourcePath   String      @default("")
   syncSource   Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   questions    Question[]
   recalls      RecallLog[]
   activities   ActivityLog[]
-  /// тема як категорія карток: коли нею востаннє користувались (призначили картці, повторювали її картки).
-  /// За цим полем сортується список категорій у виборі.
+  /// topic as a card category: when it was last used (assigned to a card, its cards reviewed); the category picker sorts by it
   cardsUsedAt  DateTime?
-  /// дедлайн категорії (підготовка до дати, наприклад інтерв'ю): до нього картки повторюються частіше
-  /// і йдуть першими в черзі; після нього категорія звичайна. Дата без часу, день дедлайну включно.
+  /// category deadline (e.g. an interview date): until it the cards repeat more often and go first in the queue, after it the category is ordinary; date only, deadline day inclusive
   deadline     DateTime?   @db.Date
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -94,29 +92,29 @@ model Topic {
   @@unique([sourceId, sourcePath])
 }
 
-/// Питання, а не конспекти: своє питання + відповідь з пам'яті + еталон.
+/// Questions, not notes: own question + answer from memory + reference answer.
 model Question {
   id        Int         @id @default(autoincrement())
   kind      CardKind    @default(CONCEPT)
   question  String
   myAnswer  String      @default("")
   reference String      @default("")
-  /// TASK: файл-еталон у репо і команда перевірки
+  /// TASK: reference file in the repo and the check command
   ref       String      @default("")
   check     String      @default("")
-  /// розклад картки (тільки CONCEPT): null = нова, ще не бачив
+  /// card schedule (CONCEPT only): null = new, never seen
   cardDueAt      DateTime?
   cardInterval   Int         @default(0)
   cardLapses     Int         @default(0)
   cardReviewedAt DateTime?
   cardReviews    CardReview[]
-  /// показ картки в Telegram-боті, один на день
+  /// card deliveries via the Telegram bot, one per day
   telegramDeliveries TelegramDelivery[]
-  /// для карток з репо: стабільний ключ, щоб Sync оновлював, а не дублював
+  /// repo cards: stable key so Sync updates instead of duplicating
   sourceKey String?     @unique
   sourceId  Int?
   syncSource Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  /// картку з репо змінили в апці (All cards → Edit): Sync більше не перезаписує її текст
+  /// repo card edited in the app (All cards -> Edit): Sync no longer overwrites its text
   editedInApp Boolean   @default(false)
   topicId   Int?
   topic     Topic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
@@ -124,21 +122,21 @@ model Question {
   createdAt DateTime    @default(now())
 }
 
-/// Картка з репо, яку видалили в апці. Sync бачить її ключ тут і не створює картку знову.
+/// Repo card deleted in the app. Sync sees its key here and does not recreate the card.
 model DeletedCard {
   id        Int      @id @default(autoincrement())
   sourceId  Int
   source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  /// той самий ключ, що був у Question.sourceKey
+  /// the same key the card had in Question.sourceKey
   sourceKey String
-  /// текст питання на момент видалення: щоб у базі було видно, що саме прибрали
+  /// question text at deletion time, so the DB shows what was removed
   question  String
   createdAt DateTime @default(now())
 
   @@unique([sourceId, sourceKey])
 }
 
-/// Одне відтворення з пам'яті: що написав, що сказав AI, який колір поставив.
+/// One recall from memory: what was written, what the AI said, which colour was set.
 model RecallLog {
   id              Int        @id @default(autoincrement())
   topicId         Int
@@ -151,7 +149,7 @@ model RecallLog {
   createdAt       DateTime   @default(now())
 }
 
-/// Цикл без жорстких дат: порядок (number), статус, ціль, ретро.
+/// Cycle without fixed dates: order (number), status, goal, retro.
 model Cycle {
   id        Int         @id @default(autoincrement())
   number    Int         @unique
@@ -163,8 +161,7 @@ model Cycle {
   createdAt DateTime    @default(now())
 }
 
-/// Лог часу: скільки хвилин і на що. З нього рахуються стрік і аналітика.
-/// Recall і mock пишуть сюди самі, решту додаєш руками.
+/// Time log: minutes spent and on what; streak and analytics come from it. Recall and mock write here automatically, the rest is added by hand.
 model ActivityLog {
   id        Int          @id @default(autoincrement())
   day       DateTime     @db.Date
@@ -179,7 +176,7 @@ model ActivityLog {
   @@index([day])
 }
 
-/// Щоденний чекліст. Один рядок на день.
+/// Daily checklist. One row per day.
 model DailyLog {
   day        DateTime @id @db.Date
   cardsDone  Boolean  @default(false)
@@ -188,12 +185,12 @@ model DailyLog {
   note       String   @default("")
 }
 
-/// Пункт щоденного списку на Today. Список один на всі дні, галочки окремі на кожен день (DailyCheck).
+/// Item of the daily list on Today. One list for all days, ticks are per day (DailyCheck).
 model DailyItem {
   id        Int          @id @default(autoincrement())
   title     String
   position  Int
-  /// '' = звичайний пункт. 'cardsDone' | 'recallDone' | 'outLoud' = галочка живе в DailyLog і ставиться сама
+  /// '' = ordinary item. 'cardsDone' | 'recallDone' | 'outLoud' = the tick lives in DailyLog and sets itself
   auto      String       @default("")
   checks    DailyCheck[]
   createdAt DateTime     @default(now())
@@ -201,7 +198,7 @@ model DailyItem {
   @@index([position])
 }
 
-/// Галочка звичайного пункту Daily за один день.
+/// Tick of an ordinary Daily item for one day.
 model DailyCheck {
   itemId Int
   item   DailyItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -234,29 +231,29 @@ model MockMessage {
   createdAt DateTime    @default(now())
 }
 
-/// План на день від AI. items = JSON масив PlanItem (src/lib/planner.ts).
+/// AI day plan. items = JSON array of PlanItem (src/lib/planner.ts).
 model DailyPlan {
   day           DateTime  @id @db.Date
   items         Json
-  /// коротке пояснення, чому саме такий план
+  /// short explanation of why this plan
   summary       String    @default("")
-  /// вечірній огляд: що зроблено, що перенести
+  /// evening review: what was done, what to carry over
   review        String    @default("")
-  /// null = чернетка: пункти можна прибирати, додавати, переставляти. Після "Start the day" план стає картою
+  /// null = draft: items can be removed, added, reordered. After "Start the day" the plan becomes the map
   startedAt     DateTime?
-  /// фокус дня (src/lib/day-focus.ts): '' без фокусу, 'levels' рівні live-code, 'plan:<Source.id>' навчальний план
+  /// day focus (src/lib/day-focus.ts): '' none, 'levels' live-code levels, 'plan:<Source.id>' study plan
   focus         String    @default("")
-  /// побажання на день вільним текстом, іде в промпт
+  /// free-text wish for the day, goes into the prompt
   wish          String    @default("")
-  /// бюджет хвилин, з яким складали план
+  /// minute budget the plan was built with
   budget        Int       @default(0)
-  /// чому Gemini не склав план (ланцюжок спроб по моделях); '' = склав або ключа нема
+  /// why Gemini failed to build the plan (chain of attempts per model); '' = built or no API key
   aiError       String    @default("")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
 
-/// Колонка беклогу: BACKLOG не йде в план дня, поки не витягнеш у TODO
+/// Backlog column: BACKLOG is not planned into the day until pulled into TODO
 enum TaskStatus {
   BACKLOG
   TODO
@@ -264,26 +261,26 @@ enum TaskStatus {
 }
 
 enum TaskRepeat {
-  /// разова: пропонується в план, поки не зробиш
+  /// one-off: suggested for the plan until done
   ONCE
   DAILY
-  /// пн-пт
+  /// Mon-Fri
   WEEKDAYS
 }
 
-/// Справа поза навчанням (розіслати резюме, задеплоїти апку). У плані дня це пункт TASK.
+/// Task outside of study (send out resumes, deploy the app). In the day plan it is a TASK item.
 model Task {
   id        Int        @id @default(autoincrement())
   title     String
   minutes   Int        @default(30)
   repeat    TaskRepeat @default(ONCE)
-  /// справа-сесія: скільки разів за день (розіслати 10 резюме). 0 = звичайна справа з галочкою
+  /// session task: how many times per day (send 10 resumes). 0 = ordinary task with a tick
   target    Int        @default(0)
-  /// разова справа: коли зроблено. Повторювані відмічаються тільки в плані дня
+  /// one-off task: when done. Repeating tasks are ticked only in the day plan
   doneAt    DateTime?
-  /// останній день, коли справа ще в плані (підготовка до інтерв'ю до 19.10). null = без кінця
+  /// last day the task is still planned (interview prep until 19.10). null = no end
   until     DateTime?  @db.Date
-  /// беклог як у Jira: BACKLOG | TODO | IN_PROGRESS; зроблено = doneAt
+  /// Jira-style backlog: BACKLOG | TODO | IN_PROGRESS; done = doneAt
   status    TaskStatus @default(BACKLOG)
   /// 1 high … 4 low
   priority  Int        @default(3)
@@ -293,28 +290,28 @@ model Task {
   ticks     TaskTick[]
 }
 
-/// Вечірня передача дня: "завтра починаю з ...". day = день, на який цей перший крок (один рядок на день).
+/// Evening handoff: "tomorrow I start with ...". day = the day this first step belongs to (one row per day).
 model Handoff {
   day       DateTime @id @db.Date
   firstStep String
   createdAt DateTime @default(now())
 }
 
-/// Один крок справи-сесії: відправив резюме, написав рекрутеру. З них росте башта дня.
+/// One step of a session task: sent a resume, messaged a recruiter. The day's tower grows from these.
 model TaskTick {
   id        Int      @id @default(autoincrement())
   taskId    Int
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  /// день, як у DailyPlan: башта починається заново щодня
+  /// day as in DailyPlan: the tower restarts every day
   day       DateTime @db.Date
-  /// компанія або посилання, необов'язково
+  /// company or link, optional
   note      String   @default("")
   createdAt DateTime @default(now())
 
   @@index([taskId, day])
 }
 
-/// Репо, з якого апка підтягує картки: learn/topic.md + learn/questions.md
+/// Repo the app pulls cards from: learn/topic.md + learn/questions.md
 model Source {
   id           Int        @id @default(autoincrement())
   /// owner/name
@@ -323,9 +320,9 @@ model Source {
   lastSyncedAt DateTime?
   lastError    String     @default("")
   lastSummary  String     @default("")
-  /// SHA коміту останнього успішного sync: не змінився, тоді файли не качаємо
+  /// commit SHA of the last successful sync: if unchanged, files are not downloaded
   lastSha      String     @default("")
-  /// learn/plan.md: назва плану і скільки хвилин на день він бере (0 = плану немає)
+  /// learn/plan.md: plan name and how many minutes per day it takes (0 = no plan)
   planName         String     @default("")
   planDailyMinutes Int        @default(0)
   topics       Topic[]
@@ -344,22 +341,22 @@ enum PlanStepKind {
   EXAM
 }
 
-/// Крок навчального плану з learn/plan.md. Порядок і текст приходять з репо, прогрес (doneAt) живе тут.
+/// Study plan step from learn/plan.md. Order and text come from the repo, progress (doneAt) lives here.
 model PlanStep {
   id        Int          @id @default(autoincrement())
   sourceId  Int
   source    Source       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  /// Id: з plan.md; по ньому Sync знаходить крок, тож прогрес не губиться, коли кроки переставляють
+  /// Id: from plan.md; Sync matches steps by it, so progress survives reordering
   key       String
   position  Int
-  /// заголовок "## ..." над кроком, наприклад "Тиждень 1"
+  /// the "## ..." heading above the step, e.g. "Week 1"
   group     String       @default("")
   title     String
   minutes   Int
   kind      PlanStepKind @default(READ)
-  /// URL або шлях у репо
+  /// URL or path in the repo
   link      String       @default("")
-  /// папка теми в learn/: ATTEMPT = recall цієї теми
+  /// topic folder under learn/: ATTEMPT = recall of this topic
   topicPath String       @default("")
   doneAt    DateTime?
 
@@ -367,15 +364,15 @@ model PlanStep {
   @@index([sourceId, position])
 }
 
-/// Кожен показ картки: для розкладу, ліміту нових на день і часу в Stats.
+/// Every card review: for scheduling, the daily new-card limit and time in Stats.
 model CardReview {
   id         Int       @id @default(autoincrement())
   questionId Int
   question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
   grade      CardGrade
-  /// картка була нова (перший показ у режимі Review)
+  /// the card was new (first showing in Review mode)
   wasNew     Boolean   @default(false)
-  /// скільки секунд пішло на картку (обрізано до 3 хв, щоб перерва на чай не рахувалась)
+  /// seconds spent on the card (capped at 3 min so a tea break does not count)
   seconds    Int       @default(0)
   createdAt  DateTime  @default(now())
 
@@ -386,19 +383,19 @@ enum TelegramDeliveryStatus {
   SENT
   REVEALED
   GRADED
-  /// оцінка з Telegram уже не рахується: картку повторили в апці або відправка обірвалась
+  /// the Telegram grade no longer counts: the card was reviewed in the app or the send failed
   STALE
 }
 
-/// Картка, надіслана Telegram-ботом. Одна на картку за день (UNIQUE): бот не шле її двічі навіть після рестарту.
+/// Card sent by the Telegram bot. One per card per day (UNIQUE): the bot never sends it twice, even after a restart.
 model TelegramDelivery {
   id         Int                    @id @default(autoincrement())
   questionId Int
   question   Question               @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  /// календарний день розсилки, як DailyLog.day
+  /// calendar day of the send, as in DailyLog.day
   day        DateTime               @db.Date
   chatId     String
-  /// null, поки Telegram не підтвердив відправку
+  /// null until Telegram confirms the send
   messageId  Int?
   status     TelegramDeliveryStatus @default(SENT)
   grade      CardGrade?
@@ -410,18 +407,17 @@ model TelegramDelivery {
   @@index([day])
 }
 
-/// Спроба пройти рівень = вправу з live-code (LEVELS_DIR). Самі вправи живуть у репо, тут тільки спроби.
-/// Розклад повторів і рамка рахуються з цих рядків (src/lib/level-schedule.ts).
+/// Attempt at a level, i.e. a live-code exercise (LEVELS_DIR). Exercises live in the repo, only attempts are here; the repeat schedule and the frame are computed from these rows (src/lib/level-schedule.ts).
 model LevelAttempt {
   id         Int      @id @default(autoincrement())
-  /// папка вправи відносно exercises/, наприклад "04-async/07-dataloader"
+  /// exercise folder relative to exercises/, e.g. "04-async/07-dataloader"
   levelKey   String
   code       String
-  /// тести зелені
+  /// tests are green
   passed     Boolean
-  /// відкрив еталон до проходження: сьогодні рівень не рахується в рамку, повтор через 2 дні
+  /// opened the reference before passing: the level does not count toward today's frame, repeat in 2 days
   gaveUp     Boolean  @default(false)
-  /// вивід vitest (обрізаний)
+  /// vitest output (truncated)
   output     String   @default("")
   durationMs Int      @default(0)
   createdAt  DateTime @default(now())
@@ -437,11 +433,10 @@ enum LootRarity {
   LEGENDARY
 }
 
-/// Картка відпочинку в пулі: з Gemini (новина, стаття, фільм, аніме, музика), xkcd або Hacker News.
-/// Статичні картки (вода, розминка, гра) живуть у src/lib/loot.config.ts і в БД не пишуться.
+/// Rest card in the pool: from Gemini (news, article, film, anime, music), xkcd or Hacker News. Static cards (water, stretch, game) live in src/lib/loot.config.ts and are not stored in the DB.
 model RestCard {
   id        Int        @id @default(autoincrement())
-  /// MEME | NEWS | ARTICLE | FILM | ANIME | MUSIC (рядок, щоб нові види не вимагали міграції)
+  /// MEME | NEWS | ARTICLE | FILM | ANIME | MUSIC (a string so new kinds need no migration)
   kind      String
   rarity    LootRarity
   title     String
@@ -451,9 +446,9 @@ model RestCard {
   minutes   Int
   /// gemini | xkcd | hn
   source    String
-  /// щоб той самий комікс чи стаття не потрапили в пул двічі
+  /// keeps the same comic or article from entering the pool twice
   dedupeKey String     @unique
-  /// довге (фільм): випадає тільки після боса дня
+  /// long (film): drops only after the day's boss
   afterBoss Boolean    @default(false)
   expiresAt DateTime
   pulledAt  DateTime?
@@ -463,7 +458,7 @@ model RestCard {
   @@index([rarity, pulledAt, expiresAt])
 }
 
-/// Один пул зі скрині. Вміст картки скопійовано сюди, бо статичні картки не в БД, а картки пулу з часом видаляються.
+/// One pull from the chest. Card content is copied here because static cards are not in the DB and pool cards get deleted over time.
 model RestPull {
   id         Int        @id @default(autoincrement())
   day        DateTime   @db.Date
@@ -475,12 +470,12 @@ model RestPull {
   imageUrl   String     @default("")
   minutes    Int
   source     String
-  /// чому рідкість не нижча за певну: "pity" (кожен 10-й пул) або "boss"
+  /// why the rarity has a floor: "pity" (every 10th pull) or "boss"
   guarantee  String     @default("")
   restCardId Int?
   restCard   RestCard?  @relation(fields: [restCardId], references: [id], onDelete: SetNull)
   openedAt   DateTime   @default(now())
-  /// натиснув "Назад на карту"
+  /// pressed "Back to the map"
   finishedAt DateTime?
 
   @@index([day])

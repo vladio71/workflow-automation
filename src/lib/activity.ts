@@ -14,7 +14,7 @@ export interface LogActivityInput {
   at?: Date;
 }
 
-/** Один запис часу. Трек береться з теми, якщо тема вказана. */
+/** One time entry. The track is taken from the topic when one is given. */
 export async function logActivity(input: LogActivityInput): Promise<void> {
   const minutes = Math.round(input.minutes);
   if (minutes <= 0) return;
@@ -37,7 +37,7 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
 
 // ------------------------------------------------------------------ streak
 
-/** Ключ дня (YYYY-MM-DD) з колонки DATE: там опівніч UTC. */
+/** Day key (YYYY-MM-DD) from a DATE column, which holds midnight UTC. */
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -49,8 +49,8 @@ export interface Streak {
 }
 
 /**
- * Активний день = є хоч один запис часу або хоч одна галочка в щоденному чеклісті.
- * Поточний стрік не рветься, якщо сьогодні ще нічого не зроблено: рахуємо до вчора.
+ * Active day = at least one time entry or one tick in the daily checklist.
+ * The current streak does not break when nothing is done yet today: it is counted up to yesterday.
  */
 export async function getStreak(now: Date = new Date()): Promise<Streak> {
   const [logDays, dailyDays, checkDays] = await Promise.all([
@@ -59,7 +59,7 @@ export async function getStreak(now: Date = new Date()): Promise<Streak> {
       where: { OR: [{ cardsDone: true }, { recallDone: true }, { outLoud: true }] },
       select: { day: true },
     }),
-    // галочки пунктів Daily, які додав сам
+    // ticks of user-added Daily items
     db.dailyCheck.findMany({ distinct: ['day'], select: { day: true } }),
   ]);
   const days = new Set<string>([...logDays, ...dailyDays, ...checkDays].map((row) => isoDay(row.day)));
@@ -109,7 +109,7 @@ export interface Analytics {
   greenRecalls: number;
   questions: number;
   mocks: number;
-  /** останні N днів, від найстарішого до сьогодні, з нулями для порожніх днів */
+  /** last N days, oldest to today, zeros for empty days */
   daily: DayMinutes[];
   byTrack: NamedMinutes[];
   byTopic: NamedMinutes[];

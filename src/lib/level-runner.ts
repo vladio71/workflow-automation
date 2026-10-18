@@ -5,14 +5,14 @@ import path from 'node:path';
 import type { Level } from './levels';
 
 /**
- * Прогін твого коду через тести вправи. Твій index.ts у репо не чіпаємо:
- *   1. копія вправи в <LEVELS_DIR>/.level-attempts/<рівень>/ (тести, еталон, types, усе, крім заготовки і README);
- *   2. index.ts(x) = твій код;
- *   3. vitest з live-code (його node_modules) з --root на цю копію; REF не задаємо, тож тести беруть твій index;
- *   4. копію видаляємо. Сама папка .level-attempts має свій .gitignore з "*", тож у git status її не видно.
+ * Runs the submitted code against the exercise tests. The index.ts in the repo is never touched:
+ *   1. copy the exercise to <LEVELS_DIR>/.level-attempts/<level>/ (tests, reference, types, everything except the stub and README);
+ *   2. index.ts(x) = the submitted code;
+ *   3. vitest from live-code (its node_modules) with --root at this copy; REF is unset, so the tests use the submitted index;
+ *   4. delete the copy. The .level-attempts folder has its own .gitignore with "*", so git status never shows it.
  *
- * Команда фіксована (node + vitest з node_modules репо), без shell: жодних рядків з репо чи з форми в командному рядку.
- * Код виконується на твоєму комп'ютері, тому апка слухає тільки 127.0.0.1 (package.json).
+ * The command is fixed (node + vitest from the repo's node_modules), no shell: no strings from the repo or the form reach the command line.
+ * The code runs on the local machine, which is why the app listens only on 127.0.0.1 (package.json).
  */
 export interface RunResult {
   passed: boolean;
@@ -21,12 +21,12 @@ export interface RunResult {
   durationMs: number;
 }
 
-/** звичайний прогін займає 1-3 с; 30 с = точно зависло */
+/** a normal run takes 1-3 s; 30 s means it is definitely stuck */
 const RUN_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_CHARS = 20_000;
 const ATTEMPTS_DIR = '.level-attempts';
 
-/** ESC [ ... літера: кольори й курсор у виводі vitest */
+/** ESC [ ... letter: colours and cursor moves in vitest output */
 const ANSI_PATTERN = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[A-Za-z]', 'g');
 
 function cleanOutput(raw: string): string {
@@ -34,7 +34,7 @@ function cleanOutput(raw: string): string {
   return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n… (output cut)` : text;
 }
 
-/** Один прогін за раз: два vitest паралельно на одну папку тільки заважають один одному. */
+/** One run at a time: two vitest processes on the same folder only get in each other's way. */
 let queue: Promise<unknown> = Promise.resolve();
 
 export function runLevel(levelsDir: string, level: Level, code: string): Promise<RunResult> {
@@ -71,7 +71,7 @@ async function runOnce(levelsDir: string, level: Level, code: string): Promise<R
   await fs.writeFile(path.join(attemptDir, level.stubFile), code);
 
   const env: NodeJS.ProcessEnv = { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
-  delete env.REF; // REF=1 перемкнув би тести на еталон
+  delete env.REF; // REF=1 would switch the tests to the reference solution
 
   const started = Date.now();
   try {
@@ -89,7 +89,7 @@ async function runOnce(levelsDir: string, level: Level, code: string): Promise<R
       child.stderr.on('data', (chunk: Buffer) => {
         output += chunk.toString();
       });
-      // --pool=threads: тести в потоках цього ж процесу, тож kill зупиняє і нескінченний цикл у твоєму коді
+      // --pool=threads: tests run in threads of this process, so kill also stops an endless loop in the submitted code
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill();

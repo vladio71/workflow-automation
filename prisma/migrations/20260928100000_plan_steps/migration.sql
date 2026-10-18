@@ -1,4 +1,4 @@
--- Навчальний план з learn/plan.md
+-- Study plan loaded from learn/plan.md
 CREATE TYPE "PlanStepKind" AS ENUM ('READ', 'ATTEMPT', 'REFERENCE', 'SUMMARY', 'DEPTH', 'EXAM');
 
 ALTER TABLE "Source" ADD COLUMN "planName" TEXT NOT NULL DEFAULT '';

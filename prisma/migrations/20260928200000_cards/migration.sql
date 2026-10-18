@@ -1,4 +1,4 @@
--- Картки в апці замість Anki
+-- Cards inside the app instead of Anki
 ALTER TYPE "ActivityKind" ADD VALUE 'CARDS';
 CREATE TYPE "CardGrade" AS ENUM ('FORGOT', 'HARD', 'GOOD', 'PRACTICE');
 

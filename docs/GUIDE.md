@@ -1,267 +1,267 @@
-# Як вчитись і не забувати
+# How to study and not forget
 
-Основа: принципи Ali Abdaal (active recall, spaced repetition, retrospective revision timetable) плюс дріли з [graphql-base](https://github.com/vladio71/graphql-base).
+Foundation: Ali Abdaal's principles (active recall, spaced repetition, retrospective revision timetable) plus drills from [graphql-base](https://github.com/vladio71/graphql-base).
 
-## Три правила
+## Three rules
 
-1. **Питання, а не конспекти.** Конспект відчувається продуктивно, але майже не працює. Формулюєш питання і відповідаєш з пам'яті.
-2. **Складно = правильно.** Повторення має бути зусиллям: порожня сторінка, закрите джерело. Перечитування не рахується.
-3. **Ретроспективно, а не наперед.** Не планувати "у вівторок тема X", а щоранку брати найслабше і найдавніше. Це робить сторінка **Today**.
+1. **Questions, not notes.** Taking notes feels productive and barely works. Write questions, answer from memory.
+2. **Hard = right.** A review has to be an effort: blank page, source closed. Re-reading does not count.
+3. **Retrospective, not ahead.** Don't plan "topic X on Tuesday"; every morning take the weakest and oldest. The **Today** page does that.
 
-## Сторінки апки
+## Pages
 
-| Сторінка | Що це |
+| Page | What it is |
 |---|---|
-| **Today** | AI-план на день (фокус, чернетка, після старту карта), чекліст, що повторити (червоні і прострочені), поточний цикл, тижневий system design, швидкий запис |
-| **Topics** | усе, що вчиш: дріли, розділи праймера, AI, Python. Колір + дата останнього відтворення + наступний повтор |
-| **Topic** | нотатки (база знань, markdown), питання до теми, історія повторень |
-| **Recall** | сесія: питання → відповідь з пам'яті → перевірка Gemini або еталон → ти ставиш колір |
-| **Cards** | картки замість Anki: **Review** (що настало сьогодні за розкладом) **Categories** (картки по категоріях, Recall однієї категорії) і **All cards** (усі Q&A будь-коли, пошук; клік по картці відкриває її сторінку) |
-| **Questions** | усі питання й задачі: додати, редагувати свої, коли картка наступна |
-| **Cycles** | твій план: фокуси по черзі (приблизно 2 тижні кожен), ціль, теми, ретро. Без жорстких дат |
-| **Stats** | стрік, час по днях, трекам, темах і типах роботи, календар активності |
-| **Inbox** | швидкий запис без сортування; розбір у неділю |
-| **Tasks** | справи поза навчанням, борд як у Jira: Backlog → To do → In progress → Done. Backlog у план дня не лізе; To do та In progress план бере. Справа з ціллю на день = сесія з лічильником і баштою |
-| **Mock interview** | system design 45 хв, Gemini в ролі інтерв'юера |
-| **Levels** | вправи live coding з репо live-code: вставив код → тести → рівень пройдено, рамка 🥉 → 🥈 → 🥇 |
-| **Plan** | навчальний план з `learn/plan.md` як карта кампанії: тижні = регіони, задачі = фортеці; список кроків під картою |
-| **Sources** | репо з папкою `learn/`, з яких апка тягне тему і картки; стан Gemini: перевірка моделей і останні запити |
+| **Today** | the AI plan for the day (focus, draft, after the start a map), the checklist, what to review (red and overdue), the current cycle, weekly system design, quick capture |
+| **Topics** | everything being learned: drills, primer sections, AI, Python. Color + last recall date + next review |
+| **Topic** | notes (the knowledge base, markdown), questions for the topic, recall history |
+| **Recall** | a session: question -> answer from memory -> Gemini check or the reference -> you set the color |
+| **Cards** | cards instead of Anki: **Review** (what is due today), **Categories** (cards by category, Recall of one category) and **All cards** (every Q&A any time, search; a click opens the card page) |
+| **Questions** | every question and task: add, edit your own, when a card is due next |
+| **Cycles** | your plan: focuses in turn (about 2 weeks each), goal, topics, retro. No hard dates |
+| **Stats** | streak, time by day, track, topic and kind of work, activity calendar |
+| **Inbox** | quick capture without sorting; triage on Sunday |
+| **Tasks** | tasks outside study, a board like Jira: Backlog -> To do -> In progress -> Done. Backlog stays out of the day plan; To do and In progress get picked. A task with a daily target is a session with a counter and a tower |
+| **Mock interview** | system design, 45 min, Gemini as the interviewer |
+| **Levels** | live-coding exercises from the live-code repo: paste code -> tests -> level passed, frame 🥉 -> 🥈 -> 🥇 |
+| **Plan** | the study plan from `learn/plan.md` as a campaign map: weeks are regions, problems are fortresses; the step list under the map |
+| **Sources** | repos with a `learn/` folder the app pulls topics and cards from; Gemini status: model check and recent requests |
 
-## План на день (AI)
+## The day plan (AI)
 
-Зранку на Today, перед **Plan my day**:
-- **Focus**: **Live code** (рівні) або кнопка навчального плану (System design…). Те, що у фокусі, бере до 60% бюджету: план у фокусі бере більше кроків і до 2 нових задач, а у фокусі Live code рівні стають обов'язковими (спершу повтори, до 4, потім до 6 нових по порядку, поки влазять у 60%). Інші плани в цей день ділять між собою решту (~40%). Без фокусу кожен план бере свій денний ліміт, а рівні йдуть на вибір (1-2).
-- **Wish**: побажання вільним текстом («без mock», «сьогодні тільки повторення»). Іде в промпт, але Gemini все одно вибирає тільки з кандидатів.
-- Бюджет часу.
+In the morning on Today, before **Plan my day**:
+- **Focus**: **Live code** (levels) or a study plan button (System design...). Whatever is in focus takes up to 60% of the budget: a focused plan takes more steps and up to 2 new problems, and with Live code in focus the levels become mandatory (redos first, up to 4, then up to 6 new ones in order, while they fit in the 60%). The other plans share the rest (~40%) that day. Without a focus every plan takes its own daily limit and levels are optional (1-2).
+- **Wish**: free text ("no mock", "only reviews today"). It goes into the prompt, but Gemini still picks only from the candidates.
+- Time budget.
 
-Як складається план:
-- Апка сама збирає кандидатів з твоїх даних: кроки навчальних планів, прострочені і червоні теми, теми поточного циклу, для яких ще мало питань, розділ праймера, якщо system design не було тиждень, mock, якщо його не було тиждень, Inbox, справи з **Tasks**.
-- Gemini вибирає з них пункти в бюджет часу, впорядковує і пояснює, чому кожен пункт сьогодні. Нових тем він не вигадує. Вчорашнє невиконане враховує.
-- Поки Gemini думає, під кнопкою видно, що з запитом: яка модель, скільки секунд, думає чи вже пише відповідь, і що впало до цього.
-- Без ключа або якщо не відповіла жодна модель, план складається за простими правилами. Тоді під планом червоний рядок з причиною по кожній моделі, наприклад «3.8 Flash: ліміт на день (429) → 3.7 Flash: завис: 30 с без відповіді». Рядок лишається, поки не перескладеш план. Детальніше в розділі «Gemini» нижче.
+How the plan is built:
+- The app collects candidates from your data: study-plan steps, overdue and red topics, topics of the current cycle with too few questions, a primer section if there was no system design for a week, a mock if there was none for a week, the Inbox, tasks from **Tasks**.
+- Gemini picks items into the time budget, orders them and explains why each one is for today. It invents no new topics. Yesterday's undone items are taken into account.
+- While Gemini thinks, the status under the button shows the request: which model, how many seconds, thinking or already writing, and what failed before.
+- Without a key, or when no model answered, the plan is built by plain rules. Then a red line under the plan gives the reason per model, e.g. "3.8 Flash: daily limit (429) -> 3.7 Flash: stalled: 30 s without a reply". The line stays until the plan is rebuilt. More in the "Gemini" section below.
 
-**Чернетка → старт.** Plan my day дає чернетку. До старту її можна правити: ✕ прибрати пункт, −/+ хвилини, ↑↓ порядок, додати кандидата, якого план не взяв, або свою справу одним рядком (вона збережеться в Tasks). Прибраний крок навчального плану забирає і наступні кроки цього плану, а два кроки одного плану місцями не міняються: порядок задає план. **▶ Start the day** фіксує план, і він стає картою (нижче). **Re-plan** після старту питає підтвердження, зроблене сьогодні лишає на початку карти, а решту складає заново як чернетку.
+**Draft -> start.** Plan my day gives a draft. Before the start it can be edited: ✕ removes an item, −/+ changes minutes, ↑↓ reorders, a candidate the plan skipped can be added, or your own task in one line (it is saved to Tasks). A removed study-plan step takes the later steps of that plan with it, and two steps of one plan never swap: the plan defines their order. **▶ Start the day** fixes the plan and it becomes a map (below). **Re-plan** after the start asks for confirmation, keeps what is done today at the top of the map and rebuilds the rest as a draft.
 
-**Справи (Tasks).** Борд: **Backlog | To do | In progress**, зроблені згорнуті знизу. Нова разова справа падає в Backlog і в план не лізе, поки не перекинеш її стрілкою `→` у To do. Повторювані (щодня або по буднях) одразу в роботі, план бере їх сам. Разову в To do план пропонує, поки не зробиш, і пише, скільки днів справа вже висить. Галочка на разовій справі в плані закриває її і в Tasks. Пріоритет P1 high … P4 low задає порядок у колонках.
+**Tasks.** The board: **Backlog | To do | In progress**, done ones collapsed at the bottom. A new one-off task lands in Backlog and stays out of the plan until you move it with the `→` arrow into To do. Recurring ones (daily or weekdays) are in progress at once, the plan takes them itself. A one-off task in To do is offered by the plan until it is done, with a note of how many days it has been waiting. Ticking a one-off task in the plan closes it in Tasks too. Priority P1 high ... P4 low sets the order in the columns.
 
-Покласти в беклог ззовні (Shortcuts на айфоні, desk.py, curl), з заголовком `x-automation-token`:
-- `POST /api/tasks` тіло `{ "title": "Налаштувати Jomo", "priority": 2, "minutes": 40 }` → 201, справа в Backlog
-- `GET /api/tasks?status=BACKLOG` (також TODO, IN_PROGRESS, DONE; без status: усі незроблені)
-- `PATCH /api/tasks/:id` тіло `{ "status": "TODO" }` або `{ "priority": 1 }`, `DELETE /api/tasks/:id`
+Putting something into the backlog from outside (iPhone Shortcuts, desk.py, curl), with the `x-automation-token` header:
+- `POST /api/tasks` body `{ "title": "Set up Jomo", "priority": 2, "minutes": 40 }` -> 201, the task is in Backlog
+- `GET /api/tasks?status=BACKLOG` (also TODO, IN_PROGRESS, DONE; without status: everything not done)
+- `PATCH /api/tasks/:id` body `{ "status": "TODO" }` or `{ "priority": 1 }`, `DELETE /api/tasks/:id`
 
-**Сесія і башта дня.** Справі в Tasks можна поставити ціль на день, наприклад «Розіслати резюме: 10». Тоді це сесія:
-- **▶ Сесія** (на Today під картою або на вузлі цієї справи на карті) відкриває попап: **+1 відправив** або Enter за кожне резюме, у поле можна вписати компанію чи посилання, **−1** прибирає зайве. Ще є **+1** у Tasks.
-- Кожен +1 = поверх башти. Недобудовані поверхи до цілі стоять риштуванням, на цілі зверху прапор, понад ціль поверхи золоті.
-- Вузол справи на карті показує 3/10 і закривається сам на цілі.
-- Опівночі башта починається з нуля, а вчорашня йде в скайлайн: маленькі башти за 14 днів, з прапором там, де ціль була.
+**Session and the tower of the day.** A task in Tasks can get a daily target, e.g. "Send resumes: 10". Then it is a session:
+- **▶ Session** (on Today under the map, or on the task's node on the map) opens a popup: **+1 sent** or Enter per resume, the field takes the company or a link, **−1** removes an extra one. There is also **+1** in Tasks.
+- Every +1 is a floor of the tower. Floors still missing up to the target stand as scaffolding, a flag goes on top at the target, floors above the target are golden.
+- The task's node on the map shows 3/10 and closes itself at the target.
+- At midnight the tower starts from zero and yesterday's goes into the skyline: small towers for the last 14 days, with a flag where the target was reached.
 
-Протягом дня апка сама бачить виконане: recall по темі, 3+ нових питання, mock, пустий Inbox. Картки відмічаються самі, коли черга на сьогодні порожня. Решту (пояснення вголос) відмічаєш галочкою.
+During the day the app sees what is done on its own: a recall on a topic, 3+ new questions, a mock, an empty Inbox. Cards tick themselves when today's queue is empty. The rest (explaining out loud) is ticked by hand.
 
-Ввечері **Check the day**: короткий огляд, що зроблено, що перенести, одна порада на завтра.
+In the evening, **Check the day**: a short review of what was done, what to carry over, one tip for tomorrow.
 
-### Карта дня
+### The day map
 
-Після **Start the day** план показується як карта: пункти стоять на стежці в порядку виконання.
-- Пройдені горять зеленим, поточний пульсує, наступні закриті, поки не пройдеш поточний. Вибирати, що робити далі, не треба.
-- Найдовший пункт дня = бос (👑). Після останнього пункту фініш 🏁.
-- Клік по вузлу показує, що це і чому сьогодні. У поточного: **Start** (перейти до роботи), **Mark done** (для того, що апка не бачить сама), **Skip for now** (перенести в кінець дня; кроки навчального плану не переносяться).
-- Рівень (⚔️) галочкою не закрити: тільки зелені тести.
-- Порядок дня задає код, а не AI: першими картки (розминка, швидка перша перемога), одразу після них бос, поки свіжа голова, далі легше до вечора. Обов'язкові пункти (кроки планів, рівні у фокусі) між собою не переставляються. Це порядок для чернетки: до старту його можна змінити ↑↓.
+After **Start the day** the plan is shown as a map: the items stand on a path in execution order.
+- Passed ones glow green, the current one pulses, the next ones are locked until the current one is passed. No choosing what to do next.
+- The longest item of the day is the boss (👑). After the last item, the finish 🏁.
+- A click on a node shows what it is and why today. The current one has **Start** (go to the work), **Mark done** (for what the app cannot see itself), **Skip for now** (move to the end of the day; study-plan steps don't move).
+- A level (⚔️) cannot be ticked: only green tests.
+- The order is set by code, not by the AI: cards first (warm-up, a quick first win), right after them the boss while the head is fresh, then lighter towards the evening. Mandatory items (plan steps, focused levels) keep their relative order. This is the draft order: before the start it can be changed with ↑↓.
 
-## Рівні (Levels)
+## Levels
 
-Рівень = вправа з [live-code](https://github.com/vladio71/live-code): умова в README, заготовка `index.ts`, тести й еталон.
-1. Відкриваєш рівень (з карти дня або зі сторінки Levels). Годинника на сторінці нема: час рахується тихо, тільки для Stats і нагадування «перевір, де ти».
-2. Пишеш код прямо в апці (без автодоповнення, як на співбесіді) або вставляєш свій, **Run tests** або Ctrl+Enter.
-3. Апка кладе код у тимчасову копію вправи і запускає її тести. Зелені тести = рівень пройдено. Твій `index.ts` у репо не чіпається.
-4. Після проходу відкривається еталон: випиши 1-2 речі, які там краще.
+A level is an exercise from [live-code](https://github.com/vladio71/live-code): the task in a README, a starter `index.ts`, tests and a reference solution.
+1. Open a level (from the day map or the Levels page). There is no clock on the page: time is counted quietly, only for Stats and the "check where you are" reminder.
+2. Write the code right in the app (no autocomplete, like in an interview) or paste your own, **Run tests** or Ctrl+Enter.
+3. The app puts the code into a temporary copy of the exercise and runs its tests. Green tests = level passed. Your `index.ts` in the repo is untouched.
+4. After a pass the reference opens: write down 1-2 things it does better.
 
-Повтори за правилом з README: та сама вправа з нуля через 2 дні, далі 7, 21, 42. Прохід у термін піднімає рамку 🥉 → 🥈 → 🥇, прохід раніше терміну = просто тренування. Рівні, в яких настав термін, самі потрапляють у план дня разом з наступною новою вправою по порядку.
+Redos follow the rule from the README: the same exercise from scratch after 2 days, then 7, 21, 42. A pass on time raises the frame 🥉 -> 🥈 -> 🥇, a pass before the due date is just practice. Levels that are due go into the day plan on their own, together with the next new exercise in order.
 
-**Give up** відкриває еталон до проходження: рівень повернеться через 2 дні, а прохід того ж дня закриє пункт плану, але рамку не підніме.
+**Give up** opens the reference before a pass: the level comes back in 2 days, and a pass the same day closes the plan item but does not raise the frame.
 
-Налаштування: `LEVELS_DIR` у `.env` = шлях до локального клону live-code, і один раз `npm install` у ньому.
+Setup: `LEVELS_DIR` in `.env` = the path to a local clone of live-code, and `npm install` inside it once.
 
-### Правила live code і нагадування
+### Live code rules and the reminder
 
-**📏 Live code rules** у меню (і кнопка **📏 Rules** на сторінці рівня) відкриває попап з правилами: золоте правило (20 хв без плану = стоп), чекліст «звір себе» по хвилинах, підказки по черзі L1 → L2 → L3, що робити після рішення, таблиця sanity checks. Почитай перед стартом, а галочки став по ходу.
+**📏 Live code rules** in the menu (and the **📏 Rules** button on a level page) opens a popup with the rules: the golden rule (20 min without a plan = stop), a "check yourself" checklist by minute, hints in order L1 -> L2 -> L3, what to do after a solution, a table of sanity checks. Read it before the start, tick along the way.
 
-Таймер нагадування:
-- рівень запускає його сам, від свого старту; зелені тести або відкритий еталон його зупиняють;
-- для вправи в редакторі: **▶ Старт** у попапі (там же скільки хвилин, за замовчуванням 25).
+The reminder timer:
+- a level starts it on its own, from its start; green tests or an opened reference stop it;
+- for an exercise in the editor: **▶ Start** in the popup (with the minutes, 25 by default).
 
-Годинника ніде не видно. Через 25 хв (налаштовується) приходить сповіщення браузера, на сторінці відкривається попап «перевір, де ти», а у вкладці з'являється 👀. Відповіді: **Є рух, працюю далі** (спитає ще раз пізніше), **Іду дивитись** (підказки по черзі і що робити після) або **Розв'язав**. Поки нагадування увімкнене, біля пункту меню стоїть ●. Сповіщення браузер дозволяє один раз: при першому **▶ Старт** або кнопкою **🔔 Дозволити сповіщення** в попапі. Без дозволу лишаються попап і 👀.
+No clock is shown anywhere. After 25 min (configurable) a browser notification arrives, the "check where you are" popup opens on the page, and 👀 appears in the tab. The answers: **Moving, keep going** (asks again later), **Going to look** (hints in order and what to do after) or **Solved**. While the reminder is on, a ● sits next to the menu item. The browser asks for notification permission once: on the first **▶ Start** or with the **🔔 Allow notifications** button in the popup. Without permission the popup and the 👀 remain.
 
-## Навчальний план (Plan)
+## The study plan (Plan)
 
-Якщо в репо є `learn/plan.md` (зараз system-design-reps), план дня будується так:
-1. Картки на сьогодні (Cards).
-2. **Переробки задач**, у яких настав термін: максимум 2 на день, по 45 хв з нуля. Задача = тема `learn/pNN-*`, після спроби ставиш колір, і розклад 2 / 7 / 21 днів повертає її сам.
-3. **Наступні кроки плану строго по порядку**, поки влазять у денний ліміт плану (`dailyMinutes`, зараз 210 хв). Максимум одна нова задача на день. У день фокусу на цей план: щонайменше 60% бюджету дня і до 2 нових задач.
-4. Решта бюджету: інші повторення, цикли по Node / AI.
+When a repo has `learn/plan.md` (currently system-design-reps), the day plan is built like this:
+1. Today's cards (Cards).
+2. **Problem redos** that are due: at most 2 per day, 45 min each, from scratch. A problem is a topic `learn/pNN-*`; after an attempt you set the color, and the 2 / 7 / 21 day schedule brings it back on its own.
+3. **The next plan steps strictly in order**, while they fit the plan's daily limit (`dailyMinutes`, currently 210 min). At most one new problem a day. On a day focused on this plan: at least 60% of the day budget and up to 2 new problems.
+4. The rest of the budget: other reviews, Node / AI cycles.
 
-Кроки плану відбирає код, а не AI: Gemini тільки розставляє день і пише пояснення, викинути чи переставити крок плану він не може.
-Спроба задачі зараховується сама, коли пройдеш "Do it" по її темі. Решту кроків відмічаєш галочкою в плані дня або на сторінці Plan.
-Задача з плану не з'являється в "Due for recall" раніше свого терміну, навіть якщо вона червона.
+Plan steps are selected by code, not by the AI: Gemini only arranges the day and writes the explanations; it cannot drop or reorder a plan step.
+A problem attempt counts on its own when you pass "Do it" on its topic. The other steps are ticked in the day plan or on the Plan page.
+A plan problem does not appear in "Due for recall" before its date, even when it is red.
 
-Змінити план (порядок, кроки, ліміт на день) = змінити `learn/plan.md` у репо. Прогрес прив'язаний до `Id:` кроку, тому текст і порядок можна правити без втрати галочок.
+Changing the plan (order, steps, daily limit) = changing `learn/plan.md` in the repo. Progress is bound to the step's `Id:`, so text and order can be edited without losing ticks.
 
-**Карта кампанії.** На сторінці Plan план показаний як кампанія, вона не скидається:
-- регіон = тиждень з plan.md (`## Тиждень 1 · ...`); пройдений до кінця регіон отримує прапор 🚩, поточний ⚔️, наступні закриті 🔒;
-- 🏰 фортеця = задача: спроба, еталон і саммарі = кільце з трьох частин, що горить по мірі проходу; 📖 читання, 🔎 поглиблення, 🐉 з короною = екзамен;
-- задача, в якої настав термін переробки, тріскається (червона тріщина і «!»); recall її лагодить;
-- клік по вузлу показує його кроки з галочками і посиланнями. Старий список кроків під картою, у «All steps as a list».
+**The campaign map.** On the Plan page the plan is shown as a campaign; it never resets:
+- a region is a week from plan.md (`## Week 1 · ...`); a region passed to the end gets a flag 🚩, the current one ⚔️, the next ones are locked 🔒;
+- 🏰 a fortress is a problem: attempt, reference and summary form a ring of three parts that lights up as you pass; 📖 reading, 🔎 deep dive, 🐉 with a crown is an exam;
+- a problem whose redo is due cracks (a red crack and "!"); a recall repairs it;
+- a click on a node shows its steps with ticks and links. The old step list is under the map, in "All steps as a list".
 
-На Today замість смужки прогресу міні-карта поточного регіону; клік відкриває Plan.
+On Today a mini-map of the current region replaces the progress bar; a click opens Plan.
 
-## Картки (Cards)
+## Cards
 
-Q-питання з усіх тем (з репо і додані руками) живуть у апці, окремий Anki не потрібен.
+Q questions from every topic (from repos and added by hand) live in the app; a separate Anki is not needed.
 
-**Review:** картки, у яких настав термін, і до 10 нових на день. Спершу відповідаєш у голові або вголос, потім Space, потім оцінка:
-- **1 Забув**: знову завтра, і ще раз у кінці цієї ж сесії;
-- **2 Важко**: той самий інтервал;
-- **3 Згадав**: наступний інтервал 1 → 3 → 7 → 14 → 30 → 60 → 120 днів.
+**Review:** cards that are due plus up to 10 new ones a day. Answer in your head or out loud first, then Space, then grade:
+- **1 Forgot**: again tomorrow, and once more at the end of this session;
+- **2 Hard**: the same interval;
+- **3 Recalled**: the next interval 1 -> 3 -> 7 -> 14 -> 30 -> 60 -> 120 days.
 
-**All cards:** усі картки одразу, без розкладу. Фільтр по темі, пошук, "Show answers" (просто прочитати), "Go through" і "Shuffled" (пройти підряд). Прохід тут розклад не міняє; тільки **F (Забув)** ставить картку на завтра. Картки згруповані по категоріях, термін окремою колонкою.
+**All cards:** every card at once, without the schedule. Filter by topic, search, "Show answers" (just read), "Go through" and "Shuffled" (go one by one). A pass here does not change the schedule; only **F (Forgot)** puts the card on tomorrow. Cards are grouped by category, the due date in its own column.
 
-**Categories:** категорія картки = її тема. Таблиця: скільки карток, скільки due, скільки нових, наступний термін. Клік по категорії відкриває її картки; **Recall** веде в Review тільки цієї категорії (картки, в яких настав термін, з оцінками). Картці, доданій руками, категорію міняєш кліком по ній: список наявних (спершу ті, якими користувався останніми) або "+ Add new". Категорію картки з репо задає її папка в learn/.
+**Categories:** a card's category is its topic. The table: how many cards, how many due, how many new, the next due date. A click on a category opens its cards; **Recall** leads to a Review of that category only (due cards with grades). A card added by hand changes category with a click on it: the list of existing ones (recently used first) or "+ Add new". A repo card's category is its folder in learn/.
 
-**Додати, змінити, видалити:**
-- **+ New card**: окрема сторінка, питання, відповідь і категорія одразу (Ctrl+Enter = додати). Форма лишається відкритою, щоб додати кілька підряд. Нова картка приходить у Review як нова.
-- Клік по картці: її сторінка, де міняєш питання, відповідь і категорію (Ctrl+Enter = зберегти, Esc = скасувати). Розклад картки не міняється.
-- **✕** на картці: видалити (з підтвердженням). Разом з карткою зникає історія її показів.
-- Картка з репо, яку ти змінив, отримує мітку **edited**: Sync більше не оновлює її з `questions.md`, твій текст головний. Картку з репо, яку ти видалив, Sync не поверне. Повернути можна тільки руками: додати її заново через New card.
+**Add, edit, delete:**
+- **+ New card**: a separate page with question, answer and category at once (Ctrl+Enter = add). The form stays open to add several in a row. A new card comes into Review as new.
+- A click on a card: its page, where question, answer and category are changed (Ctrl+Enter = save, Esc = cancel). The schedule does not change.
+- **✕** on a card: delete (with confirmation). The review history goes with it.
+- A repo card you edited gets an **edited** mark: Sync stops updating it from `questions.md`, your text wins. A repo card you deleted is not brought back by Sync. The only way back is by hand, through New card.
 
-**Telegram:** ті самі картки можуть приходити щоранку в Telegram (`npm run bot`, налаштування в README). Оцінка там іде в той самий розклад, що й тут.
+**Telegram:** the same cards can arrive every morning in Telegram (`npm run bot`, setup in the README). A grade there goes into the same schedule as here.
 
-Час на картки сам записується в Stats (тип Cards), а галочка "Cards" на Today ставиться, коли черга на сьогодні порожня.
+Time on cards is logged into Stats on its own (kind Cards), and the "Cards" tick on Today is set when today's queue is empty.
 
-Картки з репо лишаються звичайним markdown у `learn/*/questions.md` на GitHub: їх можна читати і без апки. Те, що ти змінив чи видалив в апці, у файл не записується: для цих карток файл і апка розходяться.
+Repo cards stay plain markdown in `learn/*/questions.md` on GitHub, readable without the app. What you edit or delete in the app is not written back to the file: for those cards the file and the app diverge.
 
-## Кольори і повторення
+## Colors and reviews
 
-| Колір | Коли | Наступний повтор |
+| Color | When | Next review |
 |---|---|---|
-| 🟢 Green | відтворив з нуля без підказок | пізніше: інтервал росте (2 → 7 → 21 → 42 → 84 дні) |
-| 🟡 Amber | дрібні прогалини | той самий крок |
-| 🔴 Red | застряг | звірся з еталоном, повтор через 2 дні |
+| 🟢 Green | recalled from scratch without hints | later: the interval grows (2 -> 7 -> 21 -> 42 -> 84 days) |
+| 🟡 Amber | small gaps | the same step |
+| 🔴 Red | stuck | check the reference, review in 2 days |
 
-Колір ставиш **ти**, а не Gemini: він лише підказує. Дата міняється тільки після recall-сесії, ручна зміна кольору в таблиці розклад не чіпає.
+**You** set the color, not Gemini: it only suggests. The date changes only after a recall session; a manual color change in the table leaves the schedule alone.
 
-## Процес на нову тему
+## Process for a new topic
 
-1. Прочитав розділ або зробив дріл, порівняв з еталоном.
-2. Закрив джерело і записав 3-5 питань на сторінці теми.
-3. Відповів з пам'яті (Recall).
-4. Відкрив джерело, заповнив Reference, дописав нотатки.
-5. Q-питання самі стають картками: з'являться на **Cards** (до 10 нових на день).
+1. Read the section or did the drill, compared with the reference.
+2. Closed the source and wrote 3-5 questions on the topic page.
+3. Answered from memory (Recall).
+4. Opened the source, filled in the Reference, added notes.
+5. Q questions become cards on their own: they show up on **Cards** (up to 10 new a day).
 
-## Import: картки без репо
+## Import: cards without a repo
 
-**Cards → ⇪ Import**: вставив текст у форматі `Q:`/`A:` (той самий, що в `learn/questions.md`) або перетягнув .md, вибрав категорію, натиснув Import. Передпоказ показує, скільки карток розпізнано і де помилка формату. Питання, яке вже є в категорії, не дублюється, а отримує нову відповідь; його розклад лишається. `T:`-картки сюди не імпортуються, тільки через репо.
+**Cards -> ⇪ Import**: paste text in the `Q:`/`A:` format (the same as `learn/questions.md`) or drop a .md, pick a category, press Import. The preview shows how many cards were recognised and where the format breaks. A question that already exists in the category is not duplicated; it gets the new answer and keeps its schedule. `T:` cards are not imported here, only through a repo.
 
-Те саме скриптом або з чату: `POST /api/import` з заголовком `x-automation-token`, тіло `{ text, topicId | newCategory, deadline? }`.
+The same from a script or a chat: `POST /api/import` with the `x-automation-token` header, body `{ text, topicId | newCategory, deadline? }`.
 
-## Дедлайн категорії
+## Category deadline
 
-Готуєшся до дати (інтерв'ю): на сторінці категорії став **⏱ Deadline** (або `deadline: 2026-10-19` у `topic.md` для карток з репо). До цієї дати:
-- картки категорії йдуть першими в Review, ближчий дедлайн вище; нові картки беруться всі одразу, ліміт 10 на день для них не діє;
-- інтервали стискаються під дату, що лишилась: кожне наступне повторення приблизно вдвічі довше (1, 2, 4 дні…), але жодне не перестрибує переддень дедлайну; лишився день, повторення щодня; «забув» завжди на завтра.
+Preparing for a date (an interview): on the category page set **⏱ Deadline** (or `deadline: 2026-10-19` in `topic.md` for repo cards). Until that date:
+- the category's cards go first in Review, the nearer deadline higher; its new cards are all taken at once, the 10 a day limit does not apply to them;
+- intervals are squeezed into the days left: each next review is roughly twice as long (1, 2, 4 days...), but none jumps past the day before the deadline; with one day left, daily; "forgot" is always tomorrow.
 
-Після дедлайну категорія стає звичайною: драбина 1 → 3 → 7 → 14 → 30 → 60 → 120, пріоритету немає.
+After the deadline the category becomes regular: the ladder 1 -> 3 -> 7 -> 14 -> 30 -> 60 -> 120, no priority.
 
-## Картки з репо (Sources)
+## Repo cards (Sources)
 
-Код і картки до нього живуть у репо з матеріалом, у папці `learn/`. Дві розкладки:
-
-```
-learn/topic.md + learn/questions.md                    одна тема на все репо (graphql-base)
-learn/<module>/topic.md + learn/<module>/questions.md  тема на кожну папку (system-design-reps)
-```
-
-`topic.md` це front matter: `name`, `track`, необов'язково `notes:` (файл у репо, який стане нотатками теми, наприклад README модуля), `drill:` (папка з дрілами) і `deadline:` (YYYY-MM-DD, див. «Дедлайн категорії»). Кожна папка стає окремою темою зі своїм кольором і повтореннями.
+Code and the cards about it live in the repo with the material, in the `learn/` folder. Two layouts:
 
 ```
-Q: Що таке null bubbling?
-A: Впало non-null поле, null піднімається до найближчого nullable батька.
+learn/topic.md + learn/questions.md                    one topic for the whole repo (graphql-base)
+learn/<module>/topic.md + learn/<module>/questions.md  a topic per folder (system-design-reps)
+```
 
-T: Напиши DataLoader з нуля
+`topic.md` is front matter: `name`, `track`, optionally `notes:` (a file in the repo that becomes the topic notes, e.g. the module README), `drill:` (the drills folder) and `deadline:` (YYYY-MM-DD, see "Category deadline"). Each folder becomes its own topic with its own color and reviews.
+
+```
+Q: What is null bubbling?
+A: A non-null field failed, the null bubbles up to the nearest nullable parent.
+
+T: Write a DataLoader from scratch
 Ref: drills/02-medium/06-dataloader-by-hand.ts
 Check: npx tsx drills/02-medium/06-dataloader-by-hand.ts
 ```
 
-- **Q** = пояснити словами. Стає карткою на сторінці Cards.
-- **T** = написати код руками. Тільки в апці: Recall показує задачу, ти пишеш з нуля, потім відкриваєш еталон (Ref) і запускаєш Check.
+- **Q** = explain in words. Becomes a card on the Cards page.
+- **T** = write code by hand. App only: Recall shows the task, you write from scratch, then open the reference (Ref) and run Check.
 
-Як дані потрапляють в апку:
-1. Після навчання пишеш саммарі своїми словами, Claude робить з нього картки в `learn/questions.md`.
-2. Push. CI в репо перевіряє формат (зламана картка або неіснуючий Ref дає червоний чек).
-3. Апка підтягує при відкритті Today (не частіше ніж раз на 10 хв і тільки якщо в репо є нові коміти) або кнопкою **Sync** на Sources.
+How data gets into the app:
+1. After studying you write a summary in your own words; Claude turns it into cards in `learn/questions.md`.
+2. Push. CI in the repo checks the format (a broken card or a missing Ref gives a red check).
+3. The app pulls on opening Today (at most once per 10 min and only when the repo has new commits) or with the **Sync** button on Sources.
 
-Правила Sync:
-- файл з помилкою не імпортується зовсім, помилка видна на Sources;
-- картка впізнається за текстом питання: змінив відповідь, картка оновилась (розклад картки лишається); змінив питання, це нова картка;
-- видалив картку з файлу, вона зникне з апки; видалив папку модуля, її картки зникнуть, а тема лишиться як звичайна;
-- твої відповіді з пам'яті, кольори і розклад Sync не чіпає; питання, додані руками в апці, теж;
-- картку з репо, яку змінили в апці (All cards → ✎), Sync більше не оновлює; якщо це питання потім зникне з файлу, картка лишиться в апці як звичайна;
-- картку з репо, яку видалили в апці (All cards → ✕), Sync не створює знову, поки це питання є у файлі; якщо питання у файлі переписати, прийде як нова картка;
-- на сторінках теми і Questions картки з репо тільки для читання, міняються вони через All cards або у файлі;
-- на Sources після Sync видно, скільки таких карток: "2 edited in app, 1 deleted in app".
+Sync rules:
+- a file with an error is not imported at all; the error is shown on Sources;
+- a card is recognised by its question text: a changed answer updates the card (its schedule stays); a changed question is a new card;
+- a card deleted from the file disappears from the app; a deleted module folder loses its cards, the topic stays as a regular one;
+- your answers from memory, colors and schedules are never touched by Sync; neither are questions added by hand in the app;
+- a repo card edited in the app (All cards -> ✎) is no longer updated by Sync; if the question later leaves the file, the card stays in the app as a regular one;
+- a repo card deleted in the app (All cards -> ✕) is not recreated by Sync while the question is in the file; a rewritten question arrives as a new card;
+- on the topic and Questions pages repo cards are read-only; they change through All cards or in the file;
+- Sources shows after a Sync how many such cards there are: "2 edited in app, 1 deleted in app".
 
-Приватне репо: `GITHUB_TOKEN` у `.env` (fine-grained, Contents: read-only). Без токена GitHub дає 60 запитів на годину, цього вистачає.
+A private repo: `GITHUB_TOKEN` in `.env` (fine-grained, Contents: read-only). Without a token GitHub allows 60 requests an hour, which is enough.
 
 ## Gemini
 
-У `.env` можна дати кілька моделей через кому: `GEMINI_MODEL="gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash-lite"`. Перша основна, решта запасні.
-- Ліміт (429), перевантаження (503), обрив посеред відповіді, 404, зламана відповідь або модель мовчить (45 с до першого шматка чи 30 с тиші посеред відповіді): апка одразу йде до наступної моделі. Тільки останню в списку на 503 чи обрив пробує ще раз, через 2 с: далі йти вже нема куди.
-- Відповідь іде шматками, тому довга відповідь не обривається: обривається тільки тиша. Загальна межа на план дня 3 хв.
-- Поки чекаєш (план дня, вечірній огляд, оцінка в Recall), під кнопкою рядок статусу: модель, секунди, «думає» або «пише відповідь, N симв.», і що впало до цього. Якщо модель довго мовчить, видно «нічого нового N с».
-- Не відповіла жодна модель: план дня складається за правилами, а під ним червоний рядок з причиною. Recall пише причину під кнопкою, вечірній огляд робиться без AI.
-- **Sources → Gemini**: порядок моделей, кнопка **🔌 Перевірити Gemini** (короткий запит до кожної моделі: працює чи ні і чому) і останні запити апки: яка модель відповіла і що впало. Список запитів живе до перезапуску апки.
+`.env` can list several models separated by commas: `GEMINI_MODEL="gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash-lite"`. The first is primary, the rest are fallbacks.
+- Quota (429), overload (503), a cut-off reply, 404, a broken reply, or a silent model (45 s before the first chunk or 30 s of silence mid-reply): the app moves to the next model at once. Only the last one in the list is retried on a 503 or a cut-off, after 2 s: there is nowhere else to go.
+- The reply streams in chunks, so a long reply is never cut; only silence is. The overall limit for the day plan is 3 min.
+- While you wait (day plan, evening review, a grade in Recall) a status line sits under the button: model, seconds, "thinking" or "writing, N chars", and what failed before. A long silence shows as "nothing new for N s".
+- No model answered: the day plan is built by rules, with a red line under it giving the reason. Recall shows the reason under the button, the evening review is done without AI.
+- **Sources -> Gemini**: the model order, the **🔌 Check Gemini** button (a short request to each model: works or not, and why) and the app's recent requests: which model answered and what failed. The request list lives until the app restarts.
 
-## Ритм
+## Rhythm
 
-**Щодня, ~25 хв**
-1. Cards → Review: усе, що на сьогодні (Space = відповідь, 1/2/3 = забув / важко / згадав).
-2. Today → одна категорія з "Due for recall" → Recall (картки, в яких настав термін).
-3. Одне питання вголос за хвилину.
+**Daily, ~25 min**
+1. Cards -> Review: everything due today (Space = answer, 1/2/3 = forgot / hard / recalled).
+2. Today -> one category from "Due for recall" -> Recall (due cards).
+3. One question out loud in a minute.
 
-Повторення бере теми з усіх треків, а не тільки з поточного циклу: кілька коротких різних тем краще, ніж одна довга (interleaving).
+Reviews take topics from every track, not only the current cycle: several short different topics beat one long one (interleaving).
 
-**Будні:** основна робота йде за поточним циклом і розподілом 50 / 35 / 15 (Node + system design / AI на TS / Python).
+**Weekdays:** the main work follows the current cycle and the 50 / 35 / 15 split (Node + system design / AI in TS / Python).
 
-**Щотижня: system design** ([primer](https://systemdesignschool.io/primer))
-- 1 розділ праймера: читаєш, проходиш віджети і квізи, пишеш 3-5 питань;
-- його дріл, якщо є (колонка Drill у Topics);
-- 1 mock, 45 хв.
+**Weekly: system design** ([primer](https://systemdesignschool.io/primer))
+- 1 primer section: read, do the widgets and quizzes, write 3-5 questions;
+- its drill, if there is one (the Drill column in Topics);
+- 1 mock, 45 min.
 
-Порядок: §7 → §8 → §9 → §10 (master template) → §11 по компоненту → §12-13 як навичка → §14 deep dives.
+Order: §7 -> §8 -> §9 -> §10 (master template) -> §11 per component -> §12-13 as a skill -> §14 deep dives.
 
-**Неділя, ~20 хв:** розібрати Inbox, переглянути кольори в Topics, написати Retro циклу, якщо він закінчується, вибрати розділ праймера.
+**Sunday, ~20 min:** triage the Inbox, look over the colors in Topics, write the cycle Retro if it ends, pick a primer section.
 
-## Цикли і теми
+## Cycles and topics
 
-План складаєш сам: на сторінці **Cycles** додаєш фокус ("Node: pool, retries, races") і прямо в картці циклу додаєш теми. Перший цикл автоматично стає активним. Дат немає, є тільки порядок і статус.
+You make the plan yourself: on the **Cycles** page add a focus ("Node: pool, retries, races") and add topics right in the cycle card. The first cycle becomes active automatically. No dates, only order and status.
 
-Теми без циклу додаються на сторінці **Topics** (рядок "+ New topic"). На старті є одна тема: **GraphQL** з нотатками і твоїм DataLoader; картки до неї приходять з репо graphql-base.
+Topics without a cycle are added on the **Topics** page (the "+ New topic" row). At the start there is one topic, **GraphQL**, with notes and your DataLoader; its cards come from the graphql-base repo.
 
-Один цикл за раз. Не брати новий, поки поточний не закінчений.
+One cycle at a time. No new one until the current one is finished.
 
-## Час і стрік
+## Time and streak
 
-- **Log time** (на Today, Stats і сторінці теми): хвилини + що робив (Study, Drill, Questions, Reading). Тема чи трек за бажанням.
-- Recall-сесії і mock записуються самі, за таймером.
-- **Стрік** = дні поспіль, коли було хоч щось: запис часу або галочка в чеклісті. Якщо сьогодні ще нічого не зроблено, стрік не рветься до кінця дня.
-- **Stats**: скільки часу пішло за день, тиждень, усього, на який трек, тему чи тип роботи, плюс календар активності.
+- **Log time** (on Today, Stats and the topic page): minutes + what you did (Study, Drill, Questions, Reading). Topic or track optional.
+- Recall sessions and mocks log themselves, by timer.
+- **Streak** = consecutive days with anything at all: a time entry or a tick in the checklist. If nothing is done yet today, the streak holds until the end of the day.
+- **Stats**: time per day, week, total, by track, topic or kind of work, plus the activity calendar.
 
-## Чого не робити
+## What not to do
 
-- Не переписувати відео чи статті в конспект. Тільки питання і відповіді з пам'яті.
-- Не ставити 🟢 за "перечитав і все зрозуміло".
-- Не просити Gemini генерувати питання: писати їх самому і є половина навчання.
-- Не допилювати апку замість навчання. Нова фіча в апці = задача циклу 2, а не щоденна робота.
+- Don't rewrite videos or articles into notes. Only questions and answers from memory.
+- Don't give 🟢 for "re-read it and it all made sense".
+- Don't ask Gemini to generate questions: writing them yourself is half the learning.
+- Don't polish the app instead of studying. A new feature is a task for cycle 2, not daily work.
 
 ---
 
-Оригінальна версія для Notion (CSV, формули, views): `docs/notion/`.
+The original Notion version (CSV, formulas, views): `docs/notion/`.

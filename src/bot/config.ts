@@ -1,12 +1,12 @@
 export interface BotConfig {
   token: string;
-  /** null: режим налаштування, бот тільки відповідає на /start твоїм chat id */
+  /** null: setup mode, the bot only replies to /start with the chat id */
   chatId: string | null;
-  /** HH:MM за локальним часом процесу, як у .env */
+  /** HH:MM in the process local time, as in .env */
   sendAt: string;
-  /** те саме в хвилинах від півночі */
+  /** the same in minutes since midnight */
   sendAtMinutes: number;
-  /** https://api.telegram.org, або фейковий сервер у тестах */
+  /** https://api.telegram.org, or a fake server in tests */
   apiUrl: string;
 }
 

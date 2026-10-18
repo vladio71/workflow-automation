@@ -1,6 +1,6 @@
 import type { ActivityKind, Confidence, CycleStatus, Track } from '@/generated/prisma/enums';
 
-/** Кольори як у Notion select. Ключ = назва кольору з globals.css (--tag-<color>-bg / -fg). */
+/** Notion-select style colours. Key = colour name from globals.css (--tag-<color>-bg / -fg). */
 export type TagColor = 'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange' | 'pink' | 'brown';
 
 export interface Option<T extends string> {

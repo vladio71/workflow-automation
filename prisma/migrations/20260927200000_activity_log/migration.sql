@@ -4,7 +4,7 @@ ALTER TYPE "Track" ADD VALUE 'OTHER';
 -- CreateEnum
 CREATE TYPE "ActivityKind" AS ENUM ('STUDY', 'DRILL', 'RECALL', 'QUESTIONS', 'READING', 'MOCK', 'OTHER');
 
--- AlterTable: цикли без жорстких дат
+-- AlterTable: cycles no longer have fixed dates
 ALTER TABLE "Cycle" DROP COLUMN "startsOn",
 DROP COLUMN "endsOn",
 ADD COLUMN "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

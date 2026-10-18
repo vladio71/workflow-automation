@@ -13,12 +13,15 @@ import { pickMandatory, toPlanItem } from './plan-order';
 import { todayTickCounts, type TaskProgress } from './task-sessions';
 
 /**
- * План дня. Принцип: AI НЕ вигадує, що вчити. Кандидати беруться з твоїх даних
- * (що прострочене, який цикл, навчальний план з репо, твої справи), а AI лише вибирає, впорядковує і пояснює.
- * Кроки навчального плану (PLAN) і переробки задач відбирає код, а не AI: вони обов'язкові і йдуть по порядку.
- * Повторювані справи (TASK) теж обов'язкові; разові AI пропонує, поки ти їх не зробиш.
+ * Daily plan.
+ *
+ * The LLM never decides *what* to work on. Candidates come from the user's own data
+ * (overdue reviews, the active cycle, study plans synced from Git, their tasks); the model only
+ * picks, orders and explains. Study-plan steps (PLAN) and problem redos are selected by code and
+ * are mandatory, in order. Recurring tasks (TASK) are mandatory too; one-off tasks are offered
+ * until they are done.
  */
-/** ANKI лишився тільки для старих планів у БД; нові плани мають CARDS. */
+/** ANKI is kept only for plans already stored in the DB; new plans use CARDS. */
 export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN' | 'LEVEL' | 'TASK';
 
 export interface PlanCandidate {
@@ -28,20 +31,20 @@ export interface PlanCandidate {
   href: string;
   topicId: number | null;
   defaultMinutes: number;
-  /** пояснення за замовчуванням (коли план без AI) */
+  /** Default explanation, used when the plan is built without the LLM. */
   hint?: string;
-  /** частина навчального плану на сьогодні або повторювана справа: AI не може її викинути */
+  /** Part of today's study plan or a recurring task: the LLM cannot drop it. */
   mandatory?: boolean;
-  /** навчальний план, з якого пункт ("plan:<sourceId>"): кроки одного плану йдуть строго по порядку */
+  /** Study plan this item belongs to ("plan:<sourceId>"); steps of one plan keep their order. */
   group?: string;
-  /** позиція кроку в плані (тільки PLAN) */
+  /** Step position within its plan (PLAN only). */
   order?: number;
 }
 
 export interface CandidateOptions {
-  /** фокус дня: '' (нема), 'levels' або 'plan:<sourceId>', див. day-focus.ts */
+  /** Focus of the day: '' (none), 'levels' or 'plan:<sourceId>', see day-focus.ts. */
   focus: string;
-  /** бюджет дня в хвилинах: від нього рахується частка фокусу */
+  /** Day budget in minutes; the focus share is derived from it. */
   budget: number;
 }
 
@@ -51,27 +54,27 @@ const DEFAULT_OPTIONS: CandidateOptions = { focus: NO_FOCUS, budget: DEFAULT_BUD
 export interface PlanItem extends PlanCandidate {
   minutes: number;
   why: string;
-  /** позначив руками (для того, що апка не бачить сама) */
+  /** Ticked by hand, for items the app cannot detect on its own. */
   manualDone: boolean;
 }
 
 export interface PlanItemWithStatus extends PlanItem {
   done: boolean;
-  /** справа-сесія: скільки сьогодні з цілі (3/10); вузол закривається сам на цілі */
+  /** Session task: today's count against the target (3/10); closes itself when the target is reached. */
   progress?: TaskProgress;
-  /** true = апка сама побачила виконання (recall, питання, mock), false = тільки ручна галочка */
+  /** true = the app detected completion itself (recall, questions, mock); false = manual tick only. */
   autoDone: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** рівні live-code на день: повтори в термін і нові по порядку */
+/** Live-code levels per day: due redos first, then new ones in repo order. */
 const MAX_LEVEL_REDOS = 2;
 const MAX_NEW_LEVELS = 2;
-/** день з фокусом на live-code: рівні беруть до ~60% бюджету (вправи по 15-30 хв, тож нових до 6) */
+/** On a live-code focus day levels may take ~60% of the budget (15-30 min each, so up to 6 new). */
 const MAX_FOCUS_LEVEL_REDOS = 4;
 const MAX_FOCUS_NEW_LEVELS = 6;
 
-/** items лежать у БД як JSON: при читанні перевіряємо форму, а не кастимо наосліп. */
+/** Items are stored as JSON; validate the shape on read instead of casting blindly. */
 const PlanItemSchema = z.object({
   id: z.string(),
   kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL', 'TASK']),
@@ -92,7 +95,7 @@ export function parsePlanItems(json: unknown): PlanItem[] {
   return z.array(PlanItemSchema).parse(json);
 }
 
-/** Повторювана справа сьогодні в плані? WEEKDAYS = пн-пт. */
+/** Is a recurring task due today? WEEKDAYS = Mon-Fri. */
 function isTaskDueToday(repeat: 'ONCE' | 'DAILY' | 'WEEKDAYS', now: Date): boolean {
   if (repeat === 'DAILY') return true;
   if (repeat === 'WEEKDAYS') return now.getDay() >= 1 && now.getDay() <= 5;
@@ -104,12 +107,12 @@ function daysSince(from: Date, now: Date): number {
 }
 
 async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidate[]; once: PlanCandidate[] }> {
-  // разова справа, зроблена сьогодні, лишається кандидатом: інакше перепланування ввечері її загубить.
-  // Справа з кінцевою датою (until) після неї в план не йде.
+  // A one-off task done today stays a candidate, otherwise an evening re-plan would lose it.
+  // A task with an end date (until) is not planned after that date.
   const tasks = await db.task.findMany({
     where: {
       AND: [
-        // беклог у план не йде, поки справу не витягнеш у TODO
+        // Backlog items are not planned until pulled into TODO.
         { status: { in: ['TODO', 'IN_PROGRESS'] } },
         { OR: [{ repeat: { not: 'ONCE' } }, { doneAt: null }, { doneAt: { gte: startOfDay(now) } }] },
         { OR: [{ until: null }, { until: { gte: dayKey(now) } }] },
@@ -145,8 +148,9 @@ function levelCandidate(level: LevelWithProgress, redo: boolean): PlanCandidate 
 }
 
 /**
- * Рівні live-code: спершу повтори, в яких настав термін, потім наступні нові вправи по порядку репо.
- * У день фокусу на live-code рівні обов'язкові, поки влазять у ~60% бюджету (повтори першими); решта лишається на вибір.
+ * Live-code levels: due redos first, then the next new exercises in repo order.
+ * On a live-code focus day they are mandatory while they fit in ~60% of the budget (redos first);
+ * the rest stays optional.
  */
 function levelCandidates(levels: LevelWithProgress[], focused: boolean, budget: number): PlanCandidate[] {
   const redos = levels
@@ -184,14 +188,14 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
     getLevelsWithProgress(now),
     buildTaskCandidates(now),
   ]);
-  // план у фокусі йде першим: його кроки першими займають бюджет, решта планів у залишок
+  // The focused plan goes first: its steps take the budget before the other plans.
   const isFocused = (sourceId: number): boolean => options.focus === planFocus(sourceId);
   const studyPlans = [...allStudyPlans].sort((a, b) => Number(isFocused(b.source.id)) - Number(isFocused(a.source.id)));
 
   const candidates: PlanCandidate[] = [];
   const cardsToday = cardQueue.due.length + cardQueue.fresh.length;
   if (cardsToday > 0) {
-    // ~30 с на картку
+    // ~30 s per card
     const parts = [
       cardQueue.due.length > 0 ? `${cardQueue.due.length} due` : '',
       cardQueue.fresh.length > 0 ? `${cardQueue.fresh.length} new` : '',
@@ -210,13 +214,13 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
     { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 },
   );
 
-  // рівні live-code (у день фокусу на них обов'язкові і стоять перед кроками навчальних планів)
+  // Live-code levels (mandatory on a focus day, placed before study-plan steps).
   candidates.push(...levelCandidates(levelsState.levels, options.focus === LEVELS_FOCUS, options.budget));
 
-  // навчальний план: переробки задач і наступні кроки, відібрані кодом (обов'язкові)
+  // Study plans: problem redos and next steps, selected by code (mandatory).
   const problemIds = new Set<number>();
-  // день з фокусом: решта планів ділить між собою те, що лишається після частки фокусу (~40%), по черзі;
-  // кому не лишилось, той сьогодні відпочиває
+  // On a focus day the other plans share what is left after the focus share (~40%), in turn;
+  // a plan that gets nothing rests today.
   let otherMinutesLeft = Math.round(options.budget * (1 - FOCUS_BUDGET_SHARE));
   for (const plan of studyPlans) {
     for (const id of problemTopicIds(plan)) problemIds.add(id);
@@ -256,10 +260,10 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
     }
   }
 
-  // справи поза навчанням: повторювані обов'язкові, разові пропонуються, поки не зробиш (найстаріші першими)
+  // Tasks outside study: recurring are mandatory, one-offs are offered until done (oldest first).
   candidates.push(...tasks.recurring, ...tasks.once);
 
-  // задачі плану повторюються тільки як Redo (45 хв), не як звичайний 15-хвилинний recall
+  // Plan problems repeat only as a 45-min redo, never as a regular 15-min recall.
   for (const topic of due.filter((dueTopic) => !problemIds.has(dueTopic.id)).slice(0, 6)) {
     candidates.push({
       id: `recall:${topic.id}`,
@@ -299,7 +303,7 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
     }
   }
 
-  // старий ритм "system design раз на тиждень" і тижневий mock: тільки якщо навчального плану немає
+  // The older rhythm (weekly system design + weekly mock) applies only when there is no study plan.
   if (studyPlans.length === 0 && sdTopic && !recentSdRecall) {
     candidates.push({
       id: `sd:${sdTopic.id}`,
@@ -322,14 +326,14 @@ export async function buildCandidates(now: Date = new Date(), options: Candidate
   return candidates;
 }
 
-/** План без AI (нема ключа або Gemini впав): прості правила. */
+/** Plan without the LLM (no API key or every model failed): plain rules. */
 export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { items: PlanItem[]; summary: string } {
   const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] =>
     candidates.filter((c) => c.kind === kind && c.mandatory !== true).slice(0, limit);
   const cards = pick('CARDS', 1);
   const tasks = candidates.filter((c) => c.mandatory === true && c.kind === 'TASK');
   const reserved = [...cards, ...tasks].reduce((sum, c) => sum + c.defaultMinutes, 0);
-  // кроки планів по порядку (план у фокусі першим), поки влазять; не вліз крок, наступні цього плану теж ні
+  // Plan steps in order (focused plan first) while they fit; once a step does not fit, the rest of that plan is skipped.
   const study = pickMandatory(candidates.filter((c) => c.mandatory === true && c.kind !== 'TASK'), minutesBudget - reserved);
 
   const items: PlanItem[] = [...cards, ...study, ...tasks].map(toPlanItem);
@@ -355,7 +359,7 @@ export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { 
   return { items, summary };
 }
 
-/** Що апка бачить сама: recall-логи, нові питання, mock, чекліст дня. */
+/** What the app can detect itself: recall logs, new questions, mocks, the day checklist. */
 export async function withStatus(items: PlanItem[], now: Date = new Date()): Promise<PlanItemWithStatus[]> {
   const from = startOfDay(now);
   const to = endOfDay(now);
@@ -389,13 +393,13 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
       case 'RECALL': autoDone = recalled.has(topicId); break;
       case 'QUESTIONS': autoDone = (questionsByTopic.get(topicId) ?? 0) >= 3; break;
       case 'CYCLE':
-      // робота над темою = recall або нові питання до неї; просте редагування (колір, назва) не рахується
+      // Working on a topic = a recall or new questions for it; editing color or name does not count.
       case 'SYSTEM_DESIGN': autoDone = recalled.has(topicId) || questionsByTopic.has(topicId); break;
       case 'MOCK': autoDone = mockToday > 0; break;
       case 'INBOX': autoDone = inboxCount === 0; break;
       case 'LEVEL': autoDone = passedLevels.has(item.id.replace('level:', '')); break;
       case 'PLAN': {
-        // прогрес кроку живе в PlanStep: галочка тут, на сторінці плану або автоматично після спроби задачі
+        // Step progress lives in PlanStep: ticked here, on the plan page, or automatically after a problem attempt.
         const step = stepById.get(Number(item.id.replace('plan:', '')));
         if (step) {
           const attemptDone = step.kind === 'ATTEMPT' && recalled.has(topicId);
@@ -404,7 +408,7 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
         break;
       }
       case 'TASK': {
-        // разову справу можна закрити і на сторінці Tasks; справа-сесія закривається сама, коли дійшла до цілі
+        // A one-off task can also be closed on the Tasks page; a session task closes itself at the target.
         const task = taskById.get(Number(item.id.replace('task:', '')));
         const closedOnce = task !== undefined && task.repeat === 'ONCE' && task.doneAt !== null;
         if (task && task.target > 0) {
@@ -426,7 +430,7 @@ export async function getTodayPlan(now: Date = new Date()) {
   return { ...plan, items };
 }
 
-/** Факти для вечірнього огляду: що повторив і з яким кольором. */
+/** Facts for the evening review: what was recalled and with which confidence. */
 export async function todayRecallSummary(now: Date = new Date()): Promise<string[]> {
   const recalls = await db.recallLog.findMany({
     where: { createdAt: { gte: startOfDay(now), lte: endOfDay(now) } },

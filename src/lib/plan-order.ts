@@ -1,6 +1,12 @@
 /**
- * Порядок і редагування плану дня. Чиста логіка без БД: окремий файл, щоб її можна було перевірити окремо
- * і викликати з клієнта (import type з planner стирається при компіляції, server-only сюди не тягнеться).
+ * Ordering and editing of the day plan. Pure logic, no DB: kept in its own file so it can be tested
+ * on its own and imported from the client (the `import type` from planner is erased at compile time,
+ * so `server-only` does not leak in here).
+ *
+ * Three groups of rules:
+ *   mandatory items   pickMandatory, enforceMandatory: what the LLM may not drop or reorder
+ *   momentum order    findBossId, momentumOrder: warm-up first, the biggest item while the head is fresh
+ *   draft editing     add, remove, move, set minutes, keep what is already done
  */
 import type { PlanCandidate, PlanItem, PlanItemWithStatus } from './planner';
 
@@ -18,10 +24,10 @@ function minutesOf(candidates: PlanCandidate[]): number {
 }
 
 /**
- * Які навчальні обов'язкові пункти (кроки планів, переробки) йдуть у план, у порядку кандидатів.
- * - Не вліз крок плану: наступні кроки цього плану теж не беремо, а інші плани ще можуть влізти.
- * - Перший навчальний пункт беремо навіть довшим за бюджет, інакше план застрягне.
- * - keep: пункти, які AI вже поставив сам; вони лишаються, якщо їхній план не обрізаний раніше.
+ * Which mandatory study items (plan steps, redos) go into the plan, in candidate order.
+ * - A plan step that does not fit cuts the rest of that plan; other plans may still fit.
+ * - The first study item is taken even when it is longer than the budget, otherwise the plan would never advance.
+ * - `keep`: items the LLM already placed; they stay unless their plan was cut earlier.
  */
 export function pickMandatory(
   mandatory: PlanCandidate[],
@@ -46,10 +52,10 @@ export function pickMandatory(
 }
 
 /**
- * План від AI -> план, у якому обов'язкове на місці.
- * Кроки навчальних планів AI не може викинути чи переставити: вони стають на місця, де AI поставив обов'язкові пункти,
- * у своєму порядку, а пропущені докладаються, поки влазять у бюджет.
- * Повторювані справи (TASK) мають бути в плані завжди, але де саме, вирішує AI: якщо він їх не поставив, вони йдуть у кінець.
+ * A plan from the LLM -> a plan with the mandatory items in place.
+ * Study-plan steps cannot be dropped or reordered by the model: they take the slots where the model put
+ * mandatory items, in their own order, and the ones it skipped are appended while they fit the budget.
+ * Recurring tasks (TASK) must always be present, but where is up to the model; unplaced ones go to the end.
  */
 export function enforceMandatory(items: PlanItem[], candidates: PlanCandidate[], minutesBudget: number): PlanItem[] {
   const tasks = candidates.filter((candidate) => candidate.mandatory === true && candidate.kind === 'TASK');
@@ -70,12 +76,12 @@ export function enforceMandatory(items: PlanItem[], candidates: PlanCandidate[],
       result.push(item);
       continue;
     }
-    // слот обов'язкового пункту займає наступний за порядком плану
+    // A mandatory slot is filled by the next study item in plan order.
     const inOrder = required[next];
     if (inOrder) result.push(inOrder);
     next += 1;
   }
-  // обов'язкові, яких AI не поставив, ідуть одразу після останнього обов'язкового (або в кінець)
+  // Mandatory items the model did not place go right after the last mandatory one (or to the end).
   const rest = required.slice(next);
   if (rest.length > 0) {
     let insertAt = result.length;
@@ -96,8 +102,7 @@ export function enforceMandatory(items: PlanItem[], candidates: PlanCandidate[],
   return result;
 }
 
-
-/** Мінімальний спільний вигляд пункту плану для правил порядку (підходить і PlanItem, і PlanItemWithStatus). */
+/** The minimal shape the ordering rules need; fits both PlanItem and PlanItemWithStatus. */
 export interface OrderableItem {
   id: string;
   kind: string;
@@ -105,7 +110,7 @@ export interface OrderableItem {
   mandatory?: boolean;
 }
 
-/** Бос дня = найдовший пункт; при рівності перший з них. Та сама функція на сервері (порядок) і на карті (корона). */
+/** The boss of the day is the longest item, the first one on a tie. Used on the server for ordering and on the map for the crown. */
 export function findBossId(items: readonly OrderableItem[]): string | null {
   if (items.length < 2) return null;
   let boss: OrderableItem | null = null;
@@ -115,12 +120,12 @@ export function findBossId(items: readonly OrderableItem[]): string | null {
   return boss ? boss.id : null;
 }
 
-/** розминка = картки; якщо карток сьогодні немає, найкоротший не обов'язковий пункт до 10 хв */
+/** Warm-up is the cards; without cards today, the shortest optional item of up to 10 minutes. */
 const WARM_UP_MAX_MINUTES = 10;
 
 /**
- * Порядок дня під старт: розминка → бос (жаба, поки свіжа голова) → решта, легше до вечора.
- * Кроки навчального плану між собою не переставляються: бос-крок не обганяє обов'язковий крок, що стояв перед ним.
+ * Order for the start of the day: warm-up, then the boss (the frog, while the head is fresh), then the rest.
+ * Study-plan steps keep their relative order: a boss step never overtakes a mandatory step that stood before it.
  */
 export function momentumOrder<T extends OrderableItem>(items: readonly T[]): T[] {
   const result = [...items];
@@ -142,7 +147,7 @@ export function momentumOrder<T extends OrderableItem>(items: readonly T[]): T[]
 
   let target = warmUp ? 1 : 0;
   if (boss.mandatory === true) {
-    // останній обов'язковий пункт перед босом лишається перед ним
+    // The last mandatory item before the boss stays before it.
     for (let index = bossIndex - 1; index >= 0; index -= 1) {
       if (result[index]?.mandatory === true) {
         target = Math.max(target, index + 1);
@@ -156,7 +161,7 @@ export function momentumOrder<T extends OrderableItem>(items: readonly T[]): T[]
   return result;
 }
 
-// ------------------------------------------------------------------ чернетка: правки до "Start the day"
+// ─── Draft editing, before "Start the day" ──────────────────────────────────
 
 function isLaterStepOfSamePlan(item: PlanItem, removed: PlanItem): boolean {
   return item.kind === 'PLAN'
@@ -166,14 +171,14 @@ function isLaterStepOfSamePlan(item: PlanItem, removed: PlanItem): boolean {
     && (item.order ?? 0) > (removed.order ?? 0);
 }
 
-/** Прибрати пункт. Прибраний крок плану забирає і наступні кроки того ж плану: робити крок 5 без кроку 4 не можна. */
+/** Remove an item. Removing a plan step also removes the later steps of that plan: step 5 cannot be done without step 4. */
 export function removeFromDraft(items: PlanItem[], itemId: string): PlanItem[] {
   const removed = items.find((item) => item.id === itemId);
   if (!removed) return items;
   return items.filter((item) => item.id !== itemId && !isLaterStepOfSamePlan(item, removed));
 }
 
-/** Два кроки одного плану місцями не міняємо: їхній порядок задає план. */
+/** Two steps of the same plan never swap: the plan defines their order. */
 export function canMove(items: PlanItem[], index: number, direction: MoveDirection): boolean {
   const current = items[index];
   const neighbour = items[index + direction];
@@ -192,7 +197,7 @@ export function moveInDraft(items: PlanItem[], itemId: string, direction: MoveDi
   return result;
 }
 
-/** Послідовність кроків кожного навчального плану: "plan:3" -> id кроків у порядку списку. */
+/** Step sequence of each study plan: "plan:3" -> step ids in list order. */
 function planStepOrder(items: PlanItem[]): Map<string, string[]> {
   const order = new Map<string, string[]>();
   for (const item of items) {
@@ -205,8 +210,8 @@ function planStepOrder(items: PlanItem[]): Map<string, string[]> {
 }
 
 /**
- * Перетягнути пункт на позицію toIndex (індекс у вже готовому списку).
- * null = так не можна: кроки одного плану помінялись би місцями.
+ * Drag an item to position `toIndex` (an index in the resulting list).
+ * null = not allowed: steps of one plan would swap places.
  */
 export function moveToIndex(items: PlanItem[], itemId: string, toIndex: number): PlanItem[] | null {
   const from = items.findIndex((item) => item.id === itemId);
@@ -237,8 +242,8 @@ export function setMinutesInDraft(items: PlanItem[], itemId: string, minutes: nu
 }
 
 /**
- * Додати кандидата в кінець чернетки. Крок плану тягне за собою раніші кроки того ж плану, яких у чернетці нема,
- * щоб порядок плану не зламався.
+ * Append a candidate to the draft. A plan step brings along the earlier steps of its plan that are
+ * not in the draft yet, so the plan order stays intact.
  */
 export function addToDraft(items: PlanItem[], candidateId: string, candidates: PlanCandidate[]): PlanItem[] {
   if (items.some((item) => item.id === candidateId)) return items;
@@ -257,8 +262,8 @@ export function addToDraft(items: PlanItem[], candidateId: string, candidates: P
 }
 
 /**
- * Що ще можна додати в чернетку: кандидати, яких у ній нема.
- * З кроків одного плану тільки найраніший, бо пізніший без нього все одно потягне його за собою.
+ * What can still be added to the draft: candidates not in it yet.
+ * Of one plan's steps only the earliest, since a later one would bring it along anyway.
  */
 export function addableCandidates(items: PlanItem[], candidates: PlanCandidate[]): PlanCandidate[] {
   const present = new Set(items.map((item) => item.id));
@@ -276,7 +281,7 @@ export function addableCandidates(items: PlanItem[], candidates: PlanCandidate[]
   return [...firstPlanStep.values(), ...result];
 }
 
-/** Перепланування після старту: зроблене лишається на початку плану, щоб прогрес дня не губився. */
+/** Re-planning after the start: done items stay at the top so the day's progress is not lost. */
 export function keepDone(previous: PlanItemWithStatus[], fresh: PlanItem[]): PlanItem[] {
   const kept: PlanItem[] = previous
     .filter((item) => item.done)

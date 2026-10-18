@@ -5,13 +5,17 @@ import { dayKey } from '@/lib/queries';
 import { endOfDay, startOfDay } from '@/lib/schedule';
 
 /**
- * Картки (CONCEPT-питання) з власним розкладом, замість Anki.
- *   Згадав (GOOD)  -> наступний інтервал: 1 -> 3 -> 7 -> 14 -> 30 -> 60 -> 120 днів
- *   Важко (HARD)   -> той самий інтервал
- *   Забув (FORGOT) -> знову через 1 день (а в поточній сесії ще раз у кінці)
- * Нові картки приходять поступово: не більше NEW_PER_DAY на день.
- * У режимі "All cards" (PRACTICE) розклад не міняється; "Забув" там теж ставить картку на завтра.
+ * Cards (CONCEPT questions) with their own schedule, instead of Anki.
+ *   Recalled (GOOD)  -> next interval: 1 -> 3 -> 7 -> 14 -> 30 -> 60 -> 120 days
+ *   Hard (HARD)      -> the same interval again
+ *   Forgot (FORGOT)  -> again in 1 day (and once more at the end of the current session)
+ * New cards arrive gradually, at most NEW_PER_DAY per day.
+ * In "All cards" mode (PRACTICE) the schedule does not change; "Forgot" there still puts the card on tomorrow.
+ *
+ * Sections: scheduling rules, today's queue, reviewing a card, editing cards, categories.
  */
+
+// ─── Scheduling rules ────────────────────────────────────────────────────────
 
 export const CARD_LADDER: readonly number[] = [1, 3, 7, 14, 30, 60, 120];
 export const NEW_PER_DAY = 10;
@@ -31,21 +35,21 @@ export function nextCardInterval(current: number, grade: CardGrade): number {
   return next ?? CARD_LADDER[CARD_LADDER.length - 1] ?? first;
 }
 
-/** Термін = початок дня через interval днів: картка доступна з самого ранку того дня. */
+/** Due = start of the day `interval` days ahead, so the card is available from the morning of that day. */
 export function scheduleCard(current: number, grade: CardGrade, now: Date): CardSchedule {
   const interval = nextCardInterval(current, grade);
   return { interval, dueAt: new Date(startOfDay(now).getTime() + interval * DAY_MS) };
 }
 
 /**
- * Скільки днів від сьогодні до дедлайну: 0 = дедлайн сьогодні, від'ємне = минув.
- * deadline це колонка DATE (опівніч UTC), тому порівнюємо з dayKey(now), а не з локальним startOfDay.
+ * Days from today to the deadline: 0 = today, negative = passed.
+ * `deadline` is a DATE column (midnight UTC), so it is compared with dayKey(now), not the local startOfDay.
  */
 export function daysUntilDeadline(deadline: Date, now: Date): number {
   return Math.round((deadline.getTime() - dayKey(now).getTime()) / DAY_MS);
 }
 
-/** Підпис дедлайну для UI: "today", "in 3d", "2d ago". */
+/** Deadline label for the UI: "today", "in 3d", "2d ago". */
 export function deadlineLabel(deadline: Date, now: Date): string {
   const diff = daysUntilDeadline(deadline, now);
   if (diff === 0) return 'today';
@@ -58,13 +62,13 @@ export function deadlineActive(deadline: Date | null, now: Date): deadline is Da
 }
 
 /**
- * Інтервал до дедлайну: драбина стискається під дату, що лишилась.
- * Кожне наступне повторення приблизно вдвічі довше за попереднє (1, 2, 4, ...), але жодне не перестрибує
- * переддень дедлайну: останній раз картку видно за день до нього. Лишився 1 день або менше: щодня.
- * FORGOT завжди на завтра, HARD повторює поточний крок (мінімум 1).
+ * Interval under a deadline: the ladder is squeezed into the days left.
+ * Each review is roughly twice as far as the previous one (1, 2, 4, ...), but none jumps past the day
+ * before the deadline, so the card is seen one last time the day before. With 1 day or less left: daily.
+ * FORGOT is always tomorrow, HARD repeats the current step (at least 1).
  */
 export function nextDeadlineInterval(current: number, grade: CardGrade, daysLeft: number): number {
-  const last = Math.max(1, daysLeft - 1); // переддень дедлайну
+  const last = Math.max(1, daysLeft - 1);
   if (grade === 'FORGOT') return 1;
   if (grade === 'HARD') return Math.min(last, Math.max(current, 1));
   const doubled = Math.max(1, current) * 2;
@@ -78,6 +82,8 @@ export function scheduleCardWithDeadline(current: number, grade: CardGrade, now:
   return { interval, dueAt: new Date(startOfDay(now).getTime() + interval * DAY_MS) };
 }
 
+// ─── Today's queue ───────────────────────────────────────────────────────────
+
 export interface CardView {
   id: number;
   question: string;
@@ -88,11 +94,11 @@ export interface CardView {
   dueAt: Date | null;
   interval: number;
   lapses: number;
-  /** картка прийшла з репо (learn/questions.md) */
+  /** The card came from a repo (learn/questions.md). */
   fromRepo: boolean;
-  /** картку з репо змінили в апці: Sync її більше не оновлює */
+  /** A repo card edited in the app: Sync no longer overwrites it. */
   editedInApp: boolean;
-  /** дедлайн категорії, якщо він ще не минув: картка в пріоритеті */
+  /** The category deadline while it has not passed: the card gets priority. */
   deadline: Date | null;
 }
 
@@ -116,10 +122,7 @@ function toView(question: QuestionWithTopic): CardView {
   };
 }
 
-/**
- * Порядок черги: спершу категорії з живим дедлайном (ближчий вище), потім решта.
- * Усередині порядок як був: прострочені за терміном, нові за id.
- */
+/** Categories with a live deadline first (nearest on top), then the rest; within a group the order is kept. */
 function byDeadlineFirst(now: Date) {
   return (a: CardView, b: CardView): number => {
     const da = deadlineActive(a.deadline, now) ? a.deadline.getTime() : Number.POSITIVE_INFINITY;
@@ -132,35 +135,50 @@ export interface CardQueue {
   due: CardView[];
   fresh: CardView[];
   /**
-   * Порядок для Review: усі картки з живим дедлайном (прострочені й нові) попереду,
-   * далі звичайні прострочені, далі звичайні нові. Саме цей список показувати, а не [...due, ...fresh].
+   * The order for Review: every card with a live deadline (due and new) first, then regular due,
+   * then regular new. This is the list to show, not [...due, ...fresh].
    */
   review: CardView[];
-  /** скільки нових ще можна взяти сьогодні */
+  /** How many new cards can still be taken today. */
   newLeft: number;
   reviewedToday: number;
 }
 
-/** Одна категорія карток: тема або "без категорії" (topicId: null). */
+/** One card category: a topic, or "no category" (topicId: null). */
 export interface CategoryFilter {
   topicId: number | null;
 }
 
+interface QueueRows {
+  due: QuestionWithTopic[];
+  urgentFresh: QuestionWithTopic[];
+  regularFresh: QuestionWithTopic[];
+  newLeft: number;
+  reviewedToday: number;
+}
+
 /**
- * Черга на сьогодні: усі, у кого настав термін (найстаріші першими) + нові в межах ліміту.
- * З filter у черзі тільки картки однієї категорії; ліміт нових на день лишається спільним.
+ * Today's queue: everything that is due (oldest first) plus new cards within the daily limit.
+ * With a filter only one category is in the queue; the daily limit of new cards stays shared.
  */
 export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilter): Promise<CardQueue> {
+  const rows = await loadQueueRows(now, filter);
+  return orderQueue(rows, now);
+}
+
+async function loadQueueRows(now: Date, filter?: CategoryFilter): Promise<QueueRows> {
   const from = startOfDay(now);
-  const today = dayKey(now); // для колонки DATE (deadline)
+  const today = dayKey(now);
   const inCategory = filter ? { topicId: filter.topicId } : {};
+  // Deadline categories are outside the daily limit: their new cards must not eat the regular quota.
+  const outsideDeadline = [{ topicId: null }, { topic: { deadline: null } }, { topic: { deadline: { lt: today } } }];
+
   const [due, newSeenToday, reviewedToday, urgentFresh] = await Promise.all([
     db.question.findMany({
       where: { kind: 'CONCEPT', cardDueAt: { lte: endOfDay(now) }, ...inCategory },
       include: { topic: TOPIC_SELECT },
       orderBy: { cardDueAt: 'asc' },
     }),
-    // нові картки категорій з дедлайном у ліміт не входять, інакше вони з'їли б денну норму звичайних
     db.cardReview.count({
       where: {
         wasNew: true,
@@ -169,7 +187,6 @@ export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilt
       },
     }),
     db.cardReview.count({ where: { grade: { not: 'PRACTICE' }, createdAt: { gte: from } } }),
-    // нові картки категорій з дедлайном: усі одразу, ліміт на день для них не діє
     db.question.findMany({
       where: { kind: 'CONCEPT', cardDueAt: null, topic: { deadline: { gte: today } }, ...inCategory },
       include: { topic: TOPIC_SELECT },
@@ -177,39 +194,37 @@ export async function getCardQueue(now: Date = new Date(), filter?: CategoryFilt
     }),
   ]);
   const newLeft = Math.max(0, NEW_PER_DAY - newSeenToday);
-  const regularFresh =
-    newLeft === 0
-      ? []
-      : await db.question.findMany({
-          where: {
-            kind: 'CONCEPT',
-            cardDueAt: null,
-            OR: [{ topicId: null }, { topic: { deadline: null } }, { topic: { deadline: { lt: today } } }],
-            ...inCategory,
-          },
-          include: { topic: TOPIC_SELECT },
-          orderBy: { id: 'asc' },
-          take: newLeft,
-        });
-  const order = byDeadlineFirst(now);
-  const dueViews = due.map(toView).sort(order);
-  const freshViews = [...urgentFresh.map(toView), ...regularFresh.map(toView)].sort(order);
-  const isUrgent = (card: CardView): boolean => deadlineActive(card.deadline, now);
-  const review = [
-    ...[...dueViews.filter(isUrgent), ...freshViews.filter(isUrgent)].sort(order),
-    ...dueViews.filter((card) => !isUrgent(card)),
-    ...freshViews.filter((card) => !isUrgent(card)),
-  ];
-  return { due: dueViews, fresh: freshViews, review, newLeft, reviewedToday };
+  const regularFresh = newLeft === 0
+    ? []
+    : await db.question.findMany({
+        where: { kind: 'CONCEPT', cardDueAt: null, OR: outsideDeadline, ...inCategory },
+        include: { topic: TOPIC_SELECT },
+        orderBy: { id: 'asc' },
+        take: newLeft,
+      });
+  return { due, urgentFresh, regularFresh, newLeft, reviewedToday };
 }
 
-/** Для лічильника в сайдбарі і плану дня: скільки карток чекає сьогодні. */
+function orderQueue(rows: QueueRows, now: Date): CardQueue {
+  const order = byDeadlineFirst(now);
+  const due = rows.due.map(toView).sort(order);
+  const fresh = [...rows.urgentFresh.map(toView), ...rows.regularFresh.map(toView)].sort(order);
+  const isUrgent = (card: CardView): boolean => deadlineActive(card.deadline, now);
+  const review = [
+    ...[...due.filter(isUrgent), ...fresh.filter(isUrgent)].sort(order),
+    ...due.filter((card) => !isUrgent(card)),
+    ...fresh.filter((card) => !isUrgent(card)),
+  ];
+  return { due, fresh, review, newLeft: rows.newLeft, reviewedToday: rows.reviewedToday };
+}
+
+/** For the sidebar counter and the day plan: how many cards wait today. */
 export async function getCardCounts(now: Date = new Date()): Promise<{ due: number; fresh: number }> {
   const queue = await getCardQueue(now);
   return { due: queue.due.length, fresh: queue.fresh.length };
 }
 
-/** Усі картки для вільного перегляду: нічого не ховаємо, розклад тут не заважає. */
+/** Every card for free browsing; the schedule does not hide anything here. */
 export async function getAllCards(): Promise<CardView[]> {
   const questions = await db.question.findMany({
     where: { kind: 'CONCEPT' },
@@ -219,7 +234,7 @@ export async function getAllCards(): Promise<CardView[]> {
   return questions.map(toView);
 }
 
-/** Одна картка: Telegram-бот перемальовує нею повідомлення після показу відповіді чи оцінки. */
+/** One card: the Telegram bot redraws its message with it after showing the answer or taking a grade. */
 export async function getCard(questionId: number): Promise<CardView | null> {
   const question = await db.question.findUnique({
     where: { id: questionId },
@@ -228,13 +243,15 @@ export async function getCard(questionId: number): Promise<CardView | null> {
   return question ? toView(question) : null;
 }
 
+// ─── Reviewing a card ────────────────────────────────────────────────────────
+
 export interface ReviewInput {
   questionId: number;
   grade: CardGrade;
   seconds: number;
 }
 
-/** Показ картки: запис у журнал, новий розклад (крім PRACTICE), час у Stats одним рядком на день. */
+/** A card shown: log it, reschedule (except PRACTICE), and roll the time into one Stats row per day. */
 export async function reviewCard(input: ReviewInput, now: Date = new Date()): Promise<void> {
   const question = await db.question.findUniqueOrThrow({
     where: { id: input.questionId },
@@ -243,12 +260,10 @@ export async function reviewCard(input: ReviewInput, now: Date = new Date()): Pr
   const seconds = Math.max(0, Math.min(MAX_SECONDS_PER_CARD, Math.round(input.seconds)));
   const wasNew = question.cardDueAt === null && input.grade !== 'PRACTICE';
 
-  // PRACTICE: розклад не чіпаємо. FORGOT у вільному режимі все одно ставить картку на завтра.
-  // Категорія з дедлайном: стиснута драбина; після дедлайну картка живе за звичайною.
-  const changesSchedule = input.grade !== 'PRACTICE';
-  const next = changesSchedule
-    ? scheduleCardWithDeadline(question.cardInterval, input.grade, now, question.topic?.deadline ?? null)
-    : null;
+  // PRACTICE leaves the schedule alone. A deadline category uses the squeezed ladder; after the deadline the regular one.
+  const next = input.grade === 'PRACTICE'
+    ? null
+    : scheduleCardWithDeadline(question.cardInterval, input.grade, now, question.topic?.deadline ?? null);
 
   await db.$transaction([
     db.cardReview.create({ data: { questionId: question.id, grade: input.grade, wasNew, seconds } }),
@@ -270,7 +285,7 @@ export async function reviewCard(input: ReviewInput, now: Date = new Date()): Pr
   await syncCardsActivity(now);
 }
 
-/** Один запис CARDS в ActivityLog на день, хвилини = сума секунд усіх показів за день. */
+/** One CARDS row in ActivityLog per day; minutes = the sum of seconds of every review that day. */
 async function syncCardsActivity(now: Date): Promise<void> {
   const day = dayKey(now);
   const total = await db.cardReview.aggregate({
@@ -286,7 +301,7 @@ async function syncCardsActivity(now: Date): Promise<void> {
   }
 }
 
-// ------------------------------------------------------------------ додати / змінити / видалити (All cards)
+// ─── Editing cards (All cards) ───────────────────────────────────────────────
 
 export interface NewCardInput {
   question: string;
@@ -299,7 +314,7 @@ export interface CardTextInput {
   answer: string;
 }
 
-/** Нова картка, зроблена в апці: звичайний рядок Question без sourceId, Sync її не чіпає. Порожнє питання = нічого. */
+/** A card made in the app: a plain Question row without sourceId, which Sync never touches. Empty question = nothing. */
 export async function createCard(input: NewCardInput): Promise<number | null> {
   const question = input.question.trim();
   if (!question) return null;
@@ -311,9 +326,8 @@ export async function createCard(input: NewCardInput): Promise<number | null> {
 }
 
 /**
- * Змінити текст картки. Розклад лишається як був.
- * Картка з репо після зміни позначається editedInApp: Sync далі не перезаписує її текст з questions.md.
- * sourceKey не міняємо: за ним Sync упізнає, що картка з репо вже є, і не створює дублікат.
+ * Change a card's text; the schedule stays. A repo card is marked editedInApp so Sync stops overwriting
+ * its text from questions.md. sourceKey is kept: it is how Sync knows the card already exists.
  */
 export async function updateCard(id: number, input: CardTextInput): Promise<void> {
   const current = await db.question.findUnique({ where: { id } });
@@ -321,14 +335,14 @@ export async function updateCard(id: number, input: CardTextInput): Promise<void
   const question = input.question.trim();
   if (!question) return;
   const answer = input.answer.trim();
-  // у формі видно reference, а якщо його нема, то відповідь з пам'яті: незмінений текст не пишемо в reference
+  // The form shows the reference, or the answer from memory when there is none; unchanged text is not written into reference.
   const shownAnswer = current.reference || current.myAnswer;
-  // пробіли по краях не рахуються зміною: інакше Save без правок позначив би картку з репо як змінену
+  // Surrounding whitespace is not a change, otherwise Save without edits would mark a repo card as edited.
   const questionChanged = question !== current.question.trim();
   const answerChanged = answer !== shownAnswer.trim();
   if (!questionChanged && !answerChanged) return;
 
-  // updateMany: якщо картку тим часом видалили (тут чи через Sync), це не помилка
+  // updateMany: a card deleted in the meantime (here or by Sync) is not an error.
   await db.question.updateMany({
     where: { id },
     data: {
@@ -339,10 +353,7 @@ export async function updateCard(id: number, input: CardTextInput): Promise<void
   });
 }
 
-/**
- * Видалити картку. Для картки з репо лишаємо запис у DeletedCard з її ключем,
- * інакше наступний Sync побачив би її в questions.md і створив знову.
- */
+/** Delete a card. A repo card leaves a DeletedCard row with its key, otherwise the next Sync would recreate it. */
 export async function deleteCard(id: number): Promise<void> {
   const current = await db.question.findUnique({ where: { id } });
   if (!current) return;
@@ -362,30 +373,30 @@ export async function deleteCard(id: number): Promise<void> {
   ]);
 }
 
-// ------------------------------------------------------------------ категорії карток
+// ─── Categories ──────────────────────────────────────────────────────────────
 
 /**
- * Категорія картки = її тема (Topic). Окремої таблиці нема: картки з репо вже розкладені по темах,
- * а картці, доданій руками, тему вибираєш сам (або створюєш нову прямо у виборі).
+ * A card's category is its Topic; there is no separate table. Repo cards are already grouped by topic,
+ * a card added by hand gets a topic picked (or created) in the chooser.
  */
 export interface CardCategory {
-  /** null = картки без категорії */
+  /** null = cards without a category */
   id: number | null;
   name: string;
   total: number;
-  /** термін настав (сьогодні або раніше) */
+  /** Due today or earlier. */
   due: number;
-  /** ще жодного разу не показані */
+  /** Never shown yet. */
   fresh: number;
-  /** найраніший термін серед уже показаних карток: коли категорія наступного разу стане due */
+  /** The earliest due date among shown cards: when the category becomes due next. */
   nextDueAt: Date | null;
-  /** живий дедлайн категорії: вона йде першою і повторюється частіше */
+  /** A live category deadline: it goes first and repeats more often. */
   deadline: Date | null;
 }
 
 export const NO_CATEGORY_NAME = 'No category';
 
-/** Категорії, в яких є картки, з лічильниками. Спершу ті, де є що повторювати, далі за назвою. */
+/** Categories that have cards, with counters. Those with something due first, then by name. */
 export async function getCardCategories(now: Date = new Date()): Promise<CardCategory[]> {
   const until = endOfDay(now);
   const questions = await db.question.findMany({
@@ -433,7 +444,7 @@ export interface CategoryChoice {
   name: string;
 }
 
-/** Усі теми для вибору категорії: спершу ті, якими користувався останніми, решта за назвою. */
+/** Every topic for the category chooser: recently used first, the rest by name. */
 export async function getCategoryChoices(): Promise<CategoryChoice[]> {
   const topics = await db.topic.findMany({ select: { id: true, name: true, cardsUsedAt: true } });
   return topics
@@ -445,14 +456,14 @@ export async function getCategoryChoices(): Promise<CategoryChoice[]> {
     .map((topic) => ({ id: topic.id, name: topic.name }));
 }
 
-/** Категорією щойно користувались: вона піднімається нагору у виборі. */
+/** The category was just used: it moves to the top of the chooser. */
 export async function touchCategory(topicId: number, now: Date = new Date()): Promise<void> {
   await db.topic.updateMany({ where: { id: topicId }, data: { cardsUsedAt: now } });
 }
 
 const MAX_CATEGORY_NAME = 120;
 
-/** Нова категорія = нова тема (трек Other). Якщо тема з такою назвою вже є, беремо її, а не робимо дублікат. */
+/** A new category is a new topic (track Other). An existing topic with the same name is reused, not duplicated. */
 export async function createCategory(name: string): Promise<CategoryChoice | null> {
   const text = name.trim().slice(0, MAX_CATEGORY_NAME);
   if (!text) return null;
@@ -465,10 +476,7 @@ export async function createCategory(name: string): Promise<CategoryChoice | nul
   return { id: created.id, name: created.name };
 }
 
-/**
- * Змінити категорію картки. Тільки для карток, доданих в апці:
- * категорію картки з репо задає папка в learn/, і Sync повернув би її назад.
- */
+/** Change a card's category. App-made cards only: a repo card's category is its folder in learn/, and Sync would put it back. */
 export async function setCardCategory(id: number, topicId: number | null): Promise<boolean> {
   const current = await db.question.findUnique({ where: { id } });
   if (!current || current.sourceId !== null) return false;
@@ -477,7 +485,7 @@ export async function setCardCategory(id: number, topicId: number | null): Promi
   return true;
 }
 
-/** Дедлайн категорії зі сторінки категорії. null = прибрати. Дата без часу (день дедлайну включно). */
+/** Category deadline from the category page. null = remove. A date without time; the deadline day is inclusive. */
 export async function setCategoryDeadline(topicId: number, deadline: Date | null): Promise<void> {
   await db.topic.update({ where: { id: topicId }, data: { deadline } });
 }

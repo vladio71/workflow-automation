@@ -1,12 +1,14 @@
 import 'server-only';
 import { z } from 'zod';
+import type { PlanStep, Topic } from '@/generated/prisma/client';
 import { db } from './db';
-import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog } from './queries';
+import { dayKey, getActiveCycle, getDueTopics, getNextSystemDesignTopic, getTodayLog, type CycleWithProgress } from './queries';
 import { endOfDay, startOfDay } from './schedule';
 import {
-  FOCUS_BUDGET_SHARE, REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits, type FocusRole,
+  FOCUS_BUDGET_SHARE, REDO_MINUTES, getStudyPlans, problemTopicIds, selectToday, stepHref, todayLimits,
+  type FocusRole, type StudyPlan,
 } from './study-plan';
-import { getCardQueue } from './cards';
+import { getCardQueue, type CardQueue } from './cards';
 import { getLevelsWithProgress, type LevelWithProgress } from './levels';
 import { LEVELS_FOCUS, NO_FOCUS, planFocus } from './day-focus';
 import { pickMandatory, toPlanItem } from './plan-order';
@@ -20,7 +22,13 @@ import { todayTickCounts, type TaskProgress } from './task-sessions';
  * picks, orders and explains. Study-plan steps (PLAN) and problem redos are selected by code and
  * are mandatory, in order. Recurring tasks (TASK) are mandatory too; one-off tasks are offered
  * until they are done.
+ *
+ * Reading order: types, `buildCandidates` (what could go into today), `rulePlan` (a plan without
+ * the LLM), `withStatus` (what is already done), then the stored-plan helpers.
  */
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 /** ANKI is kept only for plans already stored in the DB; new plans use CARDS. */
 export type PlanItemKind = 'ANKI' | 'CARDS' | 'RECALL' | 'CYCLE' | 'QUESTIONS' | 'SYSTEM_DESIGN' | 'MOCK' | 'OUT_LOUD' | 'INBOX' | 'PLAN' | 'LEVEL' | 'TASK';
 
@@ -67,6 +75,7 @@ export interface PlanItemWithStatus extends PlanItem {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** Live-code levels per day: due redos first, then new ones in repo order. */
 const MAX_LEVEL_REDOS = 2;
 const MAX_NEW_LEVELS = 2;
@@ -74,25 +83,106 @@ const MAX_NEW_LEVELS = 2;
 const MAX_FOCUS_LEVEL_REDOS = 4;
 const MAX_FOCUS_NEW_LEVELS = 6;
 
-/** Items are stored as JSON; validate the shape on read instead of casting blindly. */
-const PlanItemSchema = z.object({
-  id: z.string(),
-  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL', 'TASK']),
-  title: z.string(),
-  href: z.string(),
-  topicId: z.number().nullable(),
-  defaultMinutes: z.number(),
-  minutes: z.number(),
-  why: z.string(),
-  manualDone: z.boolean(),
-  hint: z.string().optional(),
-  mandatory: z.boolean().optional(),
-  group: z.string().optional(),
-  order: z.number().optional(),
-});
+const MAX_PLAIN_RECALLS = 6;
+const RECALL_MINUTES = 15;
+const CYCLE_MINUTES = 60;
+const QUESTIONS_MINUTES = 15;
+const MIN_QUESTIONS_PER_TOPIC = 3;
+const INBOX_ALERT_COUNT = 5;
 
-export function parsePlanItems(json: unknown): PlanItem[] {
-  return z.array(PlanItemSchema).parse(json);
+// ─── Building today's candidates ─────────────────────────────────────────────
+
+/** A topic of the active cycle that still needs work. */
+interface CycleTopic {
+  id: number;
+  name: string;
+  drill: string | null;
+  questionCount: number;
+}
+
+/** Everything `buildCandidates` needs, loaded once up front. */
+interface TodayData {
+  now: Date;
+  weekAgo: Date;
+  dueTopics: Topic[];
+  cycle: CycleWithProgress | null;
+  cycleTopics: CycleTopic[];
+  systemDesignTopic: Topic | null;
+  recalledSystemDesignThisWeek: boolean;
+  lastMockAt: Date | null;
+  inboxCount: number;
+  /** Focused plan first: its steps take the budget before the other plans. */
+  studyPlans: StudyPlan[];
+  /** Topic ids of study-plan problems; they repeat only as redos, never as plain recalls. */
+  problemTopicIds: Set<number>;
+  cardQueue: CardQueue;
+  levels: LevelWithProgress[];
+  recurringTasks: PlanCandidate[];
+  onceTasks: PlanCandidate[];
+}
+
+export async function buildCandidates(now: Date = new Date(), options: CandidateOptions = DEFAULT_OPTIONS): Promise<PlanCandidate[]> {
+  const data = await gatherTodayData(now, options);
+  return [
+    ...cardCandidates(data),
+    outLoudCandidate(),
+    ...levelCandidates(data.levels, options.focus === LEVELS_FOCUS, options.budget),
+    ...studyPlanCandidates(data, options),
+    ...data.recurringTasks,
+    ...data.onceTasks,
+    ...plainRecallCandidates(data),
+    ...cycleCandidates(data),
+    ...legacyRhythmCandidates(data),
+    ...inboxCandidate(data),
+  ];
+}
+
+async function gatherTodayData(now: Date, options: CandidateOptions): Promise<TodayData> {
+  const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
+  const [dueTopics, cycle, systemDesignTopic, inboxCount, lastMock, recentSystemDesignRecall, allStudyPlans, cardQueue, levelsState, tasks] = await Promise.all([
+    getDueTopics(now),
+    getActiveCycle(),
+    getNextSystemDesignTopic(),
+    db.inboxItem.count(),
+    db.mockSession.findFirst({ orderBy: { startedAt: 'desc' } }),
+    db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
+    getStudyPlans(),
+    getCardQueue(now),
+    getLevelsWithProgress(now),
+    loadTaskCandidates(now),
+  ]);
+
+  const isFocused = (plan: StudyPlan): boolean => options.focus === planFocus(plan.source.id);
+  const studyPlans = [...allStudyPlans].sort((a, b) => Number(isFocused(b)) - Number(isFocused(a)));
+  const problemIds = new Set<number>();
+  for (const plan of studyPlans) for (const id of problemTopicIds(plan)) problemIds.add(id);
+
+  return {
+    now,
+    weekAgo,
+    dueTopics,
+    cycle,
+    cycleTopics: cycle ? await loadCycleTopics(cycle.id) : [],
+    systemDesignTopic,
+    recalledSystemDesignThisWeek: recentSystemDesignRecall !== null,
+    lastMockAt: lastMock?.startedAt ?? null,
+    inboxCount,
+    studyPlans,
+    problemTopicIds: problemIds,
+    cardQueue,
+    levels: levelsState.levels,
+    recurringTasks: tasks.recurring,
+    onceTasks: tasks.once,
+  };
+}
+
+async function loadCycleTopics(cycleId: number): Promise<CycleTopic[]> {
+  const topics = await db.topic.findMany({
+    where: { cycleId, confidence: { not: 'GREEN' } },
+    include: { _count: { select: { questions: true } } },
+    orderBy: { id: 'asc' },
+  });
+  return topics.map((topic) => ({ id: topic.id, name: topic.name, drill: topic.drill, questionCount: topic._count.questions }));
 }
 
 /** Is a recurring task due today? WEEKDAYS = Mon-Fri. */
@@ -106,7 +196,7 @@ function daysSince(from: Date, now: Date): number {
   return Math.floor((startOfDay(now).getTime() - startOfDay(from).getTime()) / DAY_MS);
 }
 
-async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidate[]; once: PlanCandidate[] }> {
+async function loadTaskCandidates(now: Date): Promise<{ recurring: PlanCandidate[]; once: PlanCandidate[] }> {
   // A one-off task done today stays a candidate, otherwise an evening re-plan would lose it.
   // A task with an end date (until) is not planned after that date.
   const tasks = await db.task.findMany({
@@ -133,6 +223,29 @@ async function buildTaskCandidates(now: Date): Promise<{ recurring: PlanCandidat
     }
   }
   return { recurring, once };
+}
+
+function cardCandidates(data: TodayData): PlanCandidate[] {
+  const cardsToday = data.cardQueue.due.length + data.cardQueue.fresh.length;
+  if (cardsToday === 0) return [];
+  const parts = [
+    data.cardQueue.due.length > 0 ? `${data.cardQueue.due.length} due` : '',
+    data.cardQueue.fresh.length > 0 ? `${data.cardQueue.fresh.length} new` : '',
+  ].filter((part) => part !== '');
+  return [{
+    id: 'cards',
+    kind: 'CARDS',
+    title: `Cards: ${parts.join(' + ')}`,
+    href: '/cards',
+    topicId: null,
+    // ~30 s per card
+    defaultMinutes: Math.max(5, Math.ceil(cardsToday / 2)),
+    hint: 'Картки, у яких настав термін, і кілька нових.',
+  }];
+}
+
+function outLoudCandidate(): PlanCandidate {
+  return { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 };
 }
 
 function levelCandidate(level: LevelWithProgress, redo: boolean): PlanCandidate {
@@ -174,198 +287,229 @@ function levelCandidates(levels: LevelWithProgress[], focused: boolean, budget: 
   });
 }
 
-export async function buildCandidates(now: Date = new Date(), options: CandidateOptions = DEFAULT_OPTIONS): Promise<PlanCandidate[]> {
-  const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-  const [due, cycle, sdTopic, inboxCount, lastMock, recentSdRecall, allStudyPlans, cardQueue, levelsState, tasks] = await Promise.all([
-    getDueTopics(now),
-    getActiveCycle(),
-    getNextSystemDesignTopic(),
-    db.inboxItem.count(),
-    db.mockSession.findFirst({ orderBy: { startedAt: 'desc' } }),
-    db.recallLog.findFirst({ where: { createdAt: { gte: weekAgo }, topic: { track: 'SYSTEM_DESIGN' } } }),
-    getStudyPlans(),
-    getCardQueue(now),
-    getLevelsWithProgress(now),
-    buildTaskCandidates(now),
-  ]);
-  // The focused plan goes first: its steps take the budget before the other plans.
-  const isFocused = (sourceId: number): boolean => options.focus === planFocus(sourceId);
-  const studyPlans = [...allStudyPlans].sort((a, b) => Number(isFocused(b.source.id)) - Number(isFocused(a.source.id)));
-
+/**
+ * Study plans: problem redos and next steps, selected by code, all mandatory.
+ * On a focus day the other plans share what is left after the focus share (~40%), in turn;
+ * a plan that gets nothing rests today.
+ */
+function studyPlanCandidates(data: TodayData, options: CandidateOptions): PlanCandidate[] {
   const candidates: PlanCandidate[] = [];
-  const cardsToday = cardQueue.due.length + cardQueue.fresh.length;
-  if (cardsToday > 0) {
-    // ~30 s per card
-    const parts = [
-      cardQueue.due.length > 0 ? `${cardQueue.due.length} due` : '',
-      cardQueue.fresh.length > 0 ? `${cardQueue.fresh.length} new` : '',
-    ].filter((part) => part !== '');
-    candidates.push({
-      id: 'cards',
-      kind: 'CARDS',
-      title: `Cards: ${parts.join(' + ')}`,
-      href: '/cards',
-      topicId: null,
-      defaultMinutes: Math.max(5, Math.ceil(cardsToday / 2)),
-      hint: 'Картки, у яких настав термін, і кілька нових.',
-    });
-  }
-  candidates.push(
-    { id: 'out-loud', kind: 'OUT_LOUD', title: 'Explain 1 question out loud in a minute', href: '/cards?tab=all', topicId: null, defaultMinutes: 5 },
-  );
-
-  // Live-code levels (mandatory on a focus day, placed before study-plan steps).
-  candidates.push(...levelCandidates(levelsState.levels, options.focus === LEVELS_FOCUS, options.budget));
-
-  // Study plans: problem redos and next steps, selected by code (mandatory).
-  const problemIds = new Set<number>();
-  // On a focus day the other plans share what is left after the focus share (~40%), in turn;
-  // a plan that gets nothing rests today.
   let otherMinutesLeft = Math.round(options.budget * (1 - FOCUS_BUDGET_SHARE));
-  for (const plan of studyPlans) {
-    for (const id of problemTopicIds(plan)) problemIds.add(id);
-    const focused = isFocused(plan.source.id);
+  for (const plan of data.studyPlans) {
+    const focused = options.focus === planFocus(plan.source.id);
     const role: FocusRole = focused ? 'this' : options.focus === NO_FOCUS ? 'none' : 'other';
     if (role === 'other' && otherMinutesLeft <= 0) continue;
-    const group = `plan:${plan.source.id}`;
+
     const limits = todayLimits(plan, role, options.budget);
-    const { redos, steps } = selectToday(plan, due, now, role === 'other' ? { ...limits, minutes: Math.min(limits.minutes, otherMinutesLeft) } : limits);
+    const { redos, steps } = selectToday(
+      plan,
+      data.dueTopics,
+      data.now,
+      role === 'other' ? { ...limits, minutes: Math.min(limits.minutes, otherMinutesLeft) } : limits,
+    );
     if (role === 'other') otherMinutesLeft -= redos.length * REDO_MINUTES + steps.reduce((sum, step) => sum + step.minutes, 0);
-    for (const topic of redos) {
-      candidates.push({
-        id: `recall:${topic.id}`,
-        kind: 'RECALL',
-        title: `Redo з нуля: ${topic.name}`,
-        href: `/recall/${topic.id}`,
-        topicId: topic.id,
-        defaultMinutes: REDO_MINUTES,
-        hint: 'Настав термін переробки: 45 хв з таймером, потім звір з минулою спробою.',
-        mandatory: true,
-        group,
-      });
-    }
-    for (const step of steps) {
-      candidates.push({
-        id: `plan:${step.id}`,
-        kind: 'PLAN',
-        title: step.title,
-        href: stepHref(plan, step),
-        topicId: plan.topicByPath.get(step.topicPath)?.id ?? null,
-        defaultMinutes: step.minutes,
-        hint: `${focused ? 'Фокус дня · ' : ''}${plan.source.planName} · ${step.group} · крок ${step.position + 1}/${plan.steps.length}`,
-        mandatory: true,
-        group,
-        order: step.position,
-      });
-    }
+
+    const group = `plan:${plan.source.id}`;
+    for (const topic of redos) candidates.push(redoCandidate(topic, group));
+    for (const step of steps) candidates.push(stepCandidate(plan, step, group, focused));
   }
+  return candidates;
+}
 
-  // Tasks outside study: recurring are mandatory, one-offs are offered until done (oldest first).
-  candidates.push(...tasks.recurring, ...tasks.once);
+function redoCandidate(topic: Topic, group: string): PlanCandidate {
+  return {
+    id: `recall:${topic.id}`,
+    kind: 'RECALL',
+    title: `Redo з нуля: ${topic.name}`,
+    href: `/recall/${topic.id}`,
+    topicId: topic.id,
+    defaultMinutes: REDO_MINUTES,
+    hint: 'Настав термін переробки: 45 хв з таймером, потім звір з минулою спробою.',
+    mandatory: true,
+    group,
+  };
+}
 
-  // Plan problems repeat only as a 45-min redo, never as a regular 15-min recall.
-  for (const topic of due.filter((dueTopic) => !problemIds.has(dueTopic.id)).slice(0, 6)) {
-    candidates.push({
+function stepCandidate(plan: StudyPlan, step: PlanStep, group: string, focused: boolean): PlanCandidate {
+  return {
+    id: `plan:${step.id}`,
+    kind: 'PLAN',
+    title: step.title,
+    href: stepHref(plan, step),
+    topicId: plan.topicByPath.get(step.topicPath)?.id ?? null,
+    defaultMinutes: step.minutes,
+    hint: `${focused ? 'Фокус дня · ' : ''}${plan.source.planName} · ${step.group} · крок ${step.position + 1}/${plan.steps.length}`,
+    mandatory: true,
+    group,
+    order: step.position,
+  };
+}
+
+/** Overdue topics outside study plans. Plan problems repeat only as a 45-min redo, never as a 15-min recall. */
+function plainRecallCandidates(data: TodayData): PlanCandidate[] {
+  return data.dueTopics
+    .filter((topic) => !data.problemTopicIds.has(topic.id))
+    .slice(0, MAX_PLAIN_RECALLS)
+    .map((topic) => ({
       id: `recall:${topic.id}`,
       kind: 'RECALL',
       title: `Recall: ${topic.name}`,
       href: `/recall/${topic.id}`,
       topicId: topic.id,
-      defaultMinutes: 15,
-    });
-  }
+      defaultMinutes: RECALL_MINUTES,
+    }));
+}
 
-  if (cycle) {
-    const cycleTopics = await db.topic.findMany({
-      where: { cycleId: cycle.id, confidence: { not: 'GREEN' } },
-      include: { _count: { select: { questions: true } } },
-      orderBy: { id: 'asc' },
+function cycleCandidates(data: TodayData): PlanCandidate[] {
+  const cycle = data.cycle;
+  if (!cycle) return [];
+  const candidates: PlanCandidate[] = [];
+  for (const topic of data.cycleTopics) {
+    candidates.push({
+      id: `cycle:${topic.id}`,
+      kind: 'CYCLE',
+      title: `Cycle ${cycle.number}: work on "${topic.name}" (${topic.drill || 'build the drill'})`,
+      href: `/topics/${topic.id}`,
+      topicId: topic.id,
+      defaultMinutes: CYCLE_MINUTES,
     });
-    for (const topic of cycleTopics) {
+    if (topic.questionCount < MIN_QUESTIONS_PER_TOPIC) {
       candidates.push({
-        id: `cycle:${topic.id}`,
-        kind: 'CYCLE',
-        title: `Cycle ${cycle.number}: work on "${topic.name}" (${topic.drill || 'build the drill'})`,
+        id: `questions:${topic.id}`,
+        kind: 'QUESTIONS',
+        title: `Write 3-5 questions for "${topic.name}" (closed book)`,
         href: `/topics/${topic.id}`,
         topicId: topic.id,
-        defaultMinutes: 60,
+        defaultMinutes: QUESTIONS_MINUTES,
       });
-      if (topic._count.questions < 3) {
-        candidates.push({
-          id: `questions:${topic.id}`,
-          kind: 'QUESTIONS',
-          title: `Write 3-5 questions for "${topic.name}" (closed book)`,
-          href: `/topics/${topic.id}`,
-          topicId: topic.id,
-          defaultMinutes: 15,
-        });
-      }
     }
   }
-
-  // The older rhythm (weekly system design + weekly mock) applies only when there is no study plan.
-  if (studyPlans.length === 0 && sdTopic && !recentSdRecall) {
-    candidates.push({
-      id: `sd:${sdTopic.id}`,
-      kind: 'SYSTEM_DESIGN',
-      title: `System design primer: ${sdTopic.name.replace(/^SD /, '')}`,
-      href: `/topics/${sdTopic.id}`,
-      topicId: sdTopic.id,
-      defaultMinutes: 45,
-    });
-  }
-
-  if (studyPlans.length === 0 && (!lastMock || lastMock.startedAt < weekAgo)) {
-    candidates.push({ id: 'mock', kind: 'MOCK', title: 'System design mock, 45 min', href: '/mock', topicId: null, defaultMinutes: 45 });
-  }
-
-  if (inboxCount >= 5 || (inboxCount > 0 && now.getDay() === 0)) {
-    candidates.push({ id: 'inbox', kind: 'INBOX', title: `Clear the Inbox (${inboxCount})`, href: '/inbox', topicId: null, defaultMinutes: 10 });
-  }
-
   return candidates;
 }
 
+/** The older rhythm (weekly system design primer + weekly mock) applies only when there is no study plan. */
+function legacyRhythmCandidates(data: TodayData): PlanCandidate[] {
+  if (data.studyPlans.length > 0) return [];
+  const candidates: PlanCandidate[] = [];
+  if (data.systemDesignTopic && !data.recalledSystemDesignThisWeek) {
+    candidates.push({
+      id: `sd:${data.systemDesignTopic.id}`,
+      kind: 'SYSTEM_DESIGN',
+      title: `System design primer: ${data.systemDesignTopic.name.replace(/^SD /, '')}`,
+      href: `/topics/${data.systemDesignTopic.id}`,
+      topicId: data.systemDesignTopic.id,
+      defaultMinutes: 45,
+    });
+  }
+  if (data.lastMockAt === null || data.lastMockAt < data.weekAgo) {
+    candidates.push({ id: 'mock', kind: 'MOCK', title: 'System design mock, 45 min', href: '/mock', topicId: null, defaultMinutes: 45 });
+  }
+  return candidates;
+}
+
+/** The inbox is planned when it piles up, or on Sunday when anything is in it. */
+function inboxCandidate(data: TodayData): PlanCandidate[] {
+  const sunday = data.now.getDay() === 0;
+  if (data.inboxCount >= INBOX_ALERT_COUNT || (data.inboxCount > 0 && sunday)) {
+    return [{ id: 'inbox', kind: 'INBOX', title: `Clear the Inbox (${data.inboxCount})`, href: '/inbox', topicId: null, defaultMinutes: 10 }];
+  }
+  return [];
+}
+
+// ─── A plan without the LLM ──────────────────────────────────────────────────
+
 /** Plan without the LLM (no API key or every model failed): plain rules. */
 export function rulePlan(candidates: PlanCandidate[], minutesBudget: number): { items: PlanItem[]; summary: string } {
-  const pick = (kind: PlanItemKind, limit: number): PlanCandidate[] =>
-    candidates.filter((c) => c.kind === kind && c.mandatory !== true).slice(0, limit);
-  const cards = pick('CARDS', 1);
-  const tasks = candidates.filter((c) => c.mandatory === true && c.kind === 'TASK');
-  const reserved = [...cards, ...tasks].reduce((sum, c) => sum + c.defaultMinutes, 0);
-  // Plan steps in order (focused plan first) while they fit; once a step does not fit, the rest of that plan is skipped.
-  const study = pickMandatory(candidates.filter((c) => c.mandatory === true && c.kind !== 'TASK'), minutesBudget - reserved);
+  const reserved = reserveMandatory(candidates, minutesBudget);
+  const items = fillWithOptional(reserved.items, candidates, minutesBudget);
+  return { items, summary: ruleSummary(reserved.hasStudySteps) };
+}
 
-  const items: PlanItem[] = [...cards, ...study, ...tasks].map(toPlanItem);
-  let used = items.reduce((sum, item) => sum + item.minutes, 0);
+interface ReservedPlan {
+  items: PlanItem[];
+  hasStudySteps: boolean;
+}
+
+/** Cards, then study-plan steps in order (focused plan first) while they fit, then recurring tasks. */
+function reserveMandatory(candidates: PlanCandidate[], minutesBudget: number): ReservedPlan {
+  const cards = optionalOfKind(candidates, 'CARDS', 1);
+  const tasks = candidates.filter((candidate) => candidate.mandatory === true && candidate.kind === 'TASK');
+  const reservedMinutes = [...cards, ...tasks].reduce((sum, candidate) => sum + candidate.defaultMinutes, 0);
+  // Once a step does not fit, the rest of that plan is skipped; other plans may still fit.
+  const study = pickMandatory(candidates.filter((candidate) => candidate.mandatory === true && candidate.kind !== 'TASK'), minutesBudget - reservedMinutes);
+  return { items: [...cards, ...study, ...tasks].map(toPlanItem), hasStudySteps: study.length > 0 };
+}
+
+/** Optional candidates in a fixed order of kinds; a plan keeps at least 3 items even over budget. */
+function fillWithOptional(items: PlanItem[], candidates: PlanCandidate[], minutesBudget: number): PlanItem[] {
+  const result = [...items];
+  let used = result.reduce((sum, item) => sum + item.minutes, 0);
   const optional = [
-    ...pick('LEVEL', 2),
-    ...pick('RECALL', 2),
-    ...pick('CYCLE', 1),
-    ...pick('QUESTIONS', 1),
-    ...pick('SYSTEM_DESIGN', 1),
-    ...pick('TASK', 1),
-    ...pick('OUT_LOUD', 1),
+    ...optionalOfKind(candidates, 'LEVEL', 2),
+    ...optionalOfKind(candidates, 'RECALL', 2),
+    ...optionalOfKind(candidates, 'CYCLE', 1),
+    ...optionalOfKind(candidates, 'QUESTIONS', 1),
+    ...optionalOfKind(candidates, 'SYSTEM_DESIGN', 1),
+    ...optionalOfKind(candidates, 'TASK', 1),
+    ...optionalOfKind(candidates, 'OUT_LOUD', 1),
   ];
   for (const candidate of optional) {
     const fits = used + candidate.defaultMinutes <= minutesBudget;
-    if (!fits && items.length >= 3) continue;
+    if (!fits && result.length >= 3) continue;
     used += candidate.defaultMinutes;
-    items.push(toPlanItem(candidate));
+    result.push(toPlanItem(candidate));
   }
-  const summary = study.length > 0
-    ? 'План за правилами (без AI): картки, кроки навчального плану по порядку, справи, повторення, решта в цикл.'
-    : 'План за правилами (без AI): картки, справи, прострочені повторення, робота по циклу, system design.';
-  return { items, summary };
+  return result;
 }
 
-/** What the app can detect itself: recall logs, new questions, mocks, the day checklist. */
+function optionalOfKind(candidates: PlanCandidate[], kind: PlanItemKind, limit: number): PlanCandidate[] {
+  return candidates.filter((candidate) => candidate.kind === kind && candidate.mandatory !== true).slice(0, limit);
+}
+
+function ruleSummary(hasStudySteps: boolean): string {
+  return hasStudySteps
+    ? 'План за правилами (без AI): картки, кроки навчального плану по порядку, справи, повторення, решта в цикл.'
+    : 'План за правилами (без AI): картки, справи, прострочені повторення, робота по циклу, system design.';
+}
+
+// ─── What is already done ────────────────────────────────────────────────────
+
+interface PlanStepState {
+  kind: string;
+  doneAt: Date | null;
+}
+
+interface TaskState {
+  repeat: string;
+  doneAt: Date | null;
+  target: number;
+}
+
+/** Today's evidence the app can see on its own: recall logs, new questions, mocks, passed levels, the day checklist. */
+interface TodayEvidence {
+  cardsDone: boolean;
+  outLoudDone: boolean;
+  recalledTopicIds: Set<number>;
+  questionsByTopic: Map<number, number>;
+  mockDone: boolean;
+  inboxEmpty: boolean;
+  passedLevelKeys: Set<string>;
+  planStepById: Map<number, PlanStepState>;
+  taskById: Map<number, TaskState>;
+  tickCountByTask: Map<number, number>;
+}
+
 export async function withStatus(items: PlanItem[], now: Date = new Date()): Promise<PlanItemWithStatus[]> {
+  const evidence = await loadTodayEvidence(items, now);
+  return items.map((item) => markItem(item, evidence));
+}
+
+async function loadTodayEvidence(items: PlanItem[], now: Date): Promise<TodayEvidence> {
   const from = startOfDay(now);
   const to = endOfDay(now);
-  const planStepIds = items.filter((item) => item.kind === 'PLAN').map((item) => Number(item.id.replace('plan:', '')));
-  const taskIds = items.filter((item) => item.kind === 'TASK').map((item) => Number(item.id.replace('task:', '')));
-  const [log, recalls, questions, mockToday, inboxCount, planSteps, levelPasses, tasks] = await Promise.all([
+  const planStepIds = items.filter((item) => item.kind === 'PLAN').map((item) => numericId(item.id, 'plan:'));
+  const taskIds = items.filter((item) => item.kind === 'TASK').map((item) => numericId(item.id, 'task:'));
+  const [log, recalls, questions, mocksToday, inboxCount, planSteps, levelPasses, tasks] = await Promise.all([
     getTodayLog(now),
     db.recallLog.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
     db.question.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { topicId: true } }),
@@ -375,52 +519,102 @@ export async function withStatus(items: PlanItem[], now: Date = new Date()): Pro
     db.levelAttempt.findMany({ where: { passed: true, createdAt: { gte: from, lte: to } }, select: { levelKey: true } }),
     db.task.findMany({ where: { id: { in: taskIds } } }),
   ]);
-  const tickCounts = await todayTickCounts(tasks.filter((task) => task.target > 0).map((task) => task.id), now);
-  const passedLevels = new Set(levelPasses.map((attempt) => attempt.levelKey));
-  const recalled = new Set(recalls.map((r) => r.topicId));
-  const stepById = new Map(planSteps.map((step) => [step.id, step]));
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const questionsByTopic = new Map<number, number>();
-  for (const q of questions) if (q.topicId) questionsByTopic.set(q.topicId, (questionsByTopic.get(q.topicId) ?? 0) + 1);
+  const tickCountByTask = await todayTickCounts(tasks.filter((task) => task.target > 0).map((task) => task.id), now);
 
-  return items.map((item) => {
-    const topicId = item.topicId ?? -1;
-    let autoDone = false;
-    switch (item.kind) {
-      case 'ANKI':
-      case 'CARDS': autoDone = log.cardsDone; break;
-      case 'OUT_LOUD': autoDone = log.outLoud; break;
-      case 'RECALL': autoDone = recalled.has(topicId); break;
-      case 'QUESTIONS': autoDone = (questionsByTopic.get(topicId) ?? 0) >= 3; break;
-      case 'CYCLE':
-      // Working on a topic = a recall or new questions for it; editing color or name does not count.
-      case 'SYSTEM_DESIGN': autoDone = recalled.has(topicId) || questionsByTopic.has(topicId); break;
-      case 'MOCK': autoDone = mockToday > 0; break;
-      case 'INBOX': autoDone = inboxCount === 0; break;
-      case 'LEVEL': autoDone = passedLevels.has(item.id.replace('level:', '')); break;
-      case 'PLAN': {
-        // Step progress lives in PlanStep: ticked here, on the plan page, or automatically after a problem attempt.
-        const step = stepById.get(Number(item.id.replace('plan:', '')));
-        if (step) {
-          const attemptDone = step.kind === 'ATTEMPT' && recalled.has(topicId);
-          return { ...item, autoDone: attemptDone, done: step.doneAt !== null || attemptDone };
-        }
-        break;
-      }
-      case 'TASK': {
-        // A one-off task can also be closed on the Tasks page; a session task closes itself at the target.
-        const task = taskById.get(Number(item.id.replace('task:', '')));
-        const closedOnce = task !== undefined && task.repeat === 'ONCE' && task.doneAt !== null;
-        if (task && task.target > 0) {
-          const progress: TaskProgress = { count: tickCounts.get(task.id) ?? 0, target: task.target };
-          const reached = progress.count >= progress.target;
-          return { ...item, progress, autoDone: reached, done: reached || item.manualDone || closedOnce };
-        }
-        return { ...item, autoDone: false, done: item.manualDone || closedOnce };
-      }
-    }
-    return { ...item, autoDone, done: autoDone || item.manualDone };
-  });
+  const questionsByTopic = new Map<number, number>();
+  for (const question of questions) {
+    if (question.topicId) questionsByTopic.set(question.topicId, (questionsByTopic.get(question.topicId) ?? 0) + 1);
+  }
+  return {
+    cardsDone: log.cardsDone,
+    outLoudDone: log.outLoud,
+    recalledTopicIds: new Set(recalls.map((recall) => recall.topicId)),
+    questionsByTopic,
+    mockDone: mocksToday > 0,
+    inboxEmpty: inboxCount === 0,
+    passedLevelKeys: new Set(levelPasses.map((attempt) => attempt.levelKey)),
+    planStepById: new Map(planSteps.map((step) => [step.id, step])),
+    taskById: new Map(tasks.map((task) => [task.id, task])),
+    tickCountByTask,
+  };
+}
+
+function numericId(id: string, prefix: string): number {
+  return Number(id.replace(prefix, ''));
+}
+
+function markItem(item: PlanItem, evidence: TodayEvidence): PlanItemWithStatus {
+  const topicId = item.topicId ?? -1;
+  switch (item.kind) {
+    case 'PLAN': return markPlanStep(item, evidence, topicId);
+    case 'TASK': return markTask(item, evidence);
+    default: return markAuto(item, autoDoneFor(item, evidence, topicId));
+  }
+}
+
+function autoDoneFor(item: PlanItem, evidence: TodayEvidence, topicId: number): boolean {
+  switch (item.kind) {
+    case 'ANKI':
+    case 'CARDS': return evidence.cardsDone;
+    case 'OUT_LOUD': return evidence.outLoudDone;
+    case 'RECALL': return evidence.recalledTopicIds.has(topicId);
+    case 'QUESTIONS': return (evidence.questionsByTopic.get(topicId) ?? 0) >= MIN_QUESTIONS_PER_TOPIC;
+    // Working on a topic = a recall or new questions for it; editing color or name does not count.
+    case 'CYCLE':
+    case 'SYSTEM_DESIGN': return evidence.recalledTopicIds.has(topicId) || evidence.questionsByTopic.has(topicId);
+    case 'MOCK': return evidence.mockDone;
+    case 'INBOX': return evidence.inboxEmpty;
+    case 'LEVEL': return evidence.passedLevelKeys.has(item.id.replace('level:', ''));
+    default: return false;
+  }
+}
+
+function markAuto(item: PlanItem, autoDone: boolean): PlanItemWithStatus {
+  return { ...item, autoDone, done: autoDone || item.manualDone };
+}
+
+/** Step progress lives in PlanStep: ticked here, on the plan page, or automatically after a problem attempt. */
+function markPlanStep(item: PlanItem, evidence: TodayEvidence, topicId: number): PlanItemWithStatus {
+  const step = evidence.planStepById.get(numericId(item.id, 'plan:'));
+  if (!step) return markAuto(item, false);
+  const attemptDone = step.kind === 'ATTEMPT' && evidence.recalledTopicIds.has(topicId);
+  return { ...item, autoDone: attemptDone, done: step.doneAt !== null || attemptDone };
+}
+
+/** A one-off task can also be closed on the Tasks page; a session task closes itself at the target. */
+function markTask(item: PlanItem, evidence: TodayEvidence): PlanItemWithStatus {
+  const taskId = numericId(item.id, 'task:');
+  const task = evidence.taskById.get(taskId);
+  const closedOnce = task !== undefined && task.repeat === 'ONCE' && task.doneAt !== null;
+  if (task && task.target > 0) {
+    const progress: TaskProgress = { count: evidence.tickCountByTask.get(taskId) ?? 0, target: task.target };
+    const reached = progress.count >= progress.target;
+    return { ...item, progress, autoDone: reached, done: reached || item.manualDone || closedOnce };
+  }
+  return { ...item, autoDone: false, done: item.manualDone || closedOnce };
+}
+
+// ─── Stored plan ─────────────────────────────────────────────────────────────
+
+/** Items are stored as JSON; validate the shape on read instead of casting blindly. */
+const PlanItemSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['ANKI', 'CARDS', 'RECALL', 'CYCLE', 'QUESTIONS', 'SYSTEM_DESIGN', 'MOCK', 'OUT_LOUD', 'INBOX', 'PLAN', 'LEVEL', 'TASK']),
+  title: z.string(),
+  href: z.string(),
+  topicId: z.number().nullable(),
+  defaultMinutes: z.number(),
+  minutes: z.number(),
+  why: z.string(),
+  manualDone: z.boolean(),
+  hint: z.string().optional(),
+  mandatory: z.boolean().optional(),
+  group: z.string().optional(),
+  order: z.number().optional(),
+});
+
+export function parsePlanItems(json: unknown): PlanItem[] {
+  return z.array(PlanItemSchema).parse(json);
 }
 
 export async function getTodayPlan(now: Date = new Date()) {
@@ -437,5 +631,5 @@ export async function todayRecallSummary(now: Date = new Date()): Promise<string
     include: { topic: true },
     orderBy: { createdAt: 'asc' },
   });
-  return recalls.map((r) => `${r.topic.name}: ${r.confidenceAfter}`);
+  return recalls.map((recall) => `${recall.topic.name}: ${recall.confidenceAfter}`);
 }

@@ -11,7 +11,7 @@ interface CategoryPageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Одна категорія: усі її картки. Recall веде в Review тільки цієї категорії, клік по картці на її сторінку. */
+/** One category with all its cards. Recall opens a Review of this category only; a card click opens its page. */
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { id } = await params;
   const category = parseCategoryParam(id);

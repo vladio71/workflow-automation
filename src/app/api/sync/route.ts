@@ -2,8 +2,8 @@ import { revalidatePath } from 'next/cache';
 import { syncAllIfStale } from '@/lib/sync';
 
 /**
- * Автосинк з Today. Навмисно route handler, а не server action: server actions на сторінці
- * Next.js виконує по одному, тож повільний sync тримав би в черзі всі кнопки (Log time, Plan my day, галочки).
+ * Auto-sync triggered from Today. Deliberately a route handler, not a server action: Next.js runs a page's
+ * server actions one at a time, so a slow sync would queue every button (Log time, Plan my day, checkboxes).
  */
 export async function POST(): Promise<Response> {
   const synced = await syncAllIfStale();

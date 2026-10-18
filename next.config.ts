@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
-  // Prisma 7 + pg працюють лише на сервері, не бандлимо їх у клієнт
+  // Prisma 7 + pg are server-only, keep them out of the client bundle
   serverExternalPackages: ['@prisma/client', '@prisma/adapter-pg', 'pg'],
 };
 

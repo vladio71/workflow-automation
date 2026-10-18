@@ -3,8 +3,8 @@ import { logActivity } from '@/lib/activity';
 import { streamMockReply, type ChatTurn } from '@/lib/gemini';
 
 /**
- * POST { message } -> зберегти повідомлення кандидата, стрімити відповідь інтерв'юера текстом,
- * в кінці зберегти її цілком. Порожнє message = "почати інтерв'ю".
+ * POST { message } -> store the candidate's message, stream the interviewer's reply as text,
+ * store the full reply at the end. An empty message means "start the interview".
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const { id } = await params;
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (text === 'END' && !session.endedAt) {
     const endedAt = new Date();
     await db.mockSession.update({ where: { id: sessionId }, data: { endedAt } });
-    // тривалість mock іде в лог часу (з обмеженням, якщо вкладку забули відкритою)
+    // mock duration goes to the time log, capped in case the tab was left open
     const minutes = Math.min(120, Math.max(1, Math.round((endedAt.getTime() - session.startedAt.getTime()) / 60000)));
     await logActivity({ minutes, kind: 'MOCK', topicId: null, track: 'SYSTEM_DESIGN', note: session.problem, at: endedAt });
   }
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const message = `\n\n[Gemini error: ${error instanceof Error ? error.message : 'unknown'}]`;
         controller.enqueue(encoder.encode(message));
       } finally {
-        // помилку показуємо, але в історію не пишемо: інакше вона піде в Gemini як репліка інтерв'юера
+        // the error is shown but not saved to history, or Gemini would get it back as an interviewer turn
         if (!failed && full.trim()) await db.mockMessage.create({ data: { sessionId, role: 'MODEL', content: full } });
         controller.close();
       }

@@ -7,8 +7,8 @@ import { ensureTodayPlan } from '@/lib/plan-auto';
 import { getTodayPlan } from '@/lib/planner';
 
 /**
- * Сторінка для оверлею (desk.py, клавіша Pause): перший крок на сьогодні, список дня з галочками,
- * "Start the day". Без сайдбару (.mini ховає його через CSS). Те саме, що на Today, тільки коротко.
+ * Page for the overlay (desk.py, Pause key): today's first step, the day list with checkboxes,
+ * "Start the day". No sidebar (.mini hides it via CSS). Same as Today, only shorter.
  */
 
 export const dynamic = 'force-dynamic';

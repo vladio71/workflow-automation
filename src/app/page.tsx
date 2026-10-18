@@ -43,22 +43,22 @@ export default async function TodayPage() {
   const cycleTodo = cycle
     ? await db.topic.findMany({ where: { cycleId: cycle.id, confidence: { not: 'GREEN' } }, orderBy: { id: 'asc' } })
     : [];
-  // у чернетку можна додати те, що план не взяв: кандидати з тим самим фокусом і бюджетом
+  // the draft can take what the plan skipped: candidates with the same focus and budget
   const addable = plan && plan.startedAt === null
     ? addableCandidates(plan.items, await buildCandidates(now, { focus: plan.focus, budget: plan.budget || DEFAULT_BUDGET }))
         .map((candidate) => ({ id: candidate.id, kind: candidate.kind, title: candidate.title, minutes: candidate.defaultMinutes }))
     : [];
-  // у фокус можна взяти рівні live-code (якщо LEVELS_DIR налаштований) або будь-який навчальний план
+  // focus can be the live-code levels (when LEVELS_DIR is set) or any study plan
   const focusOptions: FocusOption[] = [
     ...(levelScan.levels.length > 0 ? [{ key: LEVELS_FOCUS, name: 'Live code' }] : []),
     ...studyPlans.map((studyPlan) => ({
       key: planFocus(studyPlan.source.id),
-      // "System design · 4 тижні + екзамен" -> "System design"
+      // "System design · 4 weeks + exam" -> "System design"
       name: (studyPlan.source.planName || studyPlan.source.repo).split(' · ')[0] ?? studyPlan.source.repo,
     })),
   ];
 
-  // Due for recall: категорії, де сьогодні є що повторювати (термін настав або ще лишились нові в межах ліміту на день)
+  // Due for recall: categories with something to review today (cards due, or new ones left within the daily limit)
   const dueCategories = cardCategories.filter((category) => category.due > 0 || (category.fresh > 0 && cardQueue.newLeft > 0));
   const dueCards = cardQueue.due.length + cardQueue.fresh.length;
 

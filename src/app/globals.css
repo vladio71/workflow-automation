@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* ---------------- Notion-подібні токени: світла і темна теми ---------------- */
+/* ---------------- Notion-like tokens: light and dark themes ---------------- */
 :root {
-  /* нативні контроли (випадний список select, скролбари) малюються в темі сторінки */
+  /* native controls (select dropdown, scrollbars) follow the page theme */
   color-scheme: light;
   --bg: #ffffff;
   --sidebar: #f7f7f5;
@@ -132,7 +132,7 @@ h3.block-title { font-size: 1.1rem; font-weight: 600; margin: 24px 0 6px; }
   width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 6px;
   padding: 6px 10px; color: var(--text); font: inherit; outline: none;
 }
-/* пункти випадного списку: без цього в темній темі Chrome/Windows малює світлий фон зі світлим текстом */
+/* dropdown options: without this Chrome on Windows draws a light background with light text in dark mode */
 select.input option { background: var(--bg); color: var(--text); }
 .input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.25); }
 .textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
@@ -223,7 +223,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .chat-msg { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .chat-msg .who { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
 
-/* ---------------- charts (один синій відтінок: це кількість, а не ідентичність) ---------------- */
+/* ---------------- charts (one blue hue: it encodes quantity, not identity) ---------------- */
 :root {
   --viz-bar: #2a78d6;
   --viz-heat-0: rgba(55, 53, 47, 0.07);
@@ -269,7 +269,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .grade-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .grade-row .btn { gap: 8px; }
 
-/* ---------------- карта дня ---------------- */
+/* ---------------- day map ---------------- */
 .map-pulse { transform-box: fill-box; transform-origin: center; animation: map-pulse 1.8s ease-out infinite; }
 @keyframes map-pulse {
   from { transform: scale(1); opacity: 0.6; }
@@ -279,7 +279,7 @@ select.input option { background: var(--bg); color: var(--text); }
   .map-pulse { animation: none; opacity: 0.4; }
 }
 
-/* ---------------- рівні: умова зліва, редактор справа; на вузькому екрані одне під одним ---------------- */
+/* ---------------- levels: task on the left, editor on the right; stacked on narrow screens ---------------- */
 .level-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px; align-items: start; }
 .level-play { position: sticky; top: 16px; }
 @media (max-width: 1100px) {
@@ -291,7 +291,7 @@ select.input option { background: var(--bg); color: var(--text); }
   .modal-body.session { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ---------------- кампанія навчального плану ---------------- */
+/* ---------------- study plan campaign ---------------- */
 .campaign { margin: 14px 0 6px; }
 .campaign-region { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 4px; margin-bottom: 10px; background: var(--bg); }
 .campaign-region.conquered { background: color-mix(in srgb, var(--tag-green-bg) 45%, var(--bg)); border-color: color-mix(in srgb, var(--map-done) 35%, var(--border)); }
@@ -305,14 +305,14 @@ select.input option { background: var(--bg); color: var(--text); }
 .plan-list { margin-top: 6px; }
 .plan-list > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
 
-/* ---------------- статус запитів до Gemini ---------------- */
+/* ---------------- Gemini request status ---------------- */
 .ai-status { font-size: 13px; margin-top: 8px; color: var(--text); }
 .ai-status-quiet { color: var(--tag-orange-fg); background: var(--tag-orange-bg); border-radius: 3px; padding: 0 4px; }
 .ai-failure { font-size: 13px; margin-top: 8px; color: var(--tag-red-fg); }
 .callout.ai-error { background: var(--tag-red-bg); color: var(--tag-red-fg); margin: 10px 0 0; padding: 10px 14px; }
 .callout.ai-error a { color: inherit; }
 
-/* ---------------- перетягування: чернетка плану і Daily ---------------- */
+/* ---------------- drag and drop: plan draft and Daily ---------------- */
 .grip { color: var(--faint); cursor: grab; user-select: none; font-size: 12px; letter-spacing: -2px; opacity: 0; padding: 2px 2px 0; }
 .plan-row:hover .grip, .daily-row:hover .grip { opacity: 1; }
 .plan-row {
@@ -323,7 +323,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .plan-row.drop-above, .daily-row.drop-above { border-top-color: var(--accent); }
 .plan-row.drop-below, .daily-row.drop-below { border-bottom-color: var(--accent); }
 
-/* ---------------- Daily: список, який правиш сам ---------------- */
+/* ---------------- Daily: the list you edit yourself ---------------- */
 .daily-row {
   display: flex; align-items: center; gap: 8px; padding: 2px 2px; border-radius: 3px;
   border-top: 2px solid transparent; border-bottom: 2px solid transparent;
@@ -342,7 +342,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .daily-new { display: block; background: none; border: 0; font: inherit; font-size: 14px; color: var(--faint); cursor: pointer; padding: 4px 2px 4px 46px; }
 .daily-new:hover { color: var(--muted); }
 
-/* ---------------- картки: категорії ---------------- */
+/* ---------------- cards: categories ---------------- */
 .card-group { display: flex; gap: 8px; align-items: baseline; padding: 16px 6px 6px; font-weight: 600; border-bottom: 1px solid var(--border-strong); }
 .card-group a:hover { text-decoration: underline; text-decoration-color: var(--faint); }
 .card-group .faint { font-weight: 400; font-size: 13px; }
@@ -356,7 +356,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .category-menu { left: auto; right: 0; min-width: 240px; max-height: 320px; overflow-y: auto; }
 .category-menu .select-option { font: inherit; font-size: 14px; color: var(--text); text-align: left; }
 
-/* ---------------- /mini: сторінка для оверлею (desk.py), без сайдбару ---------------- */
+/* ---------------- /mini: overlay page (desk.py), no sidebar ---------------- */
 .app:has(.mini) .sidebar { display: none; }
 .page.mini { max-width: none; margin: 0; padding: 14px 16px 18px; font-size: 14px; }
 .mini-first { margin: 0 0 12px; padding: 10px 12px; }
@@ -364,7 +364,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .mini .check { padding: 5px 2px; border-bottom: 1px solid var(--border); }
 .mini .check:last-of-type { border-bottom: 0; }
 
-/* ---------------- live code: попап правил і нагадування ---------------- */
+/* ---------------- live code: rules popup and reminders ---------------- */
 .nav-button { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; font-size: 14px; white-space: nowrap; }
 
 .nav-link .count.alert { color: var(--tag-red-fg); background: var(--tag-red-bg); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
@@ -393,7 +393,7 @@ select.input option { background: var(--bg); color: var(--text); }
 
 .rule-title { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 4px; }
 
-/* тег і текст в одній сітці: у правилах і в чеклісті текст починається з того самого місця */
+/* tag and text share one grid so the text starts at the same x in the rules and in the checklist */
 .rule-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; align-items: start; padding: 4px 0; line-height: 21px; }
 
 .rule-row .tag, .rule-check .tag { justify-self: start; margin-top: 1px; }
@@ -411,7 +411,7 @@ select.input option { background: var(--bg); color: var(--text); }
 
 .modal .db td:nth-child(-n + 2) { white-space: nowrap; }
 
-/* ---------------- башта дня (справа-сесія) ---------------- */
+/* ---------------- tower of the day (session task) ---------------- */
 :root {
   --tower-stone: #e3d8c8;
   --tower-stone-edge: #a8977f;
@@ -467,7 +467,7 @@ select.input option { background: var(--bg); color: var(--text); }
 
 .session-log-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; overflow-wrap: anywhere; }
 
-/* дедлайн категорії карток у таблиці категорій */
+/* card category deadline in the categories table */
 .deadline-badge {
   margin-left: 8px;
   padding: 1px 7px;
@@ -478,7 +478,7 @@ select.input option { background: var(--bg); color: var(--text); }
   white-space: nowrap;
 }
 
-/* ---------------- Tasks: борд і картка ---------------- */
+/* ---------------- Tasks: board and card ---------------- */
 .task-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; align-items: start; }
 @media (max-width: 900px) { .task-board { grid-template-columns: minmax(0, 1fr); } }
 .task-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--bg); }

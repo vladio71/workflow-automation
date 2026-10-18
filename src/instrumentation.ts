@@ -1,7 +1,7 @@
 /**
- * Часовий пояс сервера. "Сьогодні" в апці (картки, плани, стрік, Daily) рахується за часом сервера,
- * а на Vercel це UTC: без цього день перемикався б о 03:00 за Києвом, а не опівночі.
- * Локально лишається час комп'ютера. Інший пояс: APP_TZ в .env (на Vercel змінну TZ задати не можна).
+ * Server time zone. "Today" in the app (cards, plans, streak, Daily) is computed in server time, which is UTC
+ * on Vercel: without this the day would roll over at 03:00 Kyiv time instead of midnight.
+ * Locally the machine's zone is kept. Another zone: APP_TZ in .env (Vercel does not allow setting TZ).
  */
 const VERCEL_DEFAULT_TZ = 'Europe/Kyiv';
 

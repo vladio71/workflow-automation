@@ -7,7 +7,7 @@ interface NewCardPageProps {
   searchParams: Promise<{ topic?: string }>;
 }
 
-/** Окрема сторінка додавання картки. ?topic=<id> = категорія, з якої прийшов. */
+/** Standalone add-card page. ?topic=<id> is the category the user came from. */
 export default async function NewCardPage({ searchParams }: NewCardPageProps) {
   const { topic } = await searchParams;
   const from = parseCategoryParam(topic);

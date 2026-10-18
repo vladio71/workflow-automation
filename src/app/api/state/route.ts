@@ -5,27 +5,27 @@ import { dayKey } from '@/lib/queries';
 import { db } from '@/lib/db';
 
 /**
- * Стан дня для скриптів на комп'ютері (desk.py, блокер): чи день почато, скільки пунктів закрито,
- * перший крок на сьогодні з вечірньої передачі. Тільки з токеном (x-automation-token).
+ * Day state for the scripts on the machine (desk.py, blocker): whether the day is started, how many items
+ * are done, today's first step from the evening handoff. Requires the token (x-automation-token).
  *
- * Ніч (до LATE_NIGHT_HOUR): якщо на сьогодні плану ще нема, а вчорашній почато, віддаємо вчорашній.
- * Так закритий о 01:00 останній пункт дає allDone для того дня, і блокер бачить момент закриття.
+ * Late night (before LATE_NIGHT_HOUR): if today has no plan yet and yesterday's was started, yesterday's is returned,
+ * so the last item closed at 01:00 yields allDone for that day and the blocker sees the moment it closed.
  */
 
 export interface DayState {
-  /** YYYY-MM-DD за часом апки: день плану, про який звіт (уночі до 5:00 може бути вчорашній) */
+  /** YYYY-MM-DD in app time: the plan day this reports on (before 5:00 it may be yesterday) */
   day: string;
-  /** план на сьогодні складено */
+  /** today's plan exists */
   planned: boolean;
-  /** натиснуто "Start the day" */
+  /** "Start the day" was pressed */
   started: boolean;
   done: number;
   total: number;
-  /** день почато і всі пункти закриті: блокер може відпустити до вечора */
+  /** day started and every item done: the blocker may let go until the evening */
   allDone: boolean;
-  /** "сьогодні починаю з" (записано вчора ввечері), '' якщо нема */
+  /** "today I start with" (written the evening before), '' if none */
   firstStep: string;
-  /** що вже записано на наступний день (після Ctrl+Pause), '' якщо нема */
+  /** what is already written for the next day (after Ctrl+Pause), '' if none */
   nextFirstStep: string;
 }
 

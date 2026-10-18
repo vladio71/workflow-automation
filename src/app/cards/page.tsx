@@ -23,7 +23,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
     getCardCategories(now),
     getCategoryChoices(),
   ]);
-  // Review однієї категорії: та сама черга, але тільки її картки
+  // Review of one category: the same queue, restricted to its cards
   const queue = only ? await getCardQueue(now, only) : fullQueue;
   const todayCount = fullQueue.due.length + fullQueue.fresh.length;
   const onlyName = only
@@ -67,7 +67,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                 <Link href="/cards" style={{ textDecoration: 'underline' }}>all categories</Link>
               </p>
             )}
-            {/* key: інша категорія = нова сесія з нуля */}
+            {/* key: a different category starts a fresh session */}
             <CardReviewSession key={only ? categoryParam(only.topicId) : 'all'} cards={reviewCards} />
           </>
         )}

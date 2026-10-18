@@ -4,15 +4,15 @@ import { rejectUnlessAutomation } from '@/lib/automation';
 import { ImportError, finishImport, importCards } from '@/lib/import-cards';
 
 /**
- * Імпорт карток скриптом або з чату, без репо: той самий формат, що learn/questions.md (Q:/A:).
- * Тільки з токеном (x-automation-token).
+ * Card import from a script or a chat, no repo needed: same format as learn/questions.md (Q:/A:).
+ * Requires the token (x-automation-token).
  *
- * Тіло: { text, topicId? | newCategory?, deadline? }
- *   text         текст у форматі Q:/A:
- *   topicId      id існуючої категорії
- *   newCategory  або назва нової категорії
- *   deadline     YYYY-MM-DD, необов'язково: категорія стає пріоритетною до цієї дати
- * Відповідь: { topicId, added, updated }
+ * Body: { text, topicId? | newCategory?, deadline? }
+ *   text         text in the Q:/A: format
+ *   topicId      id of an existing category
+ *   newCategory  or the name of a new category
+ *   deadline     YYYY-MM-DD, optional: the category gets priority until that date
+ * Response: { topicId, added, updated }
  */
 
 const BodySchema = z.object({

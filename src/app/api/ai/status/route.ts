@@ -1,8 +1,8 @@
 import { getJob } from '@/lib/ai-status';
 
 /**
- * Статус поточного запиту до Gemini: GET /api/ai/status?job=<id>.
- * Кнопки "Plan my day", "Check the day" і "Check with Gemini" питають його раз на секунду, поки чекають відповіді.
+ * Status of a running Gemini request: GET /api/ai/status?job=<id>.
+ * The "Plan my day", "Check the day" and "Check with Gemini" buttons poll it once a second while waiting.
  */
 export const dynamic = 'force-dynamic';
 

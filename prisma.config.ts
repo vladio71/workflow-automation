@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
 
-// generate працює і без DATABASE_URL (postinstall до створення .env)
+// generate must work without DATABASE_URL (postinstall runs before .env exists)
 const databaseUrl = process.env.DATABASE_URL;
 
 export default defineConfig({

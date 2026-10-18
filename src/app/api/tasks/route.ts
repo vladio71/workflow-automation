@@ -3,11 +3,11 @@ import { rejectUnlessAutomation } from '@/lib/automation';
 import { CreateTaskSchema, createBacklogTask, listTasks, taskToJson } from '@/lib/task-backlog';
 
 /**
- * Беклог справ ззовні (Shortcuts на айфоні, desk.py, curl). Тільки з токеном (x-automation-token).
+ * Task backlog from outside (iPhone Shortcuts, desk.py, curl). Requires the token (x-automation-token).
  *
- *   GET  /api/tasks?status=BACKLOG|TODO|IN_PROGRESS|DONE   без status: усі незроблені
+ *   GET  /api/tasks?status=BACKLOG|TODO|IN_PROGRESS|DONE   without status: all unfinished
  *   POST /api/tasks  { title, priority?, minutes?, repeat?, target?, until?, status?, notes? }
- *        нова справа йде в BACKLOG (повторювана одразу в TODO) і в план дня не лізе, поки не витягнеш.
+ *        a new task goes to BACKLOG (a repeating one straight to TODO) and stays out of the day plan until pulled.
  */
 
 const STATUSES = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'DONE'] as const;

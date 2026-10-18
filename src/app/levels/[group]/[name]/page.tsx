@@ -30,7 +30,7 @@ export default async function LevelPage({ params }: LevelPageProps) {
       orderBy: { createdAt: 'desc' },
     }),
   ]);
-  // умова без заголовка і рядка "~30 хв · ..." (вони вже в шапці сторінки), підказки окремо і згорнуті
+  // the task text without the title and the "~30 min · ..." line (both are already in the page header); hints are split off and collapsed
   const readmeBody = details.readme
     .split('\n')
     .filter((line) => !line.startsWith('# ') && !line.trim().startsWith('**~'))

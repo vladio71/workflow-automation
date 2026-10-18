@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: learning
     ports:
-      - "5433:5432"   # 5433, щоб не конфліктувати з graphql-base на 5432
+      - "5433:5432"   # 5433 to avoid clashing with graphql-base on 5432
     volumes:
       - learning-data:/var/lib/postgresql/data
     healthcheck:

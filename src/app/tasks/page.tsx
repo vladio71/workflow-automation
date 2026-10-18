@@ -34,7 +34,7 @@ function toCardData(task: Task, todayCount: number): TaskCardData {
     repeatLabel: REPEAT_LABEL[task.repeat],
     target: task.target,
     todayCount,
-    // until лежить як DATE (опівніч UTC), тому беремо ISO-день, а не локальну дату
+    // until is stored as DATE (midnight UTC), so take the ISO day, not the local date
     until: task.until ? task.until.toISOString().slice(0, 10) : null,
     sinceLabel: done && task.doneAt ? `зроблено ${dateLabel(task.doneAt)}` : `з ${dateLabel(task.createdAt)}`,
     status: task.status,

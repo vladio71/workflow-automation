@@ -4,8 +4,8 @@ import { rejectUnlessAutomation } from '@/lib/automation';
 import { MAX_FIRST_STEP, setFirstStep } from '@/lib/handoff';
 
 /**
- * Вечірня передача дня з desk.py (Ctrl+Pause): "завтра починаю з ...".
- * Тіло: { "firstStep": "..." }. Порожній рядок стирає запис. Тільки з токеном (x-automation-token).
+ * Evening handoff from desk.py (Ctrl+Pause): "tomorrow I start with ...".
+ * Body: { "firstStep": "..." }. An empty string clears it. Requires the token (x-automation-token).
  */
 
 const BodySchema = z.object({ firstStep: z.string().max(MAX_FIRST_STEP) });

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ImportForm } from '@/components/ImportForm';
 import { getCategoryChoices } from '@/lib/cards';
 
-/** Швидкий імпорт карток: текст або .md у форматі Q:/A:, категорія, за бажанням дедлайн. */
+/** Quick card import: text or a .md file in the Q:/A: format, a category, an optional deadline. */
 export default async function ImportPage() {
   const categories = await getCategoryChoices();
   return (

@@ -9,7 +9,7 @@ interface CardPageProps {
   params: Promise<{ id: string }>;
 }
 
-/** Сторінка однієї картки: правка питання і відповіді, категорія, видалення. */
+/** Single card page: edit question and answer, change category, delete. */
 export default async function CardPage({ params }: CardPageProps) {
   const { id } = await params;
   const cardId = Number(id);

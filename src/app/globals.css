@@ -513,3 +513,4 @@ select.input option { background: var(--bg); color: var(--text); }
 .gloss-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .gloss-item dt { font-weight: 600; }
 .gloss-item dd { margin: 4px 0 0; }
+.gloss-tip img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; background: #fff; }

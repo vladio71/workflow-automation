@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { CardBrowser } from '@/components/CardBrowser';
 import { CardReviewSession, type ReviewCard } from '@/components/CardReviewSession';
 import { CategoryTable } from '@/components/CategoryTable';
+import { GlossaryProvider } from '@/components/Glossary';
+import { getAllGlossary } from '@/lib/glossary';
 import { NEW_PER_DAY, NO_CATEGORY_NAME, getAllCards, getCardCategories, getCardQueue, getCategoryChoices } from '@/lib/cards';
 import { categoryHref, categoryParam, parseCategoryParam } from '@/lib/card-links';
 import { toBrowseCard } from '@/lib/card-view';
@@ -17,11 +19,12 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
   const tab: CardsTab = tabParam === 'all' || tabParam === 'categories' ? tabParam : 'review';
   const only = parseCategoryParam(topic);
   const now = new Date();
-  const [fullQueue, all, categories, choices] = await Promise.all([
+  const [fullQueue, all, categories, choices, glossary] = await Promise.all([
     getCardQueue(now),
     getAllCards(),
     getCardCategories(now),
     getCategoryChoices(),
+    getAllGlossary(),
   ]);
   // Review of one category: the same queue, restricted to its cards
   const queue = only ? await getCardQueue(now, only) : fullQueue;
@@ -34,6 +37,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
     id: card.id,
     question: card.question,
     answer: card.answer,
+    topicId: card.topicId,
     topicName: card.topicName,
     isNew: card.isNew,
   }));
@@ -57,6 +61,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
         <span className="faint" style={{ fontSize: 13, marginLeft: 8 }}>{fullQueue.reviewedToday} reviewed today</span>
       </div>
 
+      <GlossaryProvider terms={glossary}>
       <div style={{ marginTop: 16 }}>
         {tab === 'review' && (
           <>
@@ -78,6 +83,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
         )}
         {tab === 'all' && <CardBrowser cards={all.map((card) => toBrowseCard(card, now))} categories={choices} />}
       </div>
+      </GlossaryProvider>
     </div>
   );
 }

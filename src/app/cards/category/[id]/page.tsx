@@ -2,10 +2,12 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CardBrowser } from '@/components/CardBrowser';
 import { CategoryDeadline } from '@/components/CategoryDeadline';
+import { GlossaryList, GlossaryProvider } from '@/components/Glossary';
 import { NO_CATEGORY_NAME, getAllCards, getCardQueue, getCategoryChoices } from '@/lib/cards';
 import { categoryParam, categoryReviewHref, parseCategoryParam } from '@/lib/card-links';
 import { toBrowseCard } from '@/lib/card-view';
 import { db } from '@/lib/db';
+import { getGlossary } from '@/lib/glossary';
 
 interface CategoryPageProps {
   params: Promise<{ id: string }>;
@@ -17,13 +19,14 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   const category = parseCategoryParam(id);
   if (!category) notFound();
   const now = new Date();
-  const [topic, all, queue, choices] = await Promise.all([
+  const [topic, all, queue, choices, glossary] = await Promise.all([
     category.topicId === null
       ? null
       : db.topic.findUnique({ where: { id: category.topicId }, select: { id: true, name: true, deadline: true, sourceId: true } }),
     getAllCards(),
     getCardQueue(now, category),
     getCategoryChoices(),
+    getGlossary(category.topicId),
   ]);
   if (category.topicId !== null && !topic) notFound();
 
@@ -68,7 +71,16 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           No cards here yet. <Link href={`/cards/new?topic=${categoryParam(category.topicId)}`} style={{ textDecoration: 'underline' }}>Add one</Link>.
         </p>
       ) : (
-        <CardBrowser cards={cards} categories={choices} locked={category} />
+        <GlossaryProvider terms={glossary}>
+          <CardBrowser cards={cards} categories={choices} locked={category} />
+        </GlossaryProvider>
+      )}
+
+      {glossary.length > 0 && (
+        <details style={{ marginTop: 24 }} data-testid="category-glossary">
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Glossary · {glossary.length}</summary>
+          <GlossaryList terms={glossary} />
+        </details>
       )}
     </div>
   );

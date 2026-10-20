@@ -90,6 +90,8 @@ model Topic {
 
   @@index([nextReviewAt])
   @@unique([sourceId, sourcePath])
+  /// glossary of this category: terms highlighted in card answers, explained on hover
+  glossary     GlossaryTerm[]
 }
 
 /// Questions, not notes: own question + answer from memory + reference answer.
@@ -488,4 +490,22 @@ model CardImage {
   bytes     Bytes
   alt       String   @default("")
   createdAt DateTime @default(now())
+}
+
+/// glossary term: highlighted in card answers (its category, or every category when topicId is null), explained on hover
+model GlossaryTerm {
+  id         Int      @id @default(autoincrement())
+  topicId    Int?
+  topic      Topic?   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  term       String
+  /// lowercased term: one term per category
+  termKey    String
+  /// other spellings that are highlighted too ("ANN", "approximate nearest neighbors")
+  aliases    String[] @default([])
+  /// markdown, shown in the tooltip and on the glossary list
+  definition String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([topicId])
 }

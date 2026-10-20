@@ -165,6 +165,8 @@ The same from a script or a chat: `POST /api/import` with the `x-automation-toke
 
 **Diagrams and images in cards.** Inside a ``` fence an answer keeps its indentation and blank lines, so ASCII diagrams stay aligned. Images: `POST /api/images` with the token, body `{ data: <base64>, mime: "image/png", alt? }` returns `{ id, url, markdown }`; put `markdown` (`![alt](/api/images/17)`) into `A:`. Images live in the database (table `CardImage`), up to 3 MB each.
 
+**Glossary.** Each category can have a glossary (table `GlossaryTerm`). In card answers the first occurrence of each term of the card's category (and of global terms) is underlined; hover or tap shows the explanation. Code blocks are not touched. The category page lists the whole glossary. From a script or a chat: `PUT /api/glossary` with the token, body `{ topicId?, terms: [{ term, aliases?, definition }] }` (same term updates, no duplicates); `GET /api/glossary?topicId=…`; `DELETE /api/glossary { topicId?, term }`. No `topicId` = a global term.
+
 ## Category deadline
 
 Preparing for a date (an interview): on the category page set **⏱ Deadline** (or `deadline: 2026-10-19` in `topic.md` for repo cards). Until that date:

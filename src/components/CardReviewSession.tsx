@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { finishCardSession, gradeCard } from '@/app/actions';
-import { Markdown } from '@/components/Markdown';
+import { CardMarkdown } from '@/components/Glossary';
 import type { CardGrade } from '@/generated/prisma/enums';
 
 export interface ReviewCard {
   id: number;
   question: string;
   answer: string;
+  topicId: number | null;
   topicName: string;
   isNew: boolean;
 }
@@ -133,7 +134,7 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
         <div className="q">{entry.card.question}</div>
         {revealed && (
           <div className="a">
-            {entry.card.answer ? <Markdown>{entry.card.answer}</Markdown> : <p className="faint">No answer yet for this card.</p>}
+            {entry.card.answer ? <CardMarkdown topicId={entry.card.topicId}>{entry.card.answer}</CardMarkdown> : <p className="faint">No answer yet for this card.</p>}
           </div>
         )}
       </div>

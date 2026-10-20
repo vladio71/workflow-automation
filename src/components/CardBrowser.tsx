@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from 'react';
 import { chooseCardCategory, finishCardSession, gradeCard, removeCard } from '@/app/actions';
 import { CategoryPicker, type CategoryOption } from '@/components/CategoryPicker';
-import { Markdown } from '@/components/Markdown';
+import { CardMarkdown } from '@/components/Glossary';
 import { categoryHref } from '@/lib/card-links';
 
 export interface BrowseCard {
@@ -175,7 +175,7 @@ export function CardBrowser({ cards, categories, locked }: CardBrowserProps) {
               </div>
               {showAnswers && (
                 <div style={{ marginTop: 6, fontSize: 14 }}>
-                  {card.answer ? <Markdown>{card.answer}</Markdown> : <span className="faint">No answer yet.</span>}
+                  {card.answer ? <CardMarkdown topicId={card.topicId}>{card.answer}</CardMarkdown> : <span className="faint">No answer yet.</span>}
                 </div>
               )}
             </div>
@@ -256,7 +256,7 @@ function CardPractice({ cards, onExit }: { cards: BrowseCard[]; onExit: () => vo
       <div className="flashcard">
         <div className="q">{card.question}</div>
         {revealed && (
-          <div className="a">{card.answer ? <Markdown>{card.answer}</Markdown> : <p className="faint">No answer yet.</p>}</div>
+          <div className="a">{card.answer ? <CardMarkdown topicId={card.topicId}>{card.answer}</CardMarkdown> : <p className="faint">No answer yet.</p>}</div>
         )}
       </div>
       {!revealed ? (

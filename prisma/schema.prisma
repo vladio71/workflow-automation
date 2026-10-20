@@ -480,3 +480,12 @@ model RestPull {
 
   @@index([day])
 }
+
+/// image for cards: stored in the database, shown in answers as ![alt](/api/images/<id>)
+model CardImage {
+  id        Int      @id @default(autoincrement())
+  mime      String
+  bytes     Bytes
+  alt       String   @default("")
+  createdAt DateTime @default(now())
+}

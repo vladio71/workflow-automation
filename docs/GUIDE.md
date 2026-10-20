@@ -163,6 +163,8 @@ Repo cards stay plain markdown in `learn/*/questions.md` on GitHub, readable wit
 
 The same from a script or a chat: `POST /api/import` with the `x-automation-token` header, body `{ text, topicId | newCategory, deadline? }`.
 
+**Diagrams and images in cards.** Inside a ``` fence an answer keeps its indentation and blank lines, so ASCII diagrams stay aligned. Images: `POST /api/images` with the token, body `{ data: <base64>, mime: "image/png", alt? }` returns `{ id, url, markdown }`; put `markdown` (`![alt](/api/images/17)`) into `A:`. Images live in the database (table `CardImage`), up to 3 MB each.
+
 ## Category deadline
 
 Preparing for a date (an interview): on the category page set **⏱ Deadline** (or `deadline: 2026-10-19` in `topic.md` for repo cards). Until that date:

@@ -6,6 +6,8 @@
  *   Q: question / A: answer                   -> CONCEPT
  *   T: task / Ref: file / Check: command       -> TASK
  * A line without a key continues the previous field (multi-line answers).
+ * Inside a ``` fence lines are kept as is: indentation, blank lines and "Q:"-looking lines stay
+ * part of the field (ASCII diagrams). Images: markdown ![alt](url) in A:, e.g. /api/images/17.
  * Lines starting with # or indented by 4+ spaces are ignored. So is a paragraph with no key at all.
  * Ref: path to a file in the repo or a full URL (https://...).
  *
@@ -48,6 +50,8 @@ type FieldKey = 'Q' | 'A' | 'T' | 'Ref' | 'Check';
 interface BlockLine {
   text: string;
   line: number;
+  /** inside a ``` fence: keep the line verbatim, never a key */
+  verbatim: boolean;
 }
 
 const KEY = /^(Q|A|T|Ref|Check):\s?(.*)$/;
@@ -69,19 +73,22 @@ export function parseQuestions(text: string): ParsedQuestions {
     const startLine = block[0]?.line ?? 0;
 
     for (const entry of block) {
-      const match = entry.text.match(KEY);
+      const match = entry.verbatim ? null : entry.text.match(KEY);
       if (match) {
         const key = match[1] as FieldKey;
         if (fields[key] !== undefined) errors.push(`line ${entry.line}: duplicate "${key}:" in one card`);
         fields[key] = (match[2] ?? '').trim();
         current = key;
       } else if (current) {
-        fields[current] = `${fields[current]}\n${entry.text.trim()}`.trim();
+        const text = entry.verbatim ? entry.text : entry.text.trim();
+        fields[current] = `${fields[current]}\n${text}`.replace(/^\s*\n/, '');
       } else {
         errors.push(`line ${entry.line}: text outside a card field: "${entry.text.trim().slice(0, 40)}"`);
       }
     }
     block = [];
+    // a field may end with blank lines kept from a fence; drop them
+    for (const key of Object.keys(fields) as FieldKey[]) fields[key] = fields[key]?.trimEnd();
 
     if (fields.Q !== undefined) {
       if (fields.T !== undefined) errors.push(`line ${startLine}: card has both Q: and T:`);
@@ -108,14 +115,23 @@ export function parseQuestions(text: string): ParsedQuestions {
   };
 
   const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let inFence = false;
   lines.forEach((raw, index) => {
+    const isFenceLine = raw.trim().startsWith('```');
+    if (inFence || isFenceLine) {
+      // the fence line itself is markdown too; it opens or closes verbatim mode
+      block.push({ text: isFenceLine ? raw.trim() : raw, line: index + 1, verbatim: inFence || isFenceLine });
+      if (isFenceLine) inFence = !inFence;
+      return;
+    }
     if (raw.trim() === '') {
       flush();
       return;
     }
     if (raw.startsWith('#') || raw.startsWith('    ')) return;
-    block.push({ text: raw, line: index + 1 });
+    block.push({ text: raw, line: index + 1, verbatim: false });
   });
+  if (inFence) errors.push('unclosed ``` fence at the end of the text');
   flush();
 
   const seen = new Map<string, number>();
@@ -326,7 +342,7 @@ export function parsePlan(text: string): ParsedPlan {
       return;
     }
     if (raw.startsWith('#') || raw.startsWith('    ')) return;
-    block.push({ text: raw, line });
+    block.push({ text: raw, line, verbatim: false });
   });
   flush();
 

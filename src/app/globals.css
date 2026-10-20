@@ -212,6 +212,7 @@ select.input option { background: var(--bg); color: var(--text); }
 .md code { background: var(--callout); color: #eb5757; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .md pre { background: var(--callout); padding: 14px 16px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
 .md pre code { background: none; color: inherit; padding: 0; }
+.md img { max-width: 100%; height: auto; border-radius: 6px; margin: 8px 0; background: #fff; }
 .md table { border-collapse: collapse; margin: 10px 0; font-size: 14px; }
 .md th, .md td { border: 1px solid var(--border-strong); padding: 6px 10px; text-align: left; }
 .md th { background: var(--callout); font-weight: 600; }

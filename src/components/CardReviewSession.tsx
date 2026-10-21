@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
-import { finishCardSession, gradeCard } from '@/app/actions';
+import { finishCardSession, gradeCard, removeCard } from '@/app/actions';
 import { CardMarkdown } from '@/components/Glossary';
 import type { CardGrade } from '@/generated/prisma/enums';
 
@@ -77,6 +77,16 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
     },
     [entry, revealed],
   );
+
+  /** "I don't need this card": deleted for good, gone from the rest of the session, not counted in the tally. */
+  const remove = (): void => {
+    if (!entry || !window.confirm('Видалити картку?')) return;
+    const id = entry.card.id;
+    startTransition(() => removeCard(id));
+    // the next card slides into the current position, so the position stays
+    setQueue((current) => [...current.slice(0, position), ...current.slice(position).filter((item) => item.card.id !== id)]);
+    setRevealed(false);
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -160,6 +170,10 @@ export function CardReviewSession({ cards }: { cards: ReviewCard[] }) {
           ))}
         </div>
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <button className="btn sm" onClick={remove} title="Видалити картку назавжди">🗑 Видалити</button>
+      </div>
     </div>
   );
 }
